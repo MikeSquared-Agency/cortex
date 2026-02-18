@@ -58,10 +58,10 @@ fn traverse_bfs<S: Storage>(
     let mut result = Subgraph::new();
     let mut visited = HashSet::new();
     let mut queue = VecDeque::new();
+    let mut candidate_edges = Vec::new();
 
     // Initialize with start nodes
     for node_id in &request.start {
-        let depth = if request.include_start { 0 } else { 0 };
         queue.push_back((*node_id, 0u32));
         visited.insert(*node_id);
     }
@@ -169,11 +169,15 @@ fn traverse_bfs<S: Storage>(
             }
 
             // Add edge if both ends are in result or will be
-            if result.nodes.contains_key(&edge.from) || result.nodes.contains_key(&edge.to) {
-                result.edges.push(edge);
-            }
+            candidate_edges.push(edge);
         }
     }
+
+    // Post-pass: only include edges where both endpoints are in the result
+    result.edges = candidate_edges
+        .into_iter()
+        .filter(|e| result.nodes.contains_key(&e.from) && result.nodes.contains_key(&e.to))
+        .collect();
 
     Ok(result)
 }
@@ -188,6 +192,7 @@ fn traverse_dfs<S: Storage>(
     let mut result = Subgraph::new();
     let mut visited = HashSet::new();
     let mut stack = Vec::new();
+    let mut candidate_edges = Vec::new();
 
     // Initialize with start nodes
     for node_id in request.start.iter().rev() {
@@ -292,11 +297,15 @@ fn traverse_dfs<S: Storage>(
             visited.insert(next_id);
             stack.push((next_id, depth + 1));
 
-            if result.nodes.contains_key(&edge.from) || result.nodes.contains_key(&edge.to) {
-                result.edges.push(edge);
-            }
+            candidate_edges.push(edge);
         }
     }
+
+    // Post-pass: only include edges where both endpoints are in the result
+    result.edges = candidate_edges
+        .into_iter()
+        .filter(|e| result.nodes.contains_key(&e.from) && result.nodes.contains_key(&e.to))
+        .collect();
 
     Ok(result)
 }
@@ -311,6 +320,7 @@ fn traverse_weighted<S: Storage>(
     let mut result = Subgraph::new();
     let mut visited = HashSet::new();
     let mut queue = BinaryHeap::new();
+    let mut candidate_edges = Vec::new();
 
     // Initialize with start nodes
     for node_id in &request.start {
@@ -417,11 +427,15 @@ fn traverse_weighted<S: Storage>(
                 });
             }
 
-            if result.nodes.contains_key(&edge.from) || result.nodes.contains_key(&edge.to) {
-                result.edges.push(edge);
-            }
+            candidate_edges.push(edge);
         }
     }
+
+    // Post-pass: only include edges where both endpoints are in the result
+    result.edges = candidate_edges
+        .into_iter()
+        .filter(|e| result.nodes.contains_key(&e.from) && result.nodes.contains_key(&e.to))
+        .collect();
 
     Ok(result)
 }

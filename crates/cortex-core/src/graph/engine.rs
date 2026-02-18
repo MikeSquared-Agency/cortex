@@ -1,5 +1,6 @@
 use crate::error::Result;
 use crate::graph::{
+    cache::AdjacencyCache,
     paths, traversal, PathRequest, PathResult, Subgraph, TraversalBudget, TraversalDirection,
     TraversalRequest, TraversalStrategy,
 };
@@ -55,20 +56,68 @@ pub trait GraphEngine: Send + Sync {
 pub struct GraphEngineImpl<S: Storage> {
     storage: Arc<S>,
     budget: TraversalBudget,
+    cache: AdjacencyCache,
 }
 
 impl<S: Storage> GraphEngineImpl<S> {
     /// Create a new graph engine with the given storage
     pub fn new(storage: Arc<S>) -> Self {
+        let cache = AdjacencyCache::new();
         Self {
             storage,
             budget: TraversalBudget::default(),
+            cache,
         }
     }
 
     /// Create a new graph engine with custom budget
     pub fn with_budget(storage: Arc<S>, budget: TraversalBudget) -> Self {
-        Self { storage, budget }
+        let cache = AdjacencyCache::new();
+        Self { storage, budget, cache }
+    }
+
+    /// Ensure the adjacency cache is valid, rebuilding if necessary
+    fn ensure_cache(&self) -> Result<()> {
+        if !self.cache.is_valid() {
+            self.cache.build(self.storage.as_ref())?;
+        }
+        Ok(())
+    }
+
+    /// Invalidate the cache (call after writes)
+    pub fn invalidate_cache(&self) {
+        self.cache.invalidate();
+    }
+
+    /// Get edges using cache when available, falling back to storage
+    pub fn cached_edges_from(&self, node_id: NodeId) -> Result<Vec<Edge>> {
+        if let Some(entries) = self.cache.get_outgoing(node_id) {
+            // Reconstruct edges from cache entries
+            let mut edges = Vec::with_capacity(entries.len());
+            for entry in entries {
+                if let Some(edge) = self.storage.get_edge(entry.edge_id)? {
+                    edges.push(edge);
+                }
+            }
+            Ok(edges)
+        } else {
+            self.storage.edges_from(node_id)
+        }
+    }
+
+    /// Get edges using cache when available, falling back to storage
+    pub fn cached_edges_to(&self, node_id: NodeId) -> Result<Vec<Edge>> {
+        if let Some(entries) = self.cache.get_incoming(node_id) {
+            let mut edges = Vec::with_capacity(entries.len());
+            for entry in entries {
+                if let Some(edge) = self.storage.get_edge(entry.edge_id)? {
+                    edges.push(edge);
+                }
+            }
+            Ok(edges)
+        } else {
+            self.storage.edges_to(node_id)
+        }
     }
 }
 
@@ -87,12 +136,13 @@ impl<S: Storage + 'static> GraphEngine for GraphEngineImpl<S> {
         direction: TraversalDirection,
         relation_filter: Option<Vec<Relation>>,
     ) -> Result<Vec<(Node, Edge)>> {
+        self.ensure_cache()?;
         let edges = match direction {
-            TraversalDirection::Outgoing => self.storage.edges_from(id)?,
-            TraversalDirection::Incoming => self.storage.edges_to(id)?,
+            TraversalDirection::Outgoing => self.cached_edges_from(id)?,
+            TraversalDirection::Incoming => self.cached_edges_to(id)?,
             TraversalDirection::Both => {
-                let mut edges = self.storage.edges_from(id)?;
-                edges.extend(self.storage.edges_to(id)?);
+                let mut edges = self.cached_edges_from(id)?;
+                edges.extend(self.cached_edges_to(id)?);
                 edges
             }
         };
@@ -151,21 +201,21 @@ impl<S: Storage + 'static> GraphEngine for GraphEngineImpl<S> {
     }
 
     fn roots(&self, relation: Relation) -> Result<Vec<Node>> {
-        // Get all nodes
+        self.ensure_cache()?;
         let all_nodes = self.storage.list_nodes(NodeFilter::new())?;
-
         let mut roots = Vec::new();
 
         for node in all_nodes {
-            // Check if this node has any incoming edges with the given relation
-            let incoming = self.storage.edges_to(node.id)?;
+            if node.deleted {
+                continue;
+            }
+
+            let incoming = self.cached_edges_to(node.id)?;
             let has_incoming = incoming.iter().any(|e| e.relation == relation);
 
-            if !has_incoming && !node.deleted {
-                // Check if it has at least one outgoing edge with this relation
-                let outgoing = self.storage.edges_from(node.id)?;
+            if !has_incoming {
+                let outgoing = self.cached_edges_from(node.id)?;
                 let has_outgoing = outgoing.iter().any(|e| e.relation == relation);
-
                 if has_outgoing {
                     roots.push(node);
                 }
@@ -176,21 +226,21 @@ impl<S: Storage + 'static> GraphEngine for GraphEngineImpl<S> {
     }
 
     fn leaves(&self, relation: Relation) -> Result<Vec<Node>> {
-        // Get all nodes
+        self.ensure_cache()?;
         let all_nodes = self.storage.list_nodes(NodeFilter::new())?;
-
         let mut leaves = Vec::new();
 
         for node in all_nodes {
-            // Check if this node has any outgoing edges with the given relation
-            let outgoing = self.storage.edges_from(node.id)?;
+            if node.deleted {
+                continue;
+            }
+
+            let outgoing = self.cached_edges_from(node.id)?;
             let has_outgoing = outgoing.iter().any(|e| e.relation == relation);
 
-            if !has_outgoing && !node.deleted {
-                // Check if it has at least one incoming edge with this relation
-                let incoming = self.storage.edges_to(node.id)?;
+            if !has_outgoing {
+                let incoming = self.cached_edges_to(node.id)?;
                 let has_incoming = incoming.iter().any(|e| e.relation == relation);
-
                 if has_incoming {
                     leaves.push(node);
                 }
@@ -201,7 +251,7 @@ impl<S: Storage + 'static> GraphEngine for GraphEngineImpl<S> {
     }
 
     fn find_cycles(&self) -> Result<Vec<Vec<NodeId>>> {
-        // Get all nodes
+        self.ensure_cache()?;
         let all_nodes = self.storage.list_nodes(NodeFilter::new())?;
 
         let mut visited = HashSet::new();
@@ -227,7 +277,7 @@ impl<S: Storage + 'static> GraphEngine for GraphEngineImpl<S> {
     }
 
     fn components(&self) -> Result<Vec<Vec<NodeId>>> {
-        // Get all nodes
+        self.ensure_cache()?;
         let all_nodes = self.storage.list_nodes(NodeFilter::new())?;
 
         let mut visited = HashSet::new();
@@ -248,7 +298,7 @@ impl<S: Storage + 'static> GraphEngine for GraphEngineImpl<S> {
     }
 
     fn most_connected(&self, limit: usize) -> Result<Vec<(Node, usize)>> {
-        // Get all nodes
+        self.ensure_cache()?;
         let all_nodes = self.storage.list_nodes(NodeFilter::new())?;
 
         let mut node_degrees = Vec::new();
@@ -258,8 +308,8 @@ impl<S: Storage + 'static> GraphEngine for GraphEngineImpl<S> {
                 continue;
             }
 
-            let outgoing = self.storage.edges_from(node.id)?;
-            let incoming = self.storage.edges_to(node.id)?;
+            let outgoing = self.cached_edges_from(node.id)?;
+            let incoming = self.cached_edges_to(node.id)?;
             let degree = outgoing.len() + incoming.len();
 
             node_degrees.push((node, degree));
@@ -287,7 +337,7 @@ impl<S: Storage> GraphEngineImpl<S> {
         rec_stack.insert(node);
         path.push(node);
 
-        let outgoing = self.storage.edges_from(node)?;
+        let outgoing = self.cached_edges_from(node)?;
 
         for edge in outgoing {
             if !visited.contains(&edge.to) {
@@ -322,8 +372,8 @@ impl<S: Storage> GraphEngineImpl<S> {
             component.push(node);
 
             // Get all edges (both directions)
-            let mut edges = self.storage.edges_from(node)?;
-            edges.extend(self.storage.edges_to(node)?);
+            let mut edges = self.cached_edges_from(node)?;
+            edges.extend(self.cached_edges_to(node)?);
 
             for edge in edges {
                 let neighbor = if edge.from == node { edge.to } else { edge.from };

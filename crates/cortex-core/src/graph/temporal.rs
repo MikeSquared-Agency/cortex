@@ -36,18 +36,17 @@ impl<S: Storage> TemporalQueriesImpl<S> {
 
 impl<S: Storage> TemporalQueries for TemporalQueriesImpl<S> {
     fn changed_since(&self, since: DateTime<Utc>) -> Result<Vec<Node>> {
-        let filter = NodeFilter::new().created_after(since);
-        let mut nodes = self.storage.list_nodes(filter)?;
-
-        // Also check for nodes updated after the timestamp
+        // Single pass: get all nodes created after `since`, then filter
+        // for nodes updated after `since` (which includes created after).
+        // TODO(#1): Add a NODES_BY_UPDATED redb index for true O(log n) lookup.
+        // For now, we do a single scan instead of two, which halves the work.
         let all_nodes = self.storage.list_nodes(NodeFilter::new())?;
-        for node in all_nodes {
-            if node.updated_at > since && node.created_at <= since {
-                nodes.push(node);
-            }
-        }
+        let mut nodes: Vec<Node> = all_nodes
+            .into_iter()
+            .filter(|n| n.created_at > since || n.updated_at > since)
+            .collect();
 
-        // Sort by updated_at
+        // Sort by updated_at ascending (oldest changes first)
         nodes.sort_by(|a, b| a.updated_at.cmp(&b.updated_at));
 
         Ok(nodes)

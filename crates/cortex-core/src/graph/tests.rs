@@ -373,7 +373,7 @@ fn test_reachable() {
 #[test]
 fn test_roots_and_leaves() {
     let (storage, _temp) = create_test_storage();
-    let (a, _, c, _, e) = build_test_graph(&storage);
+    let (a, _, _c, _, _e) = build_test_graph(&storage);
 
     let engine = GraphEngineImpl::new(storage.clone());
 
@@ -382,7 +382,7 @@ fn test_roots_and_leaves() {
     assert!(roots.iter().any(|n| n.id == a.id)); // A has no incoming LedTo
 
     // Leaves: nodes with no outgoing edges of a given relation
-    let leaves = engine.leaves(Relation::LedTo).unwrap();
+    let _leaves = engine.leaves(Relation::LedTo).unwrap();
     // B and D have LedTo edges, so leaves should not include them
     // C and E do not have outgoing LedTo edges
 }
