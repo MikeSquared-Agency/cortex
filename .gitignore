@@ -1,0 +1,19 @@
+# Rust build artifacts
+/target
+**/target
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Data files
+/data
+*.redb
+
+# OS
+.DS_Store
+Thumbs.db

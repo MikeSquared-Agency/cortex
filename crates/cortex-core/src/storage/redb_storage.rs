@@ -1,0 +1,912 @@
+use crate::error::{CortexError, Result};
+use crate::storage::filters::{NodeFilter, StorageStats};
+use crate::storage::traits::Storage;
+use crate::types::{Edge, EdgeId, Node, NodeId};
+use chrono::{DateTime, Utc};
+use redb::{Database, MultimapTableDefinition, ReadableTable, TableDefinition};
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+// Table definitions
+const NODES: TableDefinition<&[u8; 16], &[u8]> = TableDefinition::new("nodes");
+const EDGES: TableDefinition<&[u8; 16], &[u8]> = TableDefinition::new("edges");
+
+// Secondary indexes
+const NODES_BY_KIND: MultimapTableDefinition<u8, &[u8; 16]> =
+    MultimapTableDefinition::new("nodes_by_kind");
+const EDGES_BY_FROM: MultimapTableDefinition<&[u8; 16], &[u8; 16]> =
+    MultimapTableDefinition::new("edges_by_from");
+const EDGES_BY_TO: MultimapTableDefinition<&[u8; 16], &[u8; 16]> =
+    MultimapTableDefinition::new("edges_by_to");
+const NODES_BY_TAG: MultimapTableDefinition<&str, &[u8; 16]> =
+    MultimapTableDefinition::new("nodes_by_tag");
+const NODES_BY_SOURCE: MultimapTableDefinition<&str, &[u8; 16]> =
+    MultimapTableDefinition::new("nodes_by_source");
+
+// Metadata table
+const META: TableDefinition<&str, &[u8]> = TableDefinition::new("meta");
+
+/// Redb-based storage implementation
+pub struct RedbStorage {
+    db: Arc<Database>,
+    #[allow(dead_code)]
+    path: PathBuf,
+}
+
+impl RedbStorage {
+    /// Open or create a database at the given path
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let path = path.as_ref().to_path_buf();
+
+        // Ensure parent directory exists
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| {
+                CortexError::Validation(format!("Failed to create directory: {}", e))
+            })?;
+        }
+
+        let db = Database::create(&path)?;
+
+        // Initialize tables
+        let write_txn = db.begin_write()?;
+        {
+            let _ = write_txn.open_table(NODES)?;
+            let _ = write_txn.open_table(EDGES)?;
+            let _ = write_txn.open_multimap_table(NODES_BY_KIND)?;
+            let _ = write_txn.open_multimap_table(EDGES_BY_FROM)?;
+            let _ = write_txn.open_multimap_table(EDGES_BY_TO)?;
+            let _ = write_txn.open_multimap_table(NODES_BY_TAG)?;
+            let _ = write_txn.open_multimap_table(NODES_BY_SOURCE)?;
+            let _ = write_txn.open_table(META)?;
+        }
+        write_txn.commit()?;
+
+        Ok(Self {
+            db: Arc::new(db),
+            path,
+        })
+    }
+
+    /// Helper to convert UUID to byte array
+    fn uuid_to_bytes(id: &uuid::Uuid) -> [u8; 16] {
+        *id.as_bytes()
+    }
+
+    /// Helper to convert byte array to UUID
+    fn bytes_to_uuid(bytes: &[u8; 16]) -> uuid::Uuid {
+        uuid::Uuid::from_bytes(*bytes)
+    }
+
+    /// Serialize a node to bytes
+    fn serialize_node(node: &Node) -> Result<Vec<u8>> {
+        bincode::serialize(node).map_err(CortexError::from)
+    }
+
+    /// Deserialize a node from bytes
+    fn deserialize_node(bytes: &[u8]) -> Result<Node> {
+        bincode::deserialize(bytes).map_err(CortexError::from)
+    }
+
+    /// Serialize an edge to bytes
+    fn serialize_edge(edge: &Edge) -> Result<Vec<u8>> {
+        bincode::serialize(edge).map_err(CortexError::from)
+    }
+
+    /// Deserialize an edge from bytes
+    fn deserialize_edge(bytes: &[u8]) -> Result<Edge> {
+        bincode::deserialize(bytes).map_err(CortexError::from)
+    }
+
+    /// Update secondary indexes for a node
+    fn update_node_indexes(
+        &self,
+        txn: &redb::WriteTransaction,
+        node: &Node,
+        old_node: Option<&Node>,
+    ) -> Result<()> {
+        let node_id_bytes = Self::uuid_to_bytes(&node.id);
+
+        // Update kind index
+        {
+            let mut kind_table = txn.open_multimap_table(NODES_BY_KIND)?;
+
+            // Remove old kind if node existed before
+            if let Some(old) = old_node {
+                kind_table.remove(old.kind.to_u8(), &node_id_bytes)?;
+            }
+
+            kind_table.insert(node.kind.to_u8(), &node_id_bytes)?;
+        }
+
+        // Update source index
+        {
+            let mut source_table = txn.open_multimap_table(NODES_BY_SOURCE)?;
+
+            // Remove old source if changed
+            if let Some(old) = old_node {
+                if old.source.agent != node.source.agent {
+                    source_table.remove(old.source.agent.as_str(), &node_id_bytes)?;
+                }
+            }
+
+            source_table.insert(node.source.agent.as_str(), &node_id_bytes)?;
+        }
+
+        // Update tag index
+        {
+            let mut tag_table = txn.open_multimap_table(NODES_BY_TAG)?;
+
+            // Remove old tags if they changed
+            if let Some(old) = old_node {
+                for old_tag in &old.data.tags {
+                    if !node.data.tags.contains(old_tag) {
+                        tag_table.remove(old_tag.as_str(), &node_id_bytes)?;
+                    }
+                }
+            }
+
+            // Add new tags
+            for tag in &node.data.tags {
+                tag_table.insert(tag.as_str(), &node_id_bytes)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Update edge indexes
+    fn update_edge_indexes(&self, txn: &redb::WriteTransaction, edge: &Edge) -> Result<()> {
+        let edge_id_bytes = Self::uuid_to_bytes(&edge.id);
+        let from_bytes = Self::uuid_to_bytes(&edge.from);
+        let to_bytes = Self::uuid_to_bytes(&edge.to);
+
+        {
+            let mut from_table = txn.open_multimap_table(EDGES_BY_FROM)?;
+            from_table.insert(&from_bytes, &edge_id_bytes)?;
+        }
+
+        {
+            let mut to_table = txn.open_multimap_table(EDGES_BY_TO)?;
+            to_table.insert(&to_bytes, &edge_id_bytes)?;
+        }
+
+        Ok(())
+    }
+
+    /// Remove edge from indexes
+    fn remove_edge_from_indexes(&self, txn: &redb::WriteTransaction, edge: &Edge) -> Result<()> {
+        let edge_id_bytes = Self::uuid_to_bytes(&edge.id);
+        let from_bytes = Self::uuid_to_bytes(&edge.from);
+        let to_bytes = Self::uuid_to_bytes(&edge.to);
+
+        {
+            let mut from_table = txn.open_multimap_table(EDGES_BY_FROM)?;
+            from_table.remove(&from_bytes, &edge_id_bytes)?;
+        }
+
+        {
+            let mut to_table = txn.open_multimap_table(EDGES_BY_TO)?;
+            to_table.remove(&to_bytes, &edge_id_bytes)?;
+        }
+
+        Ok(())
+    }
+
+    /// Check if a node matches the filter criteria
+    fn node_matches_filter(node: &Node, filter: &NodeFilter) -> bool {
+        // Check deleted flag
+        if !filter.include_deleted && node.deleted {
+            return false;
+        }
+
+        // Check kind
+        if let Some(ref kinds) = filter.kinds {
+            if !kinds.contains(&node.kind) {
+                return false;
+            }
+        }
+
+        // Check tags (node must have at least one of the filter tags)
+        if let Some(ref tags) = filter.tags {
+            if !tags.iter().any(|t| node.data.tags.contains(t)) {
+                return false;
+            }
+        }
+
+        // Check source agent
+        if let Some(ref agent) = filter.source_agent {
+            if node.source.agent != *agent {
+                return false;
+            }
+        }
+
+        // Check time range
+        if let Some(after) = filter.created_after {
+            if node.created_at < after {
+                return false;
+            }
+        }
+
+        if let Some(before) = filter.created_before {
+            if node.created_at > before {
+                return false;
+            }
+        }
+
+        // Check importance
+        if let Some(min_importance) = filter.min_importance {
+            if node.importance < min_importance {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Find a duplicate edge (same from, to, relation)
+    fn find_duplicate_edge(&self, edge: &Edge) -> Result<Option<Edge>> {
+        let read_txn = self.db.begin_read()?;
+        let edges_table = read_txn.open_table(EDGES)?;
+        let from_index = read_txn.open_multimap_table(EDGES_BY_FROM)?;
+
+        let from_bytes = Self::uuid_to_bytes(&edge.from);
+
+        // Get all edges from this source node
+        let edge_ids: Vec<EdgeId> = from_index
+            .get(&from_bytes)?
+            .map(|result| result.map(|guard| Self::bytes_to_uuid(guard.value())))
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        // Check each edge for matching to and relation
+        for edge_id in edge_ids {
+            let edge_id_bytes = Self::uuid_to_bytes(&edge_id);
+            if let Some(bytes) = edges_table.get(&edge_id_bytes)? {
+                let existing: Edge = Self::deserialize_edge(bytes.value())?;
+                if existing.to == edge.to && existing.relation == edge.relation {
+                    return Ok(Some(existing));
+                }
+            }
+        }
+
+        Ok(None)
+    }
+}
+
+impl Storage for RedbStorage {
+    fn put_node(&self, node: &Node) -> Result<()> {
+        // Validate node
+        node.validate()
+            .map_err(|e| CortexError::Validation(e))?;
+
+        let write_txn = self.db.begin_write()?;
+
+        // Check if node already exists to get old version
+        let node_id_bytes = Self::uuid_to_bytes(&node.id);
+        let old_node = {
+            let nodes_table = write_txn.open_table(NODES)?;
+            let old_bytes = nodes_table.get(&node_id_bytes)?.map(|guard| guard.value().to_vec());
+            old_bytes.map(|bytes| Self::deserialize_node(&bytes)).transpose()?
+        };
+
+        // Serialize and store node
+        let node_bytes = Self::serialize_node(node)?;
+        {
+            let mut nodes_table = write_txn.open_table(NODES)?;
+            let node_id_bytes = Self::uuid_to_bytes(&node.id);
+            nodes_table.insert(&node_id_bytes, node_bytes.as_slice())?;
+        }
+
+        // Update indexes
+        self.update_node_indexes(&write_txn, node, old_node.as_ref())?;
+
+        write_txn.commit()?;
+        Ok(())
+    }
+
+    fn get_node(&self, id: NodeId) -> Result<Option<Node>> {
+        let read_txn = self.db.begin_read()?;
+        let table = read_txn.open_table(NODES)?;
+        let id_bytes = Self::uuid_to_bytes(&id);
+
+        if let Some(bytes) = table.get(&id_bytes)? {
+            let node = Self::deserialize_node(bytes.value())?;
+            Ok(Some(node))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn delete_node(&self, id: NodeId) -> Result<()> {
+        let mut node = self
+            .get_node(id)?
+            .ok_or(CortexError::NodeNotFound(id))?;
+
+        node.deleted = true;
+        node.updated_at = Utc::now();
+
+        self.put_node(&node)
+    }
+
+    fn list_nodes(&self, filter: NodeFilter) -> Result<Vec<Node>> {
+        let read_txn = self.db.begin_read()?;
+        let nodes_table = read_txn.open_table(NODES)?;
+
+        let mut nodes = Vec::new();
+
+        // If we have a kind filter, use the index for efficiency
+        if let Some(ref kinds) = filter.kinds {
+            let kind_index = read_txn.open_multimap_table(NODES_BY_KIND)?;
+
+            for kind in kinds {
+                let node_ids: Vec<NodeId> = kind_index
+                    .get(kind.to_u8())?
+                    .map(|result| result.map(|guard| Self::bytes_to_uuid(guard.value())))
+                    .collect::<std::result::Result<Vec<_>, _>>()?;
+
+                for node_id in node_ids {
+                    let node_id_bytes = Self::uuid_to_bytes(&node_id);
+                    if let Some(bytes) = nodes_table.get(&node_id_bytes)? {
+                        let node = Self::deserialize_node(bytes.value())?;
+                        if Self::node_matches_filter(&node, &filter) {
+                            nodes.push(node);
+                        }
+                    }
+                }
+            }
+        } else {
+            // Full table scan
+            for item in nodes_table.iter()? {
+                let (_, value) = item?;
+                let node = Self::deserialize_node(value.value())?;
+                if Self::node_matches_filter(&node, &filter) {
+                    nodes.push(node);
+                }
+            }
+        }
+
+        // Sort by created_at descending (newest first)
+        nodes.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+
+        // Apply offset and limit
+        let start = filter.offset.unwrap_or(0);
+        let end = filter.limit.map(|l| start + l).unwrap_or(nodes.len());
+        Ok(nodes.into_iter().skip(start).take(end - start).collect())
+    }
+
+    fn count_nodes(&self, filter: NodeFilter) -> Result<u64> {
+        // For now, just count the filtered list
+        // Could be optimized for specific filter types
+        Ok(self.list_nodes(filter)?.len() as u64)
+    }
+
+    fn put_edge(&self, edge: &Edge) -> Result<()> {
+        // Validate edge
+        edge.validate()
+            .map_err(|e| CortexError::Validation(e))?;
+
+        // Check that both nodes exist and are not deleted
+        let from_node = self
+            .get_node(edge.from)?
+            .ok_or(CortexError::InvalidEdge {
+                reason: format!("Source node {} does not exist", edge.from),
+            })?;
+
+        if from_node.deleted {
+            return Err(CortexError::InvalidEdge {
+                reason: format!("Source node {} is deleted", edge.from),
+            });
+        }
+
+        let to_node = self.get_node(edge.to)?.ok_or(CortexError::InvalidEdge {
+            reason: format!("Target node {} does not exist", edge.to),
+        })?;
+
+        if to_node.deleted {
+            return Err(CortexError::InvalidEdge {
+                reason: format!("Target node {} is deleted", edge.to),
+            });
+        }
+
+        // Check for duplicate (same from, to, relation)
+        if let Some(existing) = self.find_duplicate_edge(edge)? {
+            if existing.id != edge.id {
+                return Err(CortexError::DuplicateEdge {
+                    from: edge.from,
+                    to: edge.to,
+                    relation: edge.relation.to_string(),
+                });
+            }
+        }
+
+        let write_txn = self.db.begin_write()?;
+
+        // Serialize and store edge
+        let edge_bytes = Self::serialize_edge(edge)?;
+        {
+            let mut edges_table = write_txn.open_table(EDGES)?;
+            let edge_id_bytes = Self::uuid_to_bytes(&edge.id);
+            edges_table.insert(&edge_id_bytes, edge_bytes.as_slice())?;
+        }
+
+        // Update indexes
+        self.update_edge_indexes(&write_txn, edge)?;
+
+        write_txn.commit()?;
+        Ok(())
+    }
+
+    fn get_edge(&self, id: EdgeId) -> Result<Option<Edge>> {
+        let read_txn = self.db.begin_read()?;
+        let table = read_txn.open_table(EDGES)?;
+        let id_bytes = Self::uuid_to_bytes(&id);
+
+        if let Some(bytes) = table.get(&id_bytes)? {
+            let edge = Self::deserialize_edge(bytes.value())?;
+            Ok(Some(edge))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn delete_edge(&self, id: EdgeId) -> Result<()> {
+        let edge = self
+            .get_edge(id)?
+            .ok_or(CortexError::EdgeNotFound(id))?;
+
+        let write_txn = self.db.begin_write()?;
+
+        // Remove from indexes first
+        self.remove_edge_from_indexes(&write_txn, &edge)?;
+
+        // Remove from main table
+        {
+            let mut edges_table = write_txn.open_table(EDGES)?;
+            let edge_id_bytes = Self::uuid_to_bytes(&id);
+            edges_table.remove(&edge_id_bytes)?;
+        }
+
+        write_txn.commit()?;
+        Ok(())
+    }
+
+    fn edges_from(&self, node_id: NodeId) -> Result<Vec<Edge>> {
+        let read_txn = self.db.begin_read()?;
+        let edges_table = read_txn.open_table(EDGES)?;
+        let from_index = read_txn.open_multimap_table(EDGES_BY_FROM)?;
+
+        let node_id_bytes = Self::uuid_to_bytes(&node_id);
+        let edge_ids: Vec<EdgeId> = from_index
+            .get(&node_id_bytes)?
+            .map(|result| result.map(|guard| Self::bytes_to_uuid(guard.value())))
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        let mut edges = Vec::new();
+        for edge_id in edge_ids {
+            let edge_id_bytes = Self::uuid_to_bytes(&edge_id);
+            if let Some(bytes) = edges_table.get(&edge_id_bytes)? {
+                edges.push(Self::deserialize_edge(bytes.value())?);
+            }
+        }
+
+        Ok(edges)
+    }
+
+    fn edges_to(&self, node_id: NodeId) -> Result<Vec<Edge>> {
+        let read_txn = self.db.begin_read()?;
+        let edges_table = read_txn.open_table(EDGES)?;
+        let to_index = read_txn.open_multimap_table(EDGES_BY_TO)?;
+
+        let node_id_bytes = Self::uuid_to_bytes(&node_id);
+        let edge_ids: Vec<EdgeId> = to_index
+            .get(&node_id_bytes)?
+            .map(|result| result.map(|guard| Self::bytes_to_uuid(guard.value())))
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        let mut edges = Vec::new();
+        for edge_id in edge_ids {
+            let edge_id_bytes = Self::uuid_to_bytes(&edge_id);
+            if let Some(bytes) = edges_table.get(&edge_id_bytes)? {
+                edges.push(Self::deserialize_edge(bytes.value())?);
+            }
+        }
+
+        Ok(edges)
+    }
+
+    fn edges_between(&self, from: NodeId, to: NodeId) -> Result<Vec<Edge>> {
+        let edges_from_node = self.edges_from(from)?;
+        Ok(edges_from_node
+            .into_iter()
+            .filter(|e| e.to == to)
+            .collect())
+    }
+
+    fn put_nodes_batch(&self, nodes: &[Node]) -> Result<()> {
+        // Validate all nodes first
+        for node in nodes {
+            node.validate()
+                .map_err(|e| CortexError::Validation(e))?;
+        }
+
+        let write_txn = self.db.begin_write()?;
+
+        for node in nodes {
+            // Get old node if exists
+            let node_id_bytes = Self::uuid_to_bytes(&node.id);
+            let old_node = {
+                let nodes_table = write_txn.open_table(NODES)?;
+                let old_bytes = nodes_table.get(&node_id_bytes)?.map(|guard| guard.value().to_vec());
+                old_bytes.map(|bytes| Self::deserialize_node(&bytes)).transpose()?
+            };
+
+            // Serialize and store
+            let node_bytes = Self::serialize_node(node)?;
+            {
+                let mut nodes_table = write_txn.open_table(NODES)?;
+                let node_id_bytes = Self::uuid_to_bytes(&node.id);
+                nodes_table.insert(&node_id_bytes, node_bytes.as_slice())?;
+            }
+
+            // Update indexes
+            self.update_node_indexes(&write_txn, node, old_node.as_ref())?;
+        }
+
+        write_txn.commit()?;
+        Ok(())
+    }
+
+    fn put_edges_batch(&self, edges: &[Edge]) -> Result<()> {
+        // Validate all edges first
+        for edge in edges {
+            edge.validate()
+                .map_err(|e| CortexError::Validation(e))?;
+        }
+
+        let write_txn = self.db.begin_write()?;
+
+        for edge in edges {
+            let edge_bytes = Self::serialize_edge(edge)?;
+            {
+                let mut edges_table = write_txn.open_table(EDGES)?;
+                let edge_id_bytes = Self::uuid_to_bytes(&edge.id);
+                edges_table.insert(&edge_id_bytes, edge_bytes.as_slice())?;
+            }
+
+            self.update_edge_indexes(&write_txn, edge)?;
+        }
+
+        write_txn.commit()?;
+        Ok(())
+    }
+
+    fn compact(&self) -> Result<()> {
+        // redb handles compaction automatically
+        // This is a no-op but kept for API compatibility
+        Ok(())
+    }
+
+    fn stats(&self) -> Result<StorageStats> {
+        let read_txn = self.db.begin_read()?;
+        let nodes_table = read_txn.open_table(NODES)?;
+        let edges_table = read_txn.open_table(EDGES)?;
+
+        let mut node_count = 0u64;
+        let mut edge_count = 0u64;
+        let mut node_counts_by_kind = HashMap::new();
+        let mut edge_counts_by_relation = HashMap::new();
+        let mut oldest_node: Option<DateTime<Utc>> = None;
+        let mut newest_node: Option<DateTime<Utc>> = None;
+
+        // Count nodes and gather stats
+        for item in nodes_table.iter()? {
+            let (_, value) = item?;
+            let node: Node = Self::deserialize_node(value.value())?;
+
+            if !node.deleted {
+                node_count += 1;
+                *node_counts_by_kind.entry(node.kind).or_insert(0) += 1;
+
+                if oldest_node.is_none() || node.created_at < oldest_node.unwrap() {
+                    oldest_node = Some(node.created_at);
+                }
+                if newest_node.is_none() || node.created_at > newest_node.unwrap() {
+                    newest_node = Some(node.created_at);
+                }
+            }
+        }
+
+        // Count edges
+        for item in edges_table.iter()? {
+            let (_, value) = item?;
+            let edge: Edge = Self::deserialize_edge(value.value())?;
+            edge_count += 1;
+            *edge_counts_by_relation.entry(edge.relation).or_insert(0) += 1;
+        }
+
+        // Get database file size
+        let db_size_bytes = std::fs::metadata(&self.path)
+            .map(|m| m.len())
+            .unwrap_or(0);
+
+        Ok(StorageStats {
+            node_count,
+            edge_count,
+            node_counts_by_kind,
+            edge_counts_by_relation,
+            db_size_bytes,
+            oldest_node,
+            newest_node,
+        })
+    }
+
+    fn snapshot(&self, path: &Path) -> Result<()> {
+        std::fs::copy(&self.path, path).map_err(|e| {
+            CortexError::Validation(format!("Failed to create snapshot: {}", e))
+        })?;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::*;
+    use tempfile::TempDir;
+    use uuid::Uuid;
+
+    fn create_test_storage() -> (RedbStorage, TempDir) {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.redb");
+        let storage = RedbStorage::open(&db_path).unwrap();
+        (storage, temp_dir)
+    }
+
+    fn create_test_node(kind: NodeKind, title: &str) -> Node {
+        Node::new(
+            kind,
+            title.to_string(),
+            "Test body".to_string(),
+            Source {
+                agent: "test".to_string(),
+                session: None,
+                channel: None,
+            },
+            0.5,
+        )
+    }
+
+    #[test]
+    fn test_node_crud() {
+        let (storage, _temp) = create_test_storage();
+
+        let node = create_test_node(NodeKind::Fact, "Test Fact");
+
+        // Create
+        storage.put_node(&node).unwrap();
+
+        // Read
+        let retrieved = storage.get_node(node.id).unwrap();
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().data.title, "Test Fact");
+
+        // Update
+        let mut updated = node.clone();
+        updated.data.title = "Updated Fact".to_string();
+        storage.put_node(&updated).unwrap();
+
+        let retrieved = storage.get_node(node.id).unwrap().unwrap();
+        assert_eq!(retrieved.data.title, "Updated Fact");
+
+        // Soft delete
+        storage.delete_node(node.id).unwrap();
+        let deleted = storage.get_node(node.id).unwrap().unwrap();
+        assert!(deleted.deleted);
+    }
+
+    #[test]
+    fn test_node_validation() {
+        let (storage, _temp) = create_test_storage();
+
+        // Title too long
+        let mut node = create_test_node(NodeKind::Fact, &"x".repeat(300));
+        let result = storage.put_node(&node);
+        assert!(result.is_err());
+
+        // Invalid tag
+        node.data.title = "Valid".to_string();
+        node.data.tags = vec!["Invalid Tag!".to_string()];
+        let result = storage.put_node(&node);
+        assert!(result.is_err());
+
+        // Valid node
+        node.data.tags = vec!["valid-tag".to_string()];
+        let result = storage.put_node(&node);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_edge_crud() {
+        let (storage, _temp) = create_test_storage();
+
+        // Create two nodes
+        let node1 = create_test_node(NodeKind::Fact, "Fact 1");
+        let node2 = create_test_node(NodeKind::Decision, "Decision 1");
+        storage.put_node(&node1).unwrap();
+        storage.put_node(&node2).unwrap();
+
+        // Create edge
+        let edge = Edge::new(
+            node1.id,
+            node2.id,
+            Relation::InformedBy,
+            0.8,
+            EdgeProvenance::Manual {
+                created_by: "test".to_string(),
+            },
+        );
+        storage.put_edge(&edge).unwrap();
+
+        // Read
+        let retrieved = storage.get_edge(edge.id).unwrap();
+        assert!(retrieved.is_some());
+
+        // Delete
+        storage.delete_edge(edge.id).unwrap();
+        let deleted = storage.get_edge(edge.id).unwrap();
+        assert!(deleted.is_none());
+    }
+
+    #[test]
+    fn test_edge_validation() {
+        let (storage, _temp) = create_test_storage();
+
+        let node = create_test_node(NodeKind::Fact, "Fact");
+        storage.put_node(&node).unwrap();
+
+        // Self-edge
+        let edge = Edge::new(
+            node.id,
+            node.id,
+            Relation::RelatedTo,
+            0.5,
+            EdgeProvenance::Manual {
+                created_by: "test".to_string(),
+            },
+        );
+        assert!(storage.put_edge(&edge).is_err());
+
+        // Non-existent target node
+        let edge = Edge::new(
+            node.id,
+            Uuid::now_v7(),
+            Relation::RelatedTo,
+            0.5,
+            EdgeProvenance::Manual {
+                created_by: "test".to_string(),
+            },
+        );
+        assert!(storage.put_edge(&edge).is_err());
+    }
+
+    #[test]
+    fn test_node_filtering() {
+        let (storage, _temp) = create_test_storage();
+
+        // Create nodes of different kinds
+        let fact = create_test_node(NodeKind::Fact, "Fact");
+        let decision = create_test_node(NodeKind::Decision, "Decision");
+        storage.put_node(&fact).unwrap();
+        storage.put_node(&decision).unwrap();
+
+        // Filter by kind
+        let filter = NodeFilter::new().with_kinds(vec![NodeKind::Fact]);
+        let results = storage.list_nodes(filter).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].kind, NodeKind::Fact);
+
+        // Filter by multiple kinds
+        let filter = NodeFilter::new().with_kinds(vec![NodeKind::Fact, NodeKind::Decision]);
+        let results = storage.list_nodes(filter).unwrap();
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn test_edge_traversal() {
+        let (storage, _temp) = create_test_storage();
+
+        let node1 = create_test_node(NodeKind::Fact, "Node 1");
+        let node2 = create_test_node(NodeKind::Fact, "Node 2");
+        let node3 = create_test_node(NodeKind::Fact, "Node 3");
+
+        storage.put_node(&node1).unwrap();
+        storage.put_node(&node2).unwrap();
+        storage.put_node(&node3).unwrap();
+
+        // Create edges: 1->2, 1->3, 3->2
+        let edge1 = Edge::new(
+            node1.id,
+            node2.id,
+            Relation::RelatedTo,
+            1.0,
+            EdgeProvenance::Manual {
+                created_by: "test".to_string(),
+            },
+        );
+        let edge2 = Edge::new(
+            node1.id,
+            node3.id,
+            Relation::LedTo,
+            1.0,
+            EdgeProvenance::Manual {
+                created_by: "test".to_string(),
+            },
+        );
+        let edge3 = Edge::new(
+            node3.id,
+            node2.id,
+            Relation::InformedBy,
+            1.0,
+            EdgeProvenance::Manual {
+                created_by: "test".to_string(),
+            },
+        );
+
+        storage.put_edge(&edge1).unwrap();
+        storage.put_edge(&edge2).unwrap();
+        storage.put_edge(&edge3).unwrap();
+
+        // Test edges_from
+        let from_node1 = storage.edges_from(node1.id).unwrap();
+        assert_eq!(from_node1.len(), 2);
+
+        // Test edges_to
+        let to_node2 = storage.edges_to(node2.id).unwrap();
+        assert_eq!(to_node2.len(), 2);
+
+        // Test edges_between
+        let between = storage.edges_between(node1.id, node2.id).unwrap();
+        assert_eq!(between.len(), 1);
+    }
+
+    #[test]
+    fn test_batch_operations() {
+        let (storage, _temp) = create_test_storage();
+
+        let nodes: Vec<Node> = (0..10)
+            .map(|i| create_test_node(NodeKind::Observation, &format!("Node {}", i)))
+            .collect();
+
+        storage.put_nodes_batch(&nodes).unwrap();
+
+        let filter = NodeFilter::new();
+        let results = storage.list_nodes(filter).unwrap();
+        assert_eq!(results.len(), 10);
+    }
+
+    #[test]
+    fn test_storage_stats() {
+        let (storage, _temp) = create_test_storage();
+
+        let fact = create_test_node(NodeKind::Fact, "Fact");
+        let decision = create_test_node(NodeKind::Decision, "Decision");
+        storage.put_node(&fact).unwrap();
+        storage.put_node(&decision).unwrap();
+
+        let edge = Edge::new(
+            fact.id,
+            decision.id,
+            Relation::InformedBy,
+            0.8,
+            EdgeProvenance::Manual {
+                created_by: "test".to_string(),
+            },
+        );
+        storage.put_edge(&edge).unwrap();
+
+        let stats = storage.stats().unwrap();
+        assert_eq!(stats.node_count, 2);
+        assert_eq!(stats.edge_count, 1);
+        assert_eq!(stats.node_counts_by_kind.get(&NodeKind::Fact), Some(&1));
+    }
+}

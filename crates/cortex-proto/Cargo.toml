@@ -1,0 +1,10 @@
+[package]
+name = "cortex-proto"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+# Placeholder crate for Phase 5
+# Will contain protobuf definitions and generated gRPC code
