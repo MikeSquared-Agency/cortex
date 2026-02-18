@@ -244,33 +244,7 @@ impl RedbStorage {
         true
     }
 
-    /// Find a duplicate edge (same from, to, relation)
-    fn find_duplicate_edge(&self, edge: &Edge) -> Result<Option<Edge>> {
-        let read_txn = self.db.begin_read()?;
-        let edges_table = read_txn.open_table(EDGES)?;
-        let from_index = read_txn.open_multimap_table(EDGES_BY_FROM)?;
 
-        let from_bytes = Self::uuid_to_bytes(&edge.from);
-
-        // Get all edges from this source node
-        let edge_ids: Vec<EdgeId> = from_index
-            .get(&from_bytes)?
-            .map(|result| result.map(|guard| Self::bytes_to_uuid(guard.value())))
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-
-        // Check each edge for matching to and relation
-        for edge_id in edge_ids {
-            let edge_id_bytes = Self::uuid_to_bytes(&edge_id);
-            if let Some(bytes) = edges_table.get(&edge_id_bytes)? {
-                let existing: Edge = Self::deserialize_edge(bytes.value())?;
-                if existing.to == edge.to && existing.relation == edge.relation {
-                    return Ok(Some(existing));
-                }
-            }
-        }
-
-        Ok(None)
-    }
 }
 
 impl Storage for RedbStorage {
@@ -375,8 +349,27 @@ impl Storage for RedbStorage {
     }
 
     fn count_nodes(&self, filter: NodeFilter) -> Result<u64> {
-        // For now, just count the filtered list
-        // Could be optimized for specific filter types
+        // Optimized: count without materializing full Node structs
+        // For simple kind-only filters, use the index directly
+        if filter.tags.is_none()
+            && filter.source_agent.is_none()
+            && filter.created_after.is_none()
+            && filter.created_before.is_none()
+            && filter.min_importance.is_none()
+            && !filter.include_deleted
+        {
+            if let Some(ref kinds) = filter.kinds {
+                let read_txn = self.db.begin_read()?;
+                let kind_index = read_txn.open_multimap_table(NODES_BY_KIND)?;
+                let mut count = 0u64;
+                for kind in kinds {
+                    count += kind_index.get(kind.to_u8())?
+                        .count() as u64;
+                }
+                return Ok(count);
+            }
+        }
+        // Fallback: materialize and count
         Ok(self.list_nodes(filter)?.len() as u64)
     }
 
@@ -385,37 +378,57 @@ impl Storage for RedbStorage {
         edge.validate()
             .map_err(|e| CortexError::Validation(e))?;
 
-        // Check that both nodes exist and are not deleted
-        let from_node = self
-            .get_node(edge.from)?
-            .ok_or(CortexError::InvalidEdge {
-                reason: format!("Source node {} does not exist", edge.from),
-            })?;
+        // Single read transaction for all pre-checks
+        {
+            let read_txn = self.db.begin_read()?;
+            let nodes_table = read_txn.open_table(NODES)?;
 
-        if from_node.deleted {
-            return Err(CortexError::InvalidEdge {
-                reason: format!("Source node {} is deleted", edge.from),
-            });
-        }
-
-        let to_node = self.get_node(edge.to)?.ok_or(CortexError::InvalidEdge {
-            reason: format!("Target node {} does not exist", edge.to),
-        })?;
-
-        if to_node.deleted {
-            return Err(CortexError::InvalidEdge {
-                reason: format!("Target node {} is deleted", edge.to),
-            });
-        }
-
-        // Check for duplicate (same from, to, relation)
-        if let Some(existing) = self.find_duplicate_edge(edge)? {
-            if existing.id != edge.id {
-                return Err(CortexError::DuplicateEdge {
-                    from: edge.from,
-                    to: edge.to,
-                    relation: edge.relation.to_string(),
+            // Check source node exists and not deleted
+            let from_bytes = Self::uuid_to_bytes(&edge.from);
+            let from_data = nodes_table.get(&from_bytes)?
+                .ok_or(CortexError::InvalidEdge {
+                    reason: format!("Source node {} does not exist", edge.from),
+                })?;
+            let from_node: Node = Self::deserialize_node(from_data.value())?;
+            if from_node.deleted {
+                return Err(CortexError::InvalidEdge {
+                    reason: format!("Source node {} is deleted", edge.from),
                 });
+            }
+
+            // Check target node exists and not deleted
+            let to_bytes = Self::uuid_to_bytes(&edge.to);
+            let to_data = nodes_table.get(&to_bytes)?
+                .ok_or(CortexError::InvalidEdge {
+                    reason: format!("Target node {} does not exist", edge.to),
+                })?;
+            let to_node: Node = Self::deserialize_node(to_data.value())?;
+            if to_node.deleted {
+                return Err(CortexError::InvalidEdge {
+                    reason: format!("Target node {} is deleted", edge.to),
+                });
+            }
+
+            // Check for duplicate (same from, to, relation) in same transaction
+            let edges_table = read_txn.open_table(EDGES)?;
+            let from_index = read_txn.open_multimap_table(EDGES_BY_FROM)?;
+            let edge_ids: Vec<EdgeId> = from_index
+                .get(&from_bytes)?
+                .map(|result| result.map(|guard| Self::bytes_to_uuid(guard.value())))
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+
+            for edge_id in edge_ids {
+                let edge_id_bytes = Self::uuid_to_bytes(&edge_id);
+                if let Some(bytes) = edges_table.get(&edge_id_bytes)? {
+                    let existing: Edge = Self::deserialize_edge(bytes.value())?;
+                    if existing.to == edge.to && existing.relation == edge.relation && existing.id != edge.id {
+                        return Err(CortexError::DuplicateEdge {
+                            from: edge.from,
+                            to: edge.to,
+                            relation: edge.relation.to_string(),
+                        });
+                    }
+                }
             }
         }
 
@@ -908,5 +921,238 @@ mod tests {
         assert_eq!(stats.node_count, 2);
         assert_eq!(stats.edge_count, 1);
         assert_eq!(stats.node_counts_by_kind.get(&NodeKind::Fact), Some(&1));
+    }
+}
+
+#[cfg(test)]
+mod optimization_tests {
+    use super::*;
+    use crate::types::*;
+    use tempfile::TempDir;
+
+    fn create_test_storage() -> (RedbStorage, TempDir) {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("opt_test.redb");
+        let storage = RedbStorage::open(&db_path).unwrap();
+        (storage, temp_dir)
+    }
+
+    fn make_node(kind: NodeKind, title: &str) -> Node {
+        Node::new(kind, title.to_string(), "body".to_string(),
+            Source { agent: "test".to_string(), session: None, channel: None }, 0.5)
+    }
+
+    #[test]
+    fn test_count_nodes_optimized_path() {
+        let (storage, _temp) = create_test_storage();
+
+        for i in 0..50 {
+            storage.put_node(&make_node(NodeKind::Fact, &format!("F{}", i))).unwrap();
+        }
+        for i in 0..30 {
+            storage.put_node(&make_node(NodeKind::Decision, &format!("D{}", i))).unwrap();
+        }
+
+        // Kind-only filter should use index fast path
+        let count = storage.count_nodes(NodeFilter::new().with_kinds(vec![NodeKind::Fact])).unwrap();
+        assert_eq!(count, 50);
+
+        let count = storage.count_nodes(NodeFilter::new().with_kinds(vec![NodeKind::Fact, NodeKind::Decision])).unwrap();
+        assert_eq!(count, 80);
+
+        let count = storage.count_nodes(NodeFilter::new()).unwrap();
+        assert_eq!(count, 80);
+    }
+
+    #[test]
+    fn test_duplicate_edge_detection() {
+        let (storage, _temp) = create_test_storage();
+
+        let n1 = make_node(NodeKind::Fact, "N1");
+        let n2 = make_node(NodeKind::Fact, "N2");
+        storage.put_node(&n1).unwrap();
+        storage.put_node(&n2).unwrap();
+
+        let e1 = Edge::new(n1.id, n2.id, Relation::RelatedTo, 0.8,
+            EdgeProvenance::Manual { created_by: "test".to_string() });
+        storage.put_edge(&e1).unwrap();
+
+        // Same from/to/relation should fail
+        let e2 = Edge::new(n1.id, n2.id, Relation::RelatedTo, 0.5,
+            EdgeProvenance::Manual { created_by: "test".to_string() });
+        assert!(storage.put_edge(&e2).is_err());
+
+        // Different relation should succeed
+        let e3 = Edge::new(n1.id, n2.id, Relation::LedTo, 0.5,
+            EdgeProvenance::Manual { created_by: "test".to_string() });
+        assert!(storage.put_edge(&e3).is_ok());
+    }
+
+    #[test]
+    fn test_edge_to_deleted_node_rejected() {
+        let (storage, _temp) = create_test_storage();
+
+        let n1 = make_node(NodeKind::Fact, "N1");
+        let n2 = make_node(NodeKind::Fact, "N2");
+        storage.put_node(&n1).unwrap();
+        storage.put_node(&n2).unwrap();
+        storage.delete_node(n2.id).unwrap();
+
+        let edge = Edge::new(n1.id, n2.id, Relation::RelatedTo, 0.8,
+            EdgeProvenance::Manual { created_by: "test".to_string() });
+        assert!(storage.put_edge(&edge).is_err());
+    }
+
+    #[test]
+    fn test_update_existing_edge() {
+        let (storage, _temp) = create_test_storage();
+
+        let n1 = make_node(NodeKind::Fact, "N1");
+        let n2 = make_node(NodeKind::Fact, "N2");
+        storage.put_node(&n1).unwrap();
+        storage.put_node(&n2).unwrap();
+
+        let mut edge = Edge::new(n1.id, n2.id, Relation::RelatedTo, 0.8,
+            EdgeProvenance::Manual { created_by: "test".to_string() });
+        storage.put_edge(&edge).unwrap();
+
+        // Update same edge (same ID) should succeed
+        edge.weight = 0.3;
+        storage.put_edge(&edge).unwrap();
+
+        let retrieved = storage.get_edge(edge.id).unwrap().unwrap();
+        assert!((retrieved.weight - 0.3).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_snapshot_and_restore() {
+        let (storage, _temp) = create_test_storage();
+
+        let node = make_node(NodeKind::Fact, "Snapshot test");
+        storage.put_node(&node).unwrap();
+
+        // Snapshot
+        let snapshot_path = _temp.path().join("snapshot.redb");
+        storage.snapshot(&snapshot_path).unwrap();
+
+        // Open snapshot as separate database
+        let restored = RedbStorage::open(&snapshot_path).unwrap();
+        let retrieved = restored.get_node(node.id).unwrap();
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().data.title, "Snapshot test");
+    }
+
+    #[test]
+    fn test_tag_index_update_on_node_change() {
+        let (storage, _temp) = create_test_storage();
+
+        let mut node = make_node(NodeKind::Fact, "Tagged");
+        node.data.tags = vec!["alpha".to_string(), "beta".to_string()];
+        storage.put_node(&node).unwrap();
+
+        // Find by tag
+        let results = storage.list_nodes(NodeFilter::new().with_tags(vec!["alpha".to_string()])).unwrap();
+        assert_eq!(results.len(), 1);
+
+        // Update tags — remove alpha, add gamma
+        node.data.tags = vec!["beta".to_string(), "gamma".to_string()];
+        storage.put_node(&node).unwrap();
+
+        // Alpha should no longer match
+        let results = storage.list_nodes(NodeFilter::new().with_tags(vec!["alpha".to_string()])).unwrap();
+        assert_eq!(results.len(), 0);
+
+        // Gamma should match
+        let results = storage.list_nodes(NodeFilter::new().with_tags(vec!["gamma".to_string()])).unwrap();
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn test_source_index_update_on_agent_change() {
+        let (storage, _temp) = create_test_storage();
+
+        let mut node = make_node(NodeKind::Fact, "Agent test");
+        storage.put_node(&node).unwrap();
+
+        let results = storage.list_nodes(NodeFilter::new().with_source_agent("test".to_string())).unwrap();
+        assert_eq!(results.len(), 1);
+
+        // Change agent
+        node.source.agent = "kai".to_string();
+        storage.put_node(&node).unwrap();
+
+        let results = storage.list_nodes(NodeFilter::new().with_source_agent("test".to_string())).unwrap();
+        assert_eq!(results.len(), 0);
+
+        let results = storage.list_nodes(NodeFilter::new().with_source_agent("kai".to_string())).unwrap();
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn test_deleted_nodes_excluded_by_default() {
+        let (storage, _temp) = create_test_storage();
+
+        let n1 = make_node(NodeKind::Fact, "Alive");
+        let n2 = make_node(NodeKind::Fact, "Dead");
+        storage.put_node(&n1).unwrap();
+        storage.put_node(&n2).unwrap();
+        storage.delete_node(n2.id).unwrap();
+
+        let results = storage.list_nodes(NodeFilter::new()).unwrap();
+        assert_eq!(results.len(), 1);
+
+        let results = storage.list_nodes(NodeFilter::new().include_deleted()).unwrap();
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn test_importance_filter() {
+        let (storage, _temp) = create_test_storage();
+
+        let mut low = make_node(NodeKind::Fact, "Low importance");
+        low.importance = 0.2;
+        let mut high = make_node(NodeKind::Fact, "High importance");
+        high.importance = 0.9;
+
+        storage.put_node(&low).unwrap();
+        storage.put_node(&high).unwrap();
+
+        let results = storage.list_nodes(NodeFilter::new().with_min_importance(0.5)).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].data.title, "High importance");
+    }
+
+    #[test]
+    fn test_pagination() {
+        let (storage, _temp) = create_test_storage();
+
+        for i in 0..20 {
+            storage.put_node(&make_node(NodeKind::Fact, &format!("Page {}", i))).unwrap();
+        }
+
+        let page1 = storage.list_nodes(NodeFilter::new().with_limit(5)).unwrap();
+        assert_eq!(page1.len(), 5);
+
+        let page2 = storage.list_nodes(NodeFilter::new().with_limit(5).with_offset(5)).unwrap();
+        assert_eq!(page2.len(), 5);
+
+        // Pages shouldn't overlap
+        let page1_ids: Vec<_> = page1.iter().map(|n| n.id).collect();
+        let page2_ids: Vec<_> = page2.iter().map(|n| n.id).collect();
+        assert!(page1_ids.iter().all(|id| !page2_ids.contains(id)));
+    }
+
+    #[test]
+    fn test_concurrent_read_during_iteration() {
+        let (storage, _temp) = create_test_storage();
+
+        // Insert some nodes
+        for i in 0..100 {
+            storage.put_node(&make_node(NodeKind::Fact, &format!("N{}", i))).unwrap();
+        }
+
+        // Stats should work (iterates all nodes)
+        let stats = storage.stats().unwrap();
+        assert_eq!(stats.node_count, 100);
     }
 }

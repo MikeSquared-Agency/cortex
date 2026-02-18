@@ -25,7 +25,7 @@ impl Eq for WeightedNode {}
 impl PartialOrd for WeightedNode {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         // Higher weight = higher priority
-        other.weight.partial_cmp(&self.weight)
+        self.weight.partial_cmp(&other.weight)
     }
 }
 

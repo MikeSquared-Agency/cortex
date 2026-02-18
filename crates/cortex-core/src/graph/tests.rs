@@ -471,3 +471,231 @@ fn test_subgraph_merge() {
     assert_eq!(sg1.nodes.len(), 2);
     assert_eq!(sg1.depths.len(), 2);
 }
+
+// === Additional edge case and stress tests ===
+
+#[test]
+fn test_empty_graph_traversal() {
+    let (storage, _temp) = create_test_storage();
+    let engine = GraphEngineImpl::new(storage.clone());
+
+    let result = engine.traverse(TraversalRequest {
+        start: vec![Uuid::now_v7()], // non-existent node
+        max_depth: Some(3),
+        direction: TraversalDirection::Outgoing,
+        strategy: TraversalStrategy::Bfs,
+        include_start: true,
+        ..Default::default()
+    }).unwrap();
+
+    assert!(result.nodes.is_empty());
+}
+
+#[test]
+fn test_single_node_no_edges() {
+    let (storage, _temp) = create_test_storage();
+    let node = create_test_node(NodeKind::Fact, "Lonely");
+    storage.put_node(&node).unwrap();
+
+    let engine = GraphEngineImpl::new(storage.clone());
+
+    let result = engine.traverse(TraversalRequest {
+        start: vec![node.id],
+        max_depth: Some(3),
+        direction: TraversalDirection::Both,
+        strategy: TraversalStrategy::Bfs,
+        include_start: true,
+        ..Default::default()
+    }).unwrap();
+
+    assert_eq!(result.nodes.len(), 1);
+    assert!(result.edges.is_empty());
+}
+
+#[test]
+fn test_depth_zero_returns_only_start() {
+    let (storage, _temp) = create_test_storage();
+    let (a, _b, _c, _d, _e) = build_test_graph(&storage);
+
+    let engine = GraphEngineImpl::new(storage.clone());
+
+    let result = engine.traverse(TraversalRequest {
+        start: vec![a.id],
+        max_depth: Some(0),
+        direction: TraversalDirection::Outgoing,
+        strategy: TraversalStrategy::Bfs,
+        include_start: true,
+        ..Default::default()
+    }).unwrap();
+
+    assert_eq!(result.nodes.len(), 1);
+    assert!(result.nodes.contains_key(&a.id));
+}
+
+#[test]
+fn test_multiple_start_nodes() {
+    let (storage, _temp) = create_test_storage();
+    let (a, _b, c, _d, _e) = build_test_graph(&storage);
+
+    let engine = GraphEngineImpl::new(storage.clone());
+
+    let result = engine.traverse(TraversalRequest {
+        start: vec![a.id, c.id],
+        max_depth: Some(1),
+        direction: TraversalDirection::Both,
+        strategy: TraversalStrategy::Bfs,
+        include_start: true,
+        ..Default::default()
+    }).unwrap();
+
+    // Should include both starts and their neighbors
+    assert!(result.nodes.contains_key(&a.id));
+    assert!(result.nodes.contains_key(&c.id));
+}
+
+#[test]
+fn test_edge_post_pass_correctness() {
+    // Verify edges only connect nodes that are both in the result
+    let (storage, _temp) = create_test_storage();
+    let (a, _b, _c, _d, _e) = build_test_graph(&storage);
+
+    let engine = GraphEngineImpl::new(storage.clone());
+
+    let result = engine.traverse(TraversalRequest {
+        start: vec![a.id],
+        max_depth: Some(1),
+        direction: TraversalDirection::Outgoing,
+        strategy: TraversalStrategy::Bfs,
+        include_start: true,
+        ..Default::default()
+    }).unwrap();
+
+    // Every edge in the result should have both endpoints in the node set
+    for edge in &result.edges {
+        assert!(result.nodes.contains_key(&edge.from),
+            "Edge from {} not in result nodes", edge.from);
+        assert!(result.nodes.contains_key(&edge.to),
+            "Edge to {} not in result nodes", edge.to);
+    }
+}
+
+#[test]
+fn test_bidirectional_traversal_no_duplicates() {
+    let (storage, _temp) = create_test_storage();
+
+    let a = create_test_node(NodeKind::Fact, "A");
+    let b = create_test_node(NodeKind::Fact, "B");
+    storage.put_node(&a).unwrap();
+    storage.put_node(&b).unwrap();
+
+    // Edge in both directions
+    storage.put_edge(&create_test_edge(a.id, b.id, Relation::RelatedTo, 1.0)).unwrap();
+    storage.put_edge(&create_test_edge(b.id, a.id, Relation::RelatedTo, 1.0)).unwrap();
+
+    let engine = GraphEngineImpl::new(storage.clone());
+
+    let result = engine.traverse(TraversalRequest {
+        start: vec![a.id],
+        max_depth: Some(3),
+        direction: TraversalDirection::Both,
+        strategy: TraversalStrategy::Bfs,
+        include_start: true,
+        ..Default::default()
+    }).unwrap();
+
+    // Should not visit nodes more than once
+    assert_eq!(result.nodes.len(), 2);
+}
+
+#[test]
+fn test_weighted_traversal_prefers_heavy_edges() {
+    let (storage, _temp) = create_test_storage();
+
+    // Build a deeper graph where weight preference matters:
+    // root -> heavy(0.99) -> heavy_child
+    // root -> light(0.01) -> light_child
+    // With limit=3 (root + 2), weighted should explore heavy branch first
+    let root = create_test_node(NodeKind::Decision, "Root");
+    let heavy = create_test_node(NodeKind::Fact, "Heavy path");
+    let light = create_test_node(NodeKind::Fact, "Light path");
+    let heavy_child = create_test_node(NodeKind::Observation, "Heavy child");
+    let light_child = create_test_node(NodeKind::Observation, "Light child");
+    storage.put_node(&root).unwrap();
+    storage.put_node(&heavy).unwrap();
+    storage.put_node(&light).unwrap();
+    storage.put_node(&heavy_child).unwrap();
+    storage.put_node(&light_child).unwrap();
+
+    storage.put_edge(&create_test_edge(root.id, heavy.id, Relation::LedTo, 0.99)).unwrap();
+    storage.put_edge(&create_test_edge(root.id, light.id, Relation::LedTo, 0.01)).unwrap();
+    storage.put_edge(&create_test_edge(heavy.id, heavy_child.id, Relation::LedTo, 0.99)).unwrap();
+    storage.put_edge(&create_test_edge(light.id, light_child.id, Relation::LedTo, 0.01)).unwrap();
+
+    let engine = GraphEngineImpl::new(storage.clone());
+
+    // Limit to 3: root + 2 others. Weighted should explore heavy branch first.
+    let result = engine.traverse(TraversalRequest {
+        start: vec![root.id],
+        max_depth: Some(2),
+        direction: TraversalDirection::Outgoing,
+        strategy: TraversalStrategy::Weighted,
+        limit: Some(3),
+        include_start: true,
+        ..Default::default()
+    }).unwrap();
+
+    assert_eq!(result.nodes.len(), 3);
+    assert!(result.nodes.contains_key(&root.id));
+    assert!(result.nodes.contains_key(&heavy.id));
+    // Third node should be heavy_child (weight 0.99) not light (weight 0.01)
+    assert!(result.nodes.contains_key(&heavy_child.id));
+}
+
+#[test]
+fn test_path_with_relation_filter() {
+    let (storage, _temp) = create_test_storage();
+
+    let a = create_test_node(NodeKind::Fact, "A");
+    let b = create_test_node(NodeKind::Fact, "B");
+    let c = create_test_node(NodeKind::Fact, "C");
+    storage.put_node(&a).unwrap();
+    storage.put_node(&b).unwrap();
+    storage.put_node(&c).unwrap();
+
+    // Direct path A->C via LedTo
+    storage.put_edge(&create_test_edge(a.id, c.id, Relation::LedTo, 1.0)).unwrap();
+    // Indirect path A->B->C via RelatedTo
+    storage.put_edge(&create_test_edge(a.id, b.id, Relation::RelatedTo, 1.0)).unwrap();
+    storage.put_edge(&create_test_edge(b.id, c.id, Relation::RelatedTo, 1.0)).unwrap();
+
+    let engine = GraphEngineImpl::new(storage.clone());
+
+    // Only follow RelatedTo — should find A->B->C, not A->C
+    let result = engine.find_paths(PathRequest {
+        from: a.id,
+        to: c.id,
+        relation_filter: Some(vec![Relation::RelatedTo]),
+        max_paths: 1,
+        ..Default::default()
+    }).unwrap();
+
+    assert_eq!(result.paths.len(), 1);
+    assert_eq!(result.paths[0].length, 2); // A->B->C = 2 edges
+}
+
+#[test]
+fn test_connected_components_isolated_nodes() {
+    let (storage, _temp) = create_test_storage();
+
+    // 3 isolated nodes = 3 components
+    let a = create_test_node(NodeKind::Fact, "A");
+    let b = create_test_node(NodeKind::Fact, "B");
+    let c = create_test_node(NodeKind::Fact, "C");
+    storage.put_node(&a).unwrap();
+    storage.put_node(&b).unwrap();
+    storage.put_node(&c).unwrap();
+
+    let engine = GraphEngineImpl::new(storage.clone());
+    let components = engine.components().unwrap();
+    assert_eq!(components.len(), 3);
+}
