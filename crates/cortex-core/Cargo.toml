@@ -13,6 +13,8 @@ uuid.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
 redb.workspace = true
+fastembed.workspace = true
+instant-distance.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

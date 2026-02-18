@@ -24,6 +24,10 @@ thiserror = "2.0"
 # Storage
 redb = "2.1"
 
+# Vector search
+fastembed = "4.4"
+instant-distance = "0.6"
+
 # Async runtime
 tokio = { version = "1.42", features = ["full"] }
 
