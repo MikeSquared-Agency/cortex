@@ -15,6 +15,7 @@ thiserror.workspace = true
 redb.workspace = true
 fastembed.workspace = true
 instant-distance.workspace = true
+rayon.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

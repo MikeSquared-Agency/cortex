@@ -4,6 +4,7 @@ use crate::storage::Storage;
 use crate::types::{Node, NodeId, NodeKind};
 use crate::vector::{EmbeddingService, VectorFilter, VectorIndex};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Query combining vector similarity and graph proximity
 #[derive(Debug, Clone)]
@@ -89,14 +90,14 @@ pub struct HybridResult {
 
 /// Hybrid search combining vector similarity and graph proximity
 pub struct HybridSearch<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> {
-    storage: S,
+    storage: Arc<S>,
     embedding_service: E,
     vector_index: V,
     graph_engine: G,
 }
 
 impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> HybridSearch<S, E, V, G> {
-    pub fn new(storage: S, embedding_service: E, vector_index: V, graph_engine: G) -> Self {
+    pub fn new(storage: Arc<S>, embedding_service: E, vector_index: V, graph_engine: G) -> Self {
         Self {
             storage,
             embedding_service,
@@ -285,8 +286,7 @@ mod tests {
         let storage_arc = Arc::new(storage);
         let graph_engine = GraphEngineImpl::new(storage_arc.clone());
 
-        let storage_clone = RedbStorage::open(&db_path).unwrap();
-        let hybrid = HybridSearch::new(storage_clone, embedding_service, vector_index, graph_engine);
+        let hybrid = HybridSearch::new(storage_arc.clone(), embedding_service, vector_index, graph_engine);
 
         let query = HybridQuery::new("Rust language".to_string()).with_limit(5);
 
@@ -373,8 +373,7 @@ mod tests {
         let storage_arc = Arc::new(storage);
         let graph_engine = GraphEngineImpl::new(storage_arc.clone());
 
-        let storage_clone = RedbStorage::open(&db_path).unwrap();
-        let hybrid = HybridSearch::new(storage_clone, embedding_service, vector_index, graph_engine);
+        let hybrid = HybridSearch::new(storage_arc.clone(), embedding_service, vector_index, graph_engine);
 
         let query = HybridQuery::new("Rust properties".to_string())
             .with_anchors(vec![anchor_node.id])

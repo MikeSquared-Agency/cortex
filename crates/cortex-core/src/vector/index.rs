@@ -4,6 +4,7 @@ use instant_distance::{Builder, HnswMap, Point, Search};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use rayon::prelude::*;
 
 /// Result from a similarity search
 #[derive(Debug, Clone)]
@@ -327,14 +328,20 @@ impl VectorIndex for HnswIndex {
         k: usize,
         filter: Option<&VectorFilter>,
     ) -> Result<HashMap<NodeId, Vec<SimilarityResult>>> {
-        let mut results = HashMap::new();
+        // Parallel batch search using rayon
+        let results: Vec<(NodeId, Result<Vec<SimilarityResult>>)> = queries
+            .par_iter()
+            .map(|(query_id, embedding)| {
+                let search_results = self.search(embedding, k, filter);
+                (*query_id, search_results)
+            })
+            .collect();
 
-        for (query_id, embedding) in queries {
-            let search_results = self.search(embedding, k, filter)?;
-            results.insert(*query_id, search_results);
+        let mut map = HashMap::with_capacity(results.len());
+        for (id, result) in results {
+            map.insert(id, result?);
         }
-
-        Ok(results)
+        Ok(map)
     }
 
     fn len(&self) -> usize {
