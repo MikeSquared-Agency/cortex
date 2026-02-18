@@ -238,6 +238,14 @@ pub enum EdgeProvenance {
     /// same source, temporal proximity).
     AutoStructural { rule: String },
 
+    /// Created automatically by the auto-linker
+    /// when detecting contradictions.
+    AutoContradiction { reason: String },
+
+    /// Created automatically by the auto-linker
+    /// during deduplication.
+    AutoDedup { similarity: f32 },
+
     /// Imported from an external source (Alexandria migration).
     Imported { source: String },
 }

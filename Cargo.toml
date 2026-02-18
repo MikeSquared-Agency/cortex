@@ -36,6 +36,10 @@ tokio = { version = "1.42", features = ["full"] }
 tonic = "0.12"
 prost = "0.13"
 
+# Logging
+log = "0.4"
+env_logger = "0.11"
+
 # Testing
 proptest = "1.6"
 criterion = "0.5"

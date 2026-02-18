@@ -16,11 +16,13 @@ redb.workspace = true
 fastembed.workspace = true
 instant-distance.workspace = true
 rayon.workspace = true
+log.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
 criterion.workspace = true
 tempfile = "3.14"
+env_logger.workspace = true
 
 [[bench]]
 name = "storage"

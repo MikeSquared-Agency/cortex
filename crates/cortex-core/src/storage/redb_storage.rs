@@ -593,6 +593,26 @@ impl Storage for RedbStorage {
         Ok(())
     }
 
+    fn put_metadata(&self, key: &str, value: &[u8]) -> Result<()> {
+        let write_txn = self.db.begin_write()?;
+        {
+            let mut meta_table = write_txn.open_table(META)?;
+            meta_table.insert(key, value)?;
+        }
+        write_txn.commit()?;
+        Ok(())
+    }
+
+    fn get_metadata(&self, key: &str) -> Result<Option<Vec<u8>>> {
+        let read_txn = self.db.begin_read()?;
+        let meta_table = read_txn.open_table(META)?;
+
+        match meta_table.get(key)? {
+            Some(value) => Ok(Some(value.value().to_vec())),
+            None => Ok(None),
+        }
+    }
+
     fn compact(&self) -> Result<()> {
         // redb handles compaction automatically
         // This is a no-op but kept for API compatibility

@@ -50,6 +50,14 @@ pub trait Storage: Send + Sync {
     /// Insert or update multiple edges in a single transaction
     fn put_edges_batch(&self, edges: &[Edge]) -> Result<()>;
 
+    // === Metadata ===
+
+    /// Store metadata key-value pair
+    fn put_metadata(&self, key: &str, value: &[u8]) -> Result<()>;
+
+    /// Retrieve metadata by key
+    fn get_metadata(&self, key: &str) -> Result<Option<Vec<u8>>>;
+
     // === Maintenance ===
 
     /// Compact the database (redb does this automatically, but exposed for control)
