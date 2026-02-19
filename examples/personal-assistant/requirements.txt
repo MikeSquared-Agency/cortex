@@ -1,0 +1,2 @@
+cortex-memory>=0.1.0
+openai>=1.0.0

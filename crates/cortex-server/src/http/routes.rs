@@ -18,6 +18,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/nodes/:id/neighbors", get(node_neighbors))
         .route("/edges/:id", get(get_edge))
         .route("/search", get(search))
+        .route("/viz", get(graph_viz))
         .route("/graph/viz", get(graph_viz))
         .route("/graph/export", get(graph_export))
         .route("/auto-linker/status", get(auto_linker_status))

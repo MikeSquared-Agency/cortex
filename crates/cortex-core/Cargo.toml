@@ -4,6 +4,11 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+description = "Embedded graph memory engine for AI agents — typed nodes, auto-linking, decay, hybrid search, and briefing synthesis"
+repository = "https://github.com/MikeSquared-Agency/cortex"
+keywords = ["graph", "memory", "ai", "agent", "embedding"]
+categories = ["database", "data-structures"]
+readme = "README.md"
 
 [dependencies]
 serde.workspace = true

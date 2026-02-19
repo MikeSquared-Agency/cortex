@@ -1,95 +1,152 @@
 # Cortex
 
-**Warren's Graph Memory Engine**
+**Embedded graph memory for AI agents. One binary. One file. Zero dependencies.**
 
-Embedded Rust knowledge graph with vector similarity, auto-linking, and agent briefings. The brain of the Warren swarm.
+Cortex is a local knowledge graph that stores what your AI agents know, automatically discovers relationships between knowledge, and synthesises context briefings on demand. Think SQLite, but for agent memory.
 
-## What Is This?
+## Why Cortex?
 
-Cortex is a local, embedded graph database purpose-built for AI agent memory. No external database dependencies. No JVM. No cloud. A single Rust binary that stores typed knowledge as graph nodes, automatically discovers relationships via embedding similarity, and synthesises context briefings for agents at boot.
+Your agent's memory shouldn't be a text file. It should be a living graph that wires itself, forgets what's irrelevant, and tells your agent exactly what it needs to know.
 
-## Why Build This?
+- **Graph-native** — typed nodes and edges, not just vectors
+- **Auto-linking** — relationships discovered via embedding similarity
+- **Decay** — unused knowledge fades, important knowledge persists
+- **Briefings** — "what do I need to know?" → tailored context document
+- **Hybrid search** — vector similarity × graph proximity
+- **Embedded** — single file, no external dependencies
+- **Fast** — Rust, HNSW index, mmap'd storage
 
-Existing solutions fall into two camps:
+## Quick Start
 
-1. **External databases** (Neo4j, SurrealDB, Postgres+pgvector) — network hop, operational overhead, another process to manage, another thing that goes down at 3am.
-2. **Flat file memory** (MEMORY.md, AGENTS.md) — no relationships, no semantic search, stale within hours, doesn't scale past one agent.
+### Install
 
-Cortex is neither. It's an embedded library that runs in-process, stores everything on local disk, and grows its own knowledge graph automatically. Agents don't manage their memory — Cortex does it for them.
+```bash
+# Cargo
+cargo install cortex-memory
+
+# Docker
+docker run -p 9090:9090 -p 9091:9091 mikesquared/cortex:latest
+```
+
+### 5 Minutes to Memory
+
+```bash
+# Create a project
+cortex init
+
+# Start the server
+cortex serve
+
+# Store some knowledge
+cortex node create --kind fact --title "The API uses JWT auth" --importance 0.7
+
+# Search
+cortex search "authentication"
+
+# Get a briefing for your agent
+cortex briefing my-agent
+```
+
+### As a Library (Python)
+
+```python
+from cortex_memory import Cortex
+
+cx = Cortex("localhost:9090")
+cx.store("decision", "Use FastAPI", body="Async + type hints", importance=0.8)
+
+results = cx.search("backend framework")
+print(cx.briefing("my-agent"))
+```
+
+### Embedded in Rust
+
+```rust
+use cortex_core::{Cortex, LibraryConfig};
+
+let cx = Cortex::open("./memory.redb", LibraryConfig::default())?;
+cx.store(Node::fact("The API uses JWT auth", 0.7))?;
+let results = cx.search("authentication", 5)?;
+```
+
+## Documentation
+
+- **[Quick Start](docs/getting-started/quickstart.md)**
+- **[Configuration Reference](docs/reference/config.md)**
+- **[CLI Reference](docs/reference/cli.md)**
+- **[Python SDK](docs/reference/python-sdk.md)**
+- **[gRPC API](docs/reference/grpc-api.md)**
+- **[Architecture](docs/concepts/architecture.md)**
+
+## Why Not a Vector DB?
+
+| Feature | Cortex | Mem0 | Zep | Chroma | pgvector |
+|---------|--------|------|-----|--------|----------|
+| Embedded (no server) | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Graph relationships | ✅ native | ❌ | ❌ | ❌ | ❌ |
+| Auto-linking | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Edge decay | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Contradiction detection | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Briefing synthesis | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Hybrid search (vector+graph) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Local embeddings | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Single binary | ✅ | ❌ | ❌ | ❌ | ❌ |
+
+**Our moat:** Graph-native memory with auto-linking and decay. Nobody else does this.
+
+## Graph Visualisation
+
+Cortex ships a live graph explorer. Start the server and open [http://localhost:9091/viz](http://localhost:9091/viz):
+
+- Force-directed layout with nodes coloured by kind
+- Node size reflects importance score
+- Click any node for full details (title, body, metadata, connections)
+- Search, filter by kind, filter by minimum importance
+- Export as SVG, PNG, or JSON
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────┐
-│                  cortex-server               │
-│  gRPC API │ HTTP debug │ NATS consumer       │
-├─────────────────────────────────────────────┤
-│                  cortex-core                 │
-│  ┌──────────┐ ┌───────────┐ ┌─────────────┐ │
-│  │  Storage  │ │  Graph    │ │  Auto-Link  │ │
-│  │  (redb)   │ │  Engine   │ │  (Cortex)   │ │
-│  └──────────┘ └───────────┘ └─────────────┘ │
-│  ┌──────────┐ ┌───────────┐ ┌─────────────┐ │
-│  │  Vector   │ │  Briefing │ │  Ingest     │ │
-│  │  (HNSW)   │ │  Synth    │ │  Pipeline   │ │
-│  └──────────┘ └───────────┘ └─────────────┘ │
-├─────────────────────────────────────────────┤
-│              cortex-proto                    │
-│  gRPC service definitions (protobuf)        │
-└─────────────────────────────────────────────┘
+┌────────────────────────────────────────────┐
+│              Your Application              │
+│         AI Agent   SDK / gRPC client       │
+└─────────────────┬──────────────────────────┘
+                  │
+┌─────────────────▼──────────────────────────┐
+│                  Cortex                    │
+│  gRPC :9090          HTTP :9091            │
+│  ┌──────────┐  ┌───────────┐  ┌─────────┐  │
+│  │  Storage  │  │  Graph    │  │  HNSW   │  │
+│  │  (redb)   │  │  Engine   │  │  Index  │  │
+│  └──────────┘  └───────────┘  └─────────┘  │
+│  ┌──────────┐  ┌───────────┐  ┌─────────┐  │
+│  │Auto-Link │  │ Briefing  │  │  Ingest │  │
+│  │(background)│ │  Engine   │  │ Pipeline│  │
+│  └──────────┘  └───────────┘  └─────────┘  │
+└────────────────────────────────────────────┘
 ```
 
-## Phases
+## Integration Guides
 
-| Phase | Name | Spec | Duration |
-|-------|------|------|----------|
-| 1 | Foundation — Storage & Data Model | [specs/01-foundation.md](specs/01-foundation.md) | 1 week |
-| 2 | Graph Engine — Traversal & Query | [specs/02-graph-engine.md](specs/02-graph-engine.md) | 1 week |
-| 3 | Vector Layer — Embeddings & Similarity | [specs/03-vector-layer.md](specs/03-vector-layer.md) | 1 week |
-| 4 | Auto-Linker — Self-Growing Graph | [specs/04-auto-linker.md](specs/04-auto-linker.md) | 1 week |
-| 5 | API & Integration — Wire Into Warren | [specs/05-api-integration.md](specs/05-api-integration.md) | 1 week |
-| 6 | Cortex Briefings — Agent Context Synthesis | [specs/06-briefings.md](specs/06-briefings.md) | 1 week |
+- **[LangChain](docs/guides/langchain.md)** — Use Cortex as a LangChain memory backend
+- **[CrewAI](docs/guides/crewai.md)** — Share memory across a multi-agent team
+- **[OpenClaw / Warren](docs/guides/openclaw.md)** — Native integration with Warren
 
-## Tech Stack
-
-| Component | Choice | Why |
-|-----------|--------|-----|
-| Language | Rust | CPU-bound graph traversal + vector math. Ownership model for concurrent access. Single binary. |
-| Graph Storage | redb | Pure Rust embedded KV. Zero-copy mmap reads. Used by Spacebot. |
-| Vector Index | HNSW (instant-distance or hora) | In-process ANN search. No external service. |
-| Embeddings | FastEmbed-rs | Local embedding generation. No API calls. No network dependency. |
-| gRPC | tonic | Rust-native, high-performance. Schema-enforced API. |
-| Serialization | bincode + serde | Compact binary format for storage. JSON for API/debug. |
-| Async Runtime | tokio | Standard. Shared with tonic and NATS client. |
-
-## Repo Structure
+## Examples
 
 ```
-cortex/
-├── Cargo.toml              # Workspace root
-├── specs/                   # Phase specifications
-│   ├── 01-foundation.md
-│   ├── 02-graph-engine.md
-│   ├── 03-vector-layer.md
-│   ├── 04-auto-linker.md
-│   ├── 05-api-integration.md
-│   └── 06-briefings.md
-├── proto/                   # Protobuf definitions
-│   └── cortex.proto
-├── crates/
-│   ├── cortex-core/         # Library: storage, graph, vector, auto-link
-│   │   ├── Cargo.toml
-│   │   └── src/
-│   ├── cortex-server/       # Binary: gRPC + HTTP + NATS
-│   │   ├── Cargo.toml
-│   │   └── src/
-│   └── cortex-proto/        # Generated gRPC code
-│       ├── Cargo.toml
-│       └── src/
-├── Dockerfile
-└── README.md
+examples/
+  langchain-agent/     LangChain agent with Cortex memory
+  crewai-team/         CrewAI multi-agent with shared Cortex
+  personal-assistant/  Simple assistant with briefings
+  rag-pipeline/        Cortex as a RAG backend
+  rust-embedded/       Rust app using cortex-core directly
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). All contributions welcome.
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
