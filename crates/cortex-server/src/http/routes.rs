@@ -5,7 +5,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use cortex_core::{NodeFilter, NodeKind, *};
+use cortex_core::{Edge, EdgeProvenance, NodeFilter, NodeKind, Relation, Source, *};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -13,11 +13,13 @@ pub fn create_router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/stats", get(stats))
-        .route("/nodes", get(list_nodes))
+        .route("/nodes", get(list_nodes).post(create_node))
         .route("/nodes/:id", get(get_node))
         .route("/nodes/:id/neighbors", get(node_neighbors))
+        .route("/edges", post(create_edge))
         .route("/edges/:id", get(get_edge))
         .route("/search", get(search))
+        .route("/search/hybrid", get(hybrid_search))
         .route("/viz", get(graph_viz))
         .route("/graph/viz", get(graph_viz))
         .route("/graph/export", get(graph_export))
@@ -170,6 +172,147 @@ async fn list_nodes(
         .collect();
 
     Ok(Json(JsonResponse::ok(node_data)))
+}
+
+
+#[derive(Deserialize)]
+struct CreateNodeBody {
+    kind: Option<String>,
+    title: String,
+    body: Option<String>,
+    tags: Option<Vec<String>>,
+    importance: Option<f32>,
+    source_agent: Option<String>,
+}
+
+async fn create_node(
+    State(state): State<AppState>,
+    Json(body): Json<CreateNodeBody>,
+) -> AppResult<impl IntoResponse> {
+    let kind_str = body.kind.as_deref().unwrap_or("fact");
+    let kind = NodeKind::new(kind_str)
+        .map_err(|e| anyhow::anyhow!("Invalid kind: {}", e))?;
+    let importance = body.importance.unwrap_or(0.5);
+    let tags = body.tags.unwrap_or_default();
+    let source_agent = body.source_agent.unwrap_or_else(|| "http".to_string());
+    let node_body = body.body.unwrap_or_else(|| body.title.clone());
+
+    let mut node = Node::new(
+        kind,
+        body.title.clone(),
+        node_body.clone(),
+        Source {
+            agent: source_agent,
+            session: None,
+            channel: None,
+        },
+        importance,
+    );
+    node.data.tags = tags;
+
+    // Generate embedding
+    let embedding = state.embedding_service.embed(&format!("{} {}", node.data.title, node.data.body))?;
+
+    // Store node
+    state.storage.put_node(&node)?;
+
+    // Index embedding
+    {
+        let mut index = state.vector_index.write().unwrap();
+        index.insert(node.id, &embedding)?;
+    }
+
+    Ok(Json(JsonResponse::ok(serde_json::json!({
+        "id": node.id.to_string(),
+        "title": node.data.title,
+        "kind": kind_str,
+    }))))
+}
+
+#[derive(Deserialize)]
+struct CreateEdgeBody {
+    from_id: String,
+    to_id: String,
+    relation: Option<String>,
+    weight: Option<f32>,
+}
+
+async fn create_edge(
+    State(state): State<AppState>,
+    Json(body): Json<CreateEdgeBody>,
+) -> AppResult<impl IntoResponse> {
+    let from: uuid::Uuid = body.from_id.parse()
+        .map_err(|_| anyhow::anyhow!("Invalid from_id UUID"))?;
+    let to: uuid::Uuid = body.to_id.parse()
+        .map_err(|_| anyhow::anyhow!("Invalid to_id UUID"))?;
+    let relation_str = body.relation.as_deref().unwrap_or("relates-to");
+    let relation = Relation::new(relation_str)
+        .map_err(|e| anyhow::anyhow!("Invalid relation: {}", e))?;
+    let weight = body.weight.unwrap_or(1.0);
+
+    let edge = Edge {
+        id: uuid::Uuid::now_v7(),
+        from,
+        to,
+        relation: relation.clone(),
+        weight,
+        provenance: EdgeProvenance::Manual {
+            created_by: "http".to_string(),
+        },
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    };
+
+    state.storage.put_edge(&edge)?;
+
+    Ok(Json(JsonResponse::ok(serde_json::json!({
+        "id": edge.id.to_string(),
+        "from": body.from_id,
+        "to": body.to_id,
+        "relation": relation_str,
+    }))))
+}
+
+#[derive(Deserialize)]
+struct HybridSearchQuery {
+    q: String,
+    limit: Option<usize>,
+}
+
+async fn hybrid_search(
+    State(state): State<AppState>,
+    Query(query): Query<HybridSearchQuery>,
+) -> AppResult<impl IntoResponse> {
+    let embedding = state.embedding_service.embed(&query.q)?;
+    let limit = query.limit.unwrap_or(10);
+
+    let index = state.vector_index.read().unwrap();
+    let vector_results = index.search(&embedding, limit * 2, None)?;
+    drop(index);
+
+    // For hybrid: combine vector scores with graph connectivity
+    let results: Vec<_> = vector_results
+        .iter()
+        .take(limit)
+        .filter_map(|r| {
+            state.storage.get_node(r.node_id).ok().flatten().map(|node| {
+                let edge_count = state.storage.edges_from(node.id).unwrap_or_default().len()
+                    + state.storage.edges_to(node.id).unwrap_or_default().len();
+                let graph_boost = (edge_count as f32 * 0.05).min(0.3);
+                serde_json::json!({
+                    "id": node.id.to_string(),
+                    "kind": format!("{:?}", node.kind),
+                    "title": node.data.title,
+                    "body": node.data.body,
+                    "score": r.score + graph_boost,
+                    "vector_score": r.score,
+                    "graph_boost": graph_boost,
+                })
+            })
+        })
+        .collect();
+
+    Ok(Json(JsonResponse::ok(results)))
 }
 
 async fn get_node(

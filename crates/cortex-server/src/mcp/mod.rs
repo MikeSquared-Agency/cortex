@@ -797,12 +797,10 @@ fn resource_node(cortex: &Cortex, uri: &str, id_str: &str) -> Result<Value> {
 // ─── Remote mode: MCP ↔ gRPC proxy ───────────────────────────────────────
 
 async fn run_remote(server_addr: &str) -> Result<()> {
-    use cortex_client::CortexClient;
-
-    eprintln!("[cortex-mcp] Connecting to remote server: {}", server_addr);
-    let mut client = CortexClient::connect(server_addr).await
-        .map_err(|e| anyhow::anyhow!("Failed to connect to {}: {}", server_addr, e))?;
-    eprintln!("[cortex-mcp] Connected. Listening on stdio (JSON-RPC 2.0).");
+    let base_url = server_addr.trim_end_matches('/').to_string();
+    eprintln!("[cortex-mcp] Using remote HTTP server: {}", base_url);
+    let http = reqwest::Client::new();
+    eprintln!("[cortex-mcp] Ready. Listening on stdio (JSON-RPC 2.0).");
 
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
@@ -813,7 +811,7 @@ async fn run_remote(server_addr: &str) -> Result<()> {
         let line = line.trim().to_string();
         if line.is_empty() { continue; }
 
-        if let Some(response) = dispatch_remote(&mut client, &line).await {
+        if let Some(response) = dispatch_remote(&http, &base_url, &line).await {
             let bytes = serde_json::to_vec(&response)?;
             out.write_all(&bytes).await?;
             out.write_all(b"\n").await?;
@@ -823,7 +821,7 @@ async fn run_remote(server_addr: &str) -> Result<()> {
     Ok(())
 }
 
-async fn dispatch_remote(client: &mut cortex_client::CortexClient, line: &str) -> Option<Value> {
+async fn dispatch_remote(http: &reqwest::Client, base_url: &str, line: &str) -> Option<Value> {
     let req: Value = match serde_json::from_str(line) {
         Ok(v) => v,
         Err(_) => return None,
@@ -849,7 +847,7 @@ async fn dispatch_remote(client: &mut cortex_client::CortexClient, line: &str) -
             let params = req.get("params").cloned().unwrap_or(Value::Null);
             let name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
             let args = params.get("arguments").cloned().unwrap_or(json!({}));
-            remote_tool_call(client, name, &args).await
+            remote_tool_call(http, base_url, name, &args).await
         }
         "resources/list" => {
             Ok(resources_list())
@@ -859,7 +857,7 @@ async fn dispatch_remote(client: &mut cortex_client::CortexClient, line: &str) -
                 .and_then(|p| p.get("uri"))
                 .and_then(|u| u.as_str())
                 .unwrap_or("");
-            remote_resource_read(client, uri).await
+            remote_resource_read(http, base_url, uri).await
         }
         "ping" => Ok(json!({})),
         _ => Err(anyhow::anyhow!("Unknown method: {}", method)),
@@ -968,136 +966,93 @@ fn resources_list() -> Value {
     })
 }
 
-async fn remote_tool_call(client: &mut cortex_client::CortexClient, name: &str, args: &Value) -> Result<Value> {
-    use cortex_client::proto;
-
+async fn remote_tool_call(http: &reqwest::Client, base_url: &str, name: &str, args: &Value) -> Result<Value> {
     match name {
         "cortex_store" => {
-            let kind = args.get("kind").and_then(|v| v.as_str()).unwrap_or("fact");
-            let title = args.get("title").and_then(|v| v.as_str()).unwrap_or("");
-            let body = args.get("body").and_then(|v| v.as_str()).unwrap_or(title);
-            let importance = args.get("importance").and_then(|v| v.as_f64()).unwrap_or(0.5) as f32;
-            let tags: Vec<String> = args.get("tags")
-                .and_then(|v| v.as_array())
-                .map(|a| a.iter().filter_map(|t| t.as_str().map(|s| s.to_string())).collect())
-                .unwrap_or_default();
-
-            let resp = client.create_node(proto::CreateNodeRequest {
-                kind: kind.to_string(),
-                title: title.to_string(),
-                body: body.to_string(),
-                importance,
-                tags,
-                metadata: Default::default(),
-                source_agent: "mcp".to_string(),
-                source_session: None,
-                source_channel: None,
-            }).await?;
-
+            let resp: Value = http.post(format!("{}/nodes", base_url))
+                .json(&json!({
+                    "kind": args.get("kind").and_then(|v| v.as_str()).unwrap_or("fact"),
+                    "title": args.get("title").and_then(|v| v.as_str()).unwrap_or(""),
+                    "body": args.get("body").and_then(|v| v.as_str()),
+                    "tags": args.get("tags"),
+                    "importance": args.get("importance"),
+                    "source_agent": "mcp",
+                }))
+                .send().await?.json().await?;
+            let data = &resp["data"];
+            let title = data["title"].as_str().unwrap_or("");
+            let id = data["id"].as_str().unwrap_or("");
             Ok(json!({
-                "content": [{ "type": "text", "text": format!("Stored: {} (id: {})", title, resp.id) }]
+                "content": [{ "type": "text", "text": format!("Stored: {} (id: {})", title, id) }]
             }))
         }
         "cortex_search" => {
             let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
-            let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as u32;
-
-            let resp = client.search(query, limit).await?;
-            let items: Vec<Value> = resp.results.iter().map(|r| {
-                json!({
-                    "id": r.node.as_ref().map(|n| n.id.as_str()).unwrap_or(""),
-                    "kind": r.node.as_ref().map(|n| n.kind.as_str()).unwrap_or(""),
-                    "title": r.node.as_ref().map(|n| n.title.as_str()).unwrap_or(""),
-                    "body": r.node.as_ref().map(|n| n.body.as_str()).unwrap_or(""),
-                    "score": r.score,
-                })
-            }).collect();
-
+            let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(10);
+            let resp: Value = http.get(format!("{}/search?q={}&limit={}", base_url, urlencoding::encode(query), limit))
+                .send().await?.json().await?;
             Ok(json!({
-                "content": [{ "type": "text", "text": serde_json::to_string_pretty(&items)? }]
+                "content": [{ "type": "text", "text": serde_json::to_string_pretty(&resp["data"])? }]
             }))
         }
         "cortex_recall" => {
             let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
-            let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as u32;
-
-            let results = client.search_hybrid(query, vec![], limit).await?;
-            let items: Vec<Value> = results.iter().map(|r| {
-                json!({
-                    "id": r.node.as_ref().map(|n| n.id.as_str()).unwrap_or(""),
-                    "kind": r.node.as_ref().map(|n| n.kind.as_str()).unwrap_or(""),
-                    "title": r.node.as_ref().map(|n| n.title.as_str()).unwrap_or(""),
-                    "score": r.combined_score,
-                })
-            }).collect();
-
+            let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(10);
+            let resp: Value = http.get(format!("{}/search/hybrid?q={}&limit={}", base_url, urlencoding::encode(query), limit))
+                .send().await?.json().await?;
             Ok(json!({
-                "content": [{ "type": "text", "text": serde_json::to_string_pretty(&items)? }]
+                "content": [{ "type": "text", "text": serde_json::to_string_pretty(&resp["data"])? }]
             }))
         }
         "cortex_briefing" => {
             let agent_id = args.get("agent_id").and_then(|v| v.as_str()).unwrap_or("default");
-            let briefing = client.briefing(agent_id).await?;
-
+            let compact = args.get("compact").and_then(|v| v.as_bool()).unwrap_or(false);
+            let resp: Value = http.get(format!("{}/briefing/{}?compact={}", base_url, urlencoding::encode(agent_id), compact))
+                .send().await?.json().await?;
+            let rendered = resp["data"]["rendered"].as_str().unwrap_or("No briefing available");
             Ok(json!({
-                "content": [{ "type": "text", "text": briefing }]
+                "content": [{ "type": "text", "text": rendered }]
             }))
         }
         "cortex_traverse" => {
             let node_id = args.get("node_id").and_then(|v| v.as_str()).unwrap_or("");
-            let depth = args.get("depth").and_then(|v| v.as_u64()).unwrap_or(2) as u32;
+            let depth = args.get("depth").and_then(|v| v.as_u64()).unwrap_or(2);
             let direction = args.get("direction").and_then(|v| v.as_str()).unwrap_or("both");
-
-            let resp = client.traverse(node_id, depth).await?;
-            let nodes: Vec<Value> = resp.nodes.iter().map(|n| json!({
-                "id": &n.id, "kind": &n.kind, "title": &n.title
-            })).collect();
-            let edges: Vec<Value> = resp.edges.iter().map(|e| json!({
-                "id": &e.id, "from": &e.from_id, "to": &e.to_id, "relation": &e.relation
-            })).collect();
+            let resp: Value = http.get(format!("{}/nodes/{}/neighbors?depth={}&direction={}", base_url, node_id, depth, direction))
+                .send().await?.json().await?;
             Ok(json!({
-                "content": [{ "type": "text", "text": serde_json::to_string_pretty(&json!({"nodes": nodes, "edges": edges}))? }]
+                "content": [{ "type": "text", "text": serde_json::to_string_pretty(&resp["data"])? }]
             }))
         }
         "cortex_relate" => {
             let from_id = args.get("from_id").and_then(|v| v.as_str()).unwrap_or("");
             let to_id = args.get("to_id").and_then(|v| v.as_str()).unwrap_or("");
             let relation = args.get("relation").and_then(|v| v.as_str()).unwrap_or("relates-to");
-
-            let resp = client.create_edge(from_id, to_id, relation).await?;
+            let resp: Value = http.post(format!("{}/edges", base_url))
+                .json(&json!({ "from_id": from_id, "to_id": to_id, "relation": relation }))
+                .send().await?.json().await?;
+            let id = resp["data"]["id"].as_str().unwrap_or("");
             Ok(json!({
-                "content": [{ "type": "text", "text": format!("Related: {} -> [{}] -> {} (edge: {})", from_id, relation, to_id, resp) }]
+                "content": [{ "type": "text", "text": format!("Related: {} -> [{}] -> {} (edge: {})", from_id, relation, to_id, id) }]
             }))
         }
         _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
     }
 }
 
-async fn remote_resource_read(client: &mut cortex_client::CortexClient, uri: &str) -> Result<Value> {
+async fn remote_resource_read(http: &reqwest::Client, base_url: &str, uri: &str) -> Result<Value> {
     if uri == "cortex://stats" {
-        let stats = client.stats().await?;
-        let text = json!({
-            "node_count": stats.node_count,
-            "edge_count": stats.edge_count,
-            "db_size_bytes": stats.db_size_bytes,
-        });
+        let resp: Value = http.get(format!("{}/stats", base_url))
+            .send().await?.json().await?;
         Ok(json!({
-            "contents": [{ "uri": uri, "mimeType": "application/json", "text": serde_json::to_string_pretty(&text)? }]
+            "contents": [{ "uri": uri, "mimeType": "application/json", "text": serde_json::to_string_pretty(&resp["data"])? }]
         }))
     } else if let Some(id) = uri.strip_prefix("cortex://node/") {
-        let node = client.get_node(id).await?;
-        match node {
-            Some(n) => {
-                let text = json!({
-                    "id": &n.id, "kind": &n.kind, "title": &n.title,
-                    "body": &n.body, "importance": n.importance,
-                });
-                Ok(json!({
-                    "contents": [{ "uri": uri, "mimeType": "application/json", "text": serde_json::to_string_pretty(&text)? }]
-                }))
-            },
-            None => Err(anyhow::anyhow!("Node not found: {}", id)),
-        }
+        let resp: Value = http.get(format!("{}/nodes/{}", base_url, id))
+            .send().await?.json().await?;
+        Ok(json!({
+            "contents": [{ "uri": uri, "mimeType": "application/json", "text": serde_json::to_string_pretty(&resp["data"])? }]
+        }))
     } else {
         Err(anyhow::anyhow!("Unknown resource: {}", uri))
     }
