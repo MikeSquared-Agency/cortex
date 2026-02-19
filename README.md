@@ -22,7 +22,7 @@ Your agent's memory shouldn't be a text file. It should be a living graph that w
 
 ```bash
 # Cargo
-cargo install cortex-memory
+cargo install cortex-server
 
 # Docker
 docker run -p 9090:9090 -p 9091:9091 mikesquared/cortex:latest

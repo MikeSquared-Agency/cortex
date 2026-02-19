@@ -13,6 +13,10 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Mike Darlington"]
 license = "MIT"
+description = "Embedded graph memory for AI agents"
+repository = "https://github.com/MikeSquared-Agency/cortex"
+keywords = ["ai", "graph", "memory", "agents", "knowledge-graph"]
+categories = ["database", "science"]
 
 [workspace.dependencies]
 # Core dependencies
