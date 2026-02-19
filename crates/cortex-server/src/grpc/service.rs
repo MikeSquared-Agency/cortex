@@ -492,7 +492,8 @@ impl CortexService for CortexServiceImpl {
             filter = filter.with_kinds(kinds.map_err(|e| Status::invalid_argument(e.to_string()))?);
         }
 
-        let index = self.vector_index.read().unwrap();
+        let index = self.vector_index.read()
+            .map_err(|_| Status::unavailable("Vector index is being rebuilt, try again shortly"))?;
         let results = if req.min_score > 0.0 {
             index.search_threshold(&embedding, req.min_score, Some(&filter))
                 .map_err(|e| Status::internal(e.to_string()))?

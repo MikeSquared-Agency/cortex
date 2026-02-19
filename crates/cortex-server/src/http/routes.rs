@@ -211,15 +211,42 @@ async fn get_node(
     Ok(Json(JsonResponse::ok(node_data)))
 }
 
+#[derive(Deserialize)]
+struct NeighborQuery {
+    depth: Option<u32>,
+    direction: Option<String>,
+}
+
 async fn node_neighbors(
     State(state): State<AppState>,
     Path(id): Path<String>,
+    Query(query): Query<NeighborQuery>,
 ) -> AppResult<impl IntoResponse> {
     let node_id: uuid::Uuid = id
         .parse()
         .map_err(|_| anyhow::anyhow!("Invalid UUID"))?;
 
-    let subgraph = state.graph_engine.neighborhood(node_id, 1)?;
+    let depth = query.depth.unwrap_or(1);
+
+    // neighborhood() uses Both direction internally; for filtered direction
+    // we use traverse directly
+    let subgraph = if let Some(ref dir) = query.direction {
+        let direction = match dir.to_lowercase().as_str() {
+            "outgoing" => cortex_core::TraversalDirection::Outgoing,
+            "incoming" => cortex_core::TraversalDirection::Incoming,
+            _ => cortex_core::TraversalDirection::Both,
+        };
+        state.graph_engine.traverse(cortex_core::TraversalRequest {
+            start: vec![node_id],
+            max_depth: Some(depth),
+            direction,
+            include_start: true,
+            strategy: cortex_core::TraversalStrategy::Bfs,
+            ..Default::default()
+        })?
+    } else {
+        state.graph_engine.neighborhood(node_id, depth)?
+    };
 
     let nodes: Vec<_> = subgraph
         .nodes
