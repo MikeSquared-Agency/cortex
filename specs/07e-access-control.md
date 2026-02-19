@@ -1,14 +1,16 @@
-# Phase 7E: Access Control & Policies
+# Phase 7E: Retention, Audit & Encryption
 
-**Status:** Ready to implement after Phase 7A is merged.  
-**Dependencies:** Phase 7A (Core Decoupling) — requires `CortexConfig` (namespace/retention/security config blocks), string `NodeKind`.  
-**Weeks:** 5–6  
+**Status:** Ready to implement after Phase 7A is merged.
+**Dependencies:** Phase 7A (Core Decoupling) — requires `CortexConfig` (retention/security config blocks), string `NodeKind`.
+**Weeks:** 5–6
 
 ---
 
 ## Overview
 
-Multi-agent isolation via namespaces, automatic data expiry via retention policies, an append-only audit log for every mutation, and AES-256-GCM encryption at rest for the redb database file. These features are gated by configuration — the default `access.mode = "open"` behaviour is fully backward compatible.
+Automatic data expiry via retention policies, an append-only audit log for every mutation, and AES-256-GCM encryption at rest for the redb database file. All features are gated by configuration — defaults are backward compatible with no retention limits, no audit, no encryption.
+
+**Explicitly excluded:** Namespace isolation and RBAC. All agents see the full graph. Multi-agent access control may be added in a future phase.
 
 ---
 
@@ -16,8 +18,8 @@ Multi-agent isolation via namespaces, automatic data expiry via retention polici
 
 ```
 crates/cortex-core/src/
-  access/
-    mod.rs          — Namespace resolution + access checking
+  policies/
+    mod.rs          — Re-exports
     retention.rs    — Retention policy enforcement
     audit.rs        — Audit log (AuditEntry, AuditTable)
   storage/
@@ -32,156 +34,9 @@ crates/cortex-server/src/
 
 ---
 
-## Task 1: Namespace Model
+## Task 1: Retention Policies
 
-### File: `crates/cortex-core/src/access/mod.rs`
-
-Every node gets an optional `namespace` field. Queries automatically filter by the requesting agent's allowed namespaces.
-
-**Configuration** (from Phase 7A `CortexConfig`):
-```toml
-[access]
-mode = "namespace"  # "open" (default) | "namespace" | "rbac"
-
-[[access.namespaces]]
-name = "kai"
-agents = ["kai", "dutybound"]   # These agents can read/write this namespace
-inherit = ["shared"]             # Also inherits from "shared" namespace
-
-[[access.namespaces]]
-name = "shared"
-agents = ["*"]                   # Everyone can read
-write = ["kai"]                  # Only kai can write
-```
-
-**Node type update** — add namespace field:
-
-In `crates/cortex-core/src/types.rs`, add to the `Node` struct:
-```rust
-/// Namespace for multi-agent isolation.
-/// None means the node belongs to the global/open namespace.
-pub namespace: Option<String>,
-```
-
-**Namespace resolver:**
-```rust
-use crate::config::{AccessConfig, AccessMode};
-
-/// Resolves which namespaces an agent can read/write.
-pub struct NamespaceResolver {
-    config: AccessConfig,
-}
-
-impl NamespaceResolver {
-    pub fn new(config: AccessConfig) -> Self {
-        Self { config }
-    }
-
-    /// Returns the list of namespace names an agent can READ.
-    pub fn readable_namespaces(&self, agent_id: &str) -> Vec<String> {
-        match self.config.mode.as_str() {
-            "open" | "" => vec![],  // No filtering — all nodes visible
-            "namespace" => self.resolve_readable(agent_id),
-            _ => vec![],
-        }
-    }
-
-    /// Returns the list of namespace names an agent can WRITE to.
-    pub fn writable_namespaces(&self, agent_id: &str) -> Vec<String> {
-        match self.config.mode.as_str() {
-            "open" | "" => vec![],
-            "namespace" => self.resolve_writable(agent_id),
-            _ => vec![],
-        }
-    }
-
-    fn resolve_readable(&self, agent_id: &str) -> Vec<String> {
-        let mut readable = Vec::new();
-        for ns in &self.config.namespaces {
-            let can_read = ns.agents.iter().any(|a| a == "*" || a == agent_id);
-            if can_read {
-                readable.push(ns.name.clone());
-                // Recursively add inherited namespaces
-                if let Some(inherited) = &ns.inherit {
-                    for inh in inherited {
-                        if !readable.contains(inh) {
-                            readable.push(inh.clone());
-                        }
-                    }
-                }
-            }
-        }
-        readable
-    }
-
-    fn resolve_writable(&self, agent_id: &str) -> Vec<String> {
-        let mut writable = Vec::new();
-        for ns in &self.config.namespaces {
-            let can_write = match &ns.write {
-                Some(writers) => writers.iter().any(|a| a == "*" || a == agent_id),
-                None => ns.agents.iter().any(|a| a == "*" || a == agent_id),
-            };
-            if can_write {
-                writable.push(ns.name.clone());
-            }
-        }
-        writable
-    }
-
-    /// Resolve the default namespace for a new node created by agent_id.
-    pub fn default_namespace_for(&self, agent_id: &str) -> Option<String> {
-        match self.config.mode.as_str() {
-            "open" | "" => None,
-            "namespace" => {
-                // The first namespace the agent can write to
-                self.resolve_writable(agent_id).into_iter().next()
-            }
-            _ => None,
-        }
-    }
-}
-```
-
-**Storage filter integration:**
-
-In `crates/cortex-core/src/storage/filters.rs`, add namespace filtering to `NodeFilter`:
-```rust
-pub struct NodeFilter {
-    // ... existing fields ...
-    /// If Some, only return nodes in these namespaces.
-    /// If None, no namespace filter applied.
-    pub namespaces: Option<Vec<String>>,
-}
-
-impl NodeFilter {
-    pub fn with_namespaces(mut self, namespaces: Vec<String>) -> Self {
-        self.namespaces = Some(namespaces);
-        self
-    }
-}
-```
-
-**gRPC service integration:**
-
-In `crates/cortex-server/src/grpc/service.rs`, every request that reads nodes must be filtered through the namespace resolver:
-
-```rust
-// Before returning nodes, filter by agent's readable namespaces:
-let readable = resolver.readable_namespaces(&agent_id);
-let filter = if readable.is_empty() {
-    base_filter  // open mode: no namespace filter
-} else {
-    base_filter.with_namespaces(readable)
-};
-```
-
-The `agent_id` comes from the gRPC request metadata header: `x-cortex-agent-id`.
-
----
-
-## Task 2: Retention Policies
-
-### File: `crates/cortex-core/src/access/retention.rs`
+### File: `crates/cortex-core/src/policies/retention.rs`
 
 Automatic node expiry based on kind-specific TTLs and total node count limits.
 
@@ -317,9 +172,9 @@ pub fn with_not_deleted(mut self) -> Self {
 
 ---
 
-## Task 3: Audit Log
+## Task 2: Audit Log
 
-### File: `crates/cortex-core/src/access/audit.rs`
+### File: `crates/cortex-core/src/policies/audit.rs`
 
 An append-only log of every mutation, stored in a dedicated redb table.
 
@@ -377,7 +232,7 @@ impl std::fmt::Display for AuditAction {
 
 **Audit table in redb:**
 
-The audit table is append-only. Entries are keyed by `(timestamp_nanos as u128, target_id as bytes)` for time-ordered iteration.
+The audit table is append-only. Entries are keyed by `(timestamp_nanos as u128)` for time-ordered iteration.
 
 ```rust
 use redb::{TableDefinition, Database};
@@ -393,7 +248,7 @@ impl AuditLog {
         Self { db }
     }
 
-    /// Append an audit entry. This is a write to the redb audit table.
+    /// Append an audit entry.
     pub fn log(&self, entry: AuditEntry) -> crate::Result<()> {
         let key = entry.timestamp.timestamp_nanos_opt().unwrap_or(0) as u128;
         let value = serde_json::to_vec(&entry)
@@ -430,7 +285,6 @@ impl AuditLog {
             let (_, value) = result
                 .map_err(|e| crate::CortexError::Validation(format!("Audit iter: {}", e)))?;
             if let Ok(entry) = serde_json::from_slice::<AuditEntry>(value.value()) {
-                // Apply filters
                 if let Some(ref actor) = filter.actor {
                     if entry.actor != *actor { continue; }
                 }
@@ -466,7 +320,6 @@ pub struct AuditFilter {
 In `crates/cortex-core/src/storage/redb_storage.rs`, wrap all write operations to emit audit entries:
 
 ```rust
-// In RedbStorage, add an optional audit_log field:
 pub struct RedbStorage {
     db: Arc<Database>,
     audit_log: Option<Arc<AuditLog>>,
@@ -541,7 +394,7 @@ pub struct AuditArgs {
 
 ---
 
-## Task 4: Encryption at Rest
+## Task 3: Encryption at Rest
 
 ### File: `crates/cortex-core/src/storage/encrypted.rs`
 
@@ -557,15 +410,11 @@ encryption = true
 
 **Key derivation:**
 
-The encryption key is derived from the `CORTEX_ENCRYPTION_KEY` environment variable using Argon2id:
-
 ```rust
-use argon2::{Argon2, password_hash::SaltString};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 
-/// Derive a 256-bit AES key from the CORTEX_ENCRYPTION_KEY env var.
-/// Uses Argon2id with a fixed salt derived from the database path.
-pub fn derive_key(db_path: &std::path::Path) -> anyhow::Result<[u8; 32]> {
+/// Read and validate the encryption key from CORTEX_ENCRYPTION_KEY env var.
+pub fn derive_key() -> anyhow::Result<[u8; 32]> {
     let raw_key = std::env::var("CORTEX_ENCRYPTION_KEY")
         .map_err(|_| anyhow::anyhow!("CORTEX_ENCRYPTION_KEY environment variable not set"))?;
 
@@ -584,16 +433,9 @@ pub fn derive_key(db_path: &std::path::Path) -> anyhow::Result<[u8; 32]> {
 
 **Encryption implementation:**
 
-Encryption is applied to the entire redb file using a streaming AES-256-GCM approach. Because redb manages its own file, we use a **pre-open hook**:
-- On open: if encryption is enabled, decrypt the file to a temp location, open the temp file with redb, then on close re-encrypt to the original path.
-- On backup: the backup is also encrypted.
-
-**Cargo.toml dependencies:**
-```toml
-aes-gcm = "0.10"
-argon2 = "0.5"
-base64 = "0.22"
-```
+Because redb manages its own file, we use a **pre-open/post-close hook**:
+- On open: if encryption is enabled, decrypt the file to a temp location, open the temp file with redb.
+- On close: re-encrypt and replace the original file.
 
 ```rust
 use aes_gcm::{
@@ -607,7 +449,6 @@ pub fn encrypt_file(path: &std::path::Path, key: &[u8; 32]) -> anyhow::Result<()
     let plaintext = std::fs::read(path)?;
     let cipher = Aes256Gcm::new(key.into());
 
-    // Generate random nonce
     let nonce_bytes: [u8; 12] = rand::random();
     let nonce = Nonce::from_slice(&nonce_bytes);
 
@@ -644,21 +485,15 @@ pub fn decrypt_file(path: &std::path::Path, key: &[u8; 32]) -> anyhow::Result<()
 **Startup flow when encryption is enabled:**
 
 ```rust
-// In cortex-server/src/main.rs or serve::run():
 if config.security.encryption {
-    let key = encrypted::derive_key(&db_path)?;
-    // Decrypt to temp file
+    let key = encrypted::derive_key()?;
     let temp_path = db_path.with_extension("redb.tmp");
     std::fs::copy(&db_path, &temp_path)?;
     encrypted::decrypt_file(&temp_path, &key)?;
-    // Open redb against temp file
     let storage = RedbStorage::open(&temp_path)?;
-    // On shutdown: re-encrypt and replace original
-    // (register shutdown hook)
+    // Register shutdown hook to re-encrypt and replace original
 }
 ```
-
-**Backup encryption:** The `cortex backup --encrypt` flag (Phase 7B) calls `encrypt_file()` on the backup copy.
 
 **Key generation helper:**
 ```
@@ -671,37 +506,42 @@ Add to your environment:
 Keep this key safe — data encrypted with it cannot be recovered without it.
 ```
 
+**Cargo.toml dependencies:**
+```toml
+aes-gcm = "0.10"
+base64 = "0.22"
+rand = "0.8"
+```
+
 ---
 
 ## Definition of Done
 
-- [ ] With `[access] mode = "open"`, all existing behaviour is unchanged
-- [ ] With `[access] mode = "namespace"`, nodes have a `namespace` field set on create
-- [ ] Namespace resolver correctly identifies which namespaces an agent can read
-- [ ] Namespace resolver correctly identifies which namespaces an agent can write to
-- [ ] `agents = ["*"]` grants read access to all agents
-- [ ] Namespace inheritance: agent in `"kai"` that inherits `"shared"` can read both
-- [ ] Queries via gRPC filter nodes by the requesting agent's `x-cortex-agent-id` header
-- [ ] `NodeFilter::with_namespaces()` correctly restricts `list_nodes()` results
+### Retention
 - [ ] Retention engine soft-deletes nodes past their TTL when `sweep()` is called
 - [ ] Retention engine respects `by_kind` per-kind TTLs
 - [ ] Retention engine skips kinds with explicit `ttl = 0` (keep forever) during default TTL sweep
 - [ ] Retention engine evicts oldest/least-important nodes when `max_nodes.limit` is exceeded
 - [ ] Hard delete runs after grace period (7 days by default)
 - [ ] Auto-linker's background loop calls `RetentionEngine::sweep()` on each cycle
+- [ ] With no `[retention]` config, all existing behaviour is unchanged
+
+### Audit Log
 - [ ] `AuditLog::log()` appends entries to the redb `audit` table
 - [ ] `AuditLog::query()` returns entries filtered by `since`, `actor`, `node_id`
 - [ ] Every `put_node()` call emits a `NodeCreated` or `NodeUpdated` audit entry
 - [ ] Every `soft_delete_node()` call emits a `NodeDeleted` audit entry
 - [ ] Every `put_edge()` call emits an `EdgeCreated` audit entry
+- [ ] Auto-linker decay emits `EdgeDecayed` entries
 - [ ] `cortex audit --since 24h` prints the last 24h of audit entries
 - [ ] `cortex audit --node <id>` shows all audit entries for a specific node
 - [ ] `cortex audit --actor auto-linker` filters to auto-linker actions
 - [ ] `cortex audit --format json` outputs JSON array of entries
+
+### Encryption at Rest
 - [ ] With `[security] encryption = true` and `CORTEX_ENCRYPTION_KEY` set, database is encrypted on disk
 - [ ] Without `CORTEX_ENCRYPTION_KEY`, server refuses to start with a clear error
 - [ ] `CORTEX_ENCRYPTION_KEY` that is not 32 bytes (base64-decoded) is rejected with a clear error
 - [ ] Encrypted database cannot be opened by redb directly (ciphertext, not valid redb format)
-- [ ] `cortex backup --encrypt ./backup.redb` creates an encrypted backup
 - [ ] `cortex security generate-key` outputs a valid base64-encoded 32-byte key
-- [ ] `cargo test --workspace` passes with all access control features
+- [ ] `cargo test --workspace` passes with all features
