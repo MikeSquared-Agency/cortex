@@ -1,3 +1,5 @@
+> **Status:** IMPLEMENTED
+
 # Phase 2 — Graph Engine: Traversal & Query
 
 **Duration:** 1 week  

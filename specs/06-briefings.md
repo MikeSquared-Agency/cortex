@@ -1,3 +1,5 @@
+> **Status:** IMPLEMENTED
+
 # Phase 6 — Cortex Briefings: Agent Context Synthesis
 
 **Duration:** 1 week  

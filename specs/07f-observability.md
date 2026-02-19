@@ -1,3 +1,5 @@
+> **Status:** DEFERRED — see GitHub issue #17
+
 # Phase 7F: Observability
 
 **Status:** Ready to implement after Phase 7A is merged.  

@@ -19,3 +19,10 @@ Thumbs.db
 .fastembed_cache/
 node_modules/
 **/node_modules/
+
+# Python / macOS / DB files
+__pycache__/
+.pytest_cache/
+*.egg-info/
+.venv/
+*.redb.v1.bak

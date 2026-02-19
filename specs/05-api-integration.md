@@ -1,3 +1,5 @@
+> **Status:** IMPLEMENTED
+
 # Phase 5 — API & Integration: Wire Into Warren
 
 **Duration:** 1 week  

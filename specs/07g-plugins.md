@@ -1,3 +1,5 @@
+> **Status:** DEFERRED — see GitHub issue #9
+
 # Phase 7G: Plugin System
 
 **Status:** Ready to implement after Phase 7A is merged.  

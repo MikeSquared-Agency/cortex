@@ -1,3 +1,5 @@
+> **Status:** IMPLEMENTED
+
 # Phase 7C: Client SDKs
 
 **Status:** Ready to implement after Phase 7A is merged.  

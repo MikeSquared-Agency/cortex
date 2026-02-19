@@ -1,3 +1,5 @@
+> **Status:** IMPLEMENTED
+
 # Phase 3 — Vector Layer: Embeddings & Similarity
 
 **Duration:** 1 week  

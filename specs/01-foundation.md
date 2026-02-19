@@ -1,3 +1,5 @@
+> **Status:** IMPLEMENTED
+
 # Phase 1 — Foundation: Storage & Data Model
 
 **Duration:** 1 week  

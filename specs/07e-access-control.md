@@ -1,3 +1,5 @@
+> **Status:** IMPLEMENTED
+
 # Phase 7E: Retention, Audit & Encryption
 
 **Status:** Ready to implement after Phase 7A is merged.

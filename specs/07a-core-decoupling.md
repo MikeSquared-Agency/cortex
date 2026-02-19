@@ -1,3 +1,5 @@
+> **Status:** IMPLEMENTED
+
 # Phase 7A: Core Decoupling
 
 **Status:** BLOCKS all other phases — implement this first.  

@@ -1,3 +1,5 @@
+> **Status:** DEFERRED — see GitHub issue #8
+
 # Phase 7D: Import Adapters
 
 **Status:** Ready to implement after Phase 7A is merged.  

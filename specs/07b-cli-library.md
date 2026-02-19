@@ -1,3 +1,5 @@
+> **Status:** IMPLEMENTED
+
 # Phase 7B: CLI & Library Mode
 
 **Status:** Ready to implement after Phase 7A is merged.  
