@@ -5,6 +5,7 @@ mod config;
 mod grpc;
 mod http;
 mod ingest;
+mod mcp;
 mod migration;
 mod serve;
 
@@ -119,6 +120,13 @@ async fn main() -> anyhow::Result<()> {
 
         Commands::Security(cmd) => {
             cli::security::run(cmd).await?;
+        }
+
+        Commands::Mcp(args) => {
+            // MCP uses library mode — redirect tracing to stderr so stdout stays clean
+            let data_dir = args.data_dir.or_else(|| Some(config.server.data_dir.clone()));
+            let server = args.server;
+            mcp::run(mcp::McpArgs { data_dir, server }).await?;
         }
     }
 

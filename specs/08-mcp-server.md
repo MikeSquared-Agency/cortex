@@ -1,4 +1,4 @@
-> **Status:** READY TO IMPLEMENT
+> **Status:** IMPLEMENTED
 
 # Spec 08 — MCP Server
 

@@ -82,6 +82,21 @@ pub enum Commands {
     /// Security utilities (key generation, etc.)
     #[command(subcommand)]
     Security(SecurityCommands),
+    /// Start an MCP server (stdio transport for AI agent integration)
+    Mcp(McpArgs),
+}
+
+// --- MCP args ---
+
+#[derive(Args, Debug)]
+pub struct McpArgs {
+    /// Path to cortex data directory. Defaults to ~/.cortex/default or the global --data-dir.
+    #[arg(long)]
+    pub data_dir: Option<PathBuf>,
+
+    /// Connect to a running Cortex server via gRPC instead of opening the database directly.
+    #[arg(long)]
+    pub server: Option<String>,
 }
 
 #[derive(Subcommand, Debug)]
