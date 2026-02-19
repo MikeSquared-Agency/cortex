@@ -112,10 +112,10 @@ where
             sections.push(identity);
         }
 
-        // Graph-based sections run before Active Context so their nodes are
-        // reserved; Active Context then fills remaining slots with recent nodes.
+        // Graph-based sections: use agent node traversal if available,
+        // otherwise fall back to global queries by node kind.
         if let Some(aid) = agent_node_id {
-            // 2. Patterns
+            // 2. Patterns (via graph traversal)
             let patterns = self.generate_patterns(aid, &seen_ids)?;
             if !patterns.nodes.is_empty() {
                 for n in &patterns.nodes {
@@ -124,7 +124,7 @@ where
                 sections.push(patterns);
             }
 
-            // 3. Goals
+            // 3. Goals (via graph traversal)
             let goals = self.generate_goals(aid, &seen_ids)?;
             if !goals.nodes.is_empty() {
                 for n in &goals.nodes {
@@ -142,6 +142,25 @@ where
                     }
                     sections.push(unresolved);
                 }
+            }
+        } else {
+            // No agent node — fall back to global queries by kind
+            let global_patterns = self.generate_global_by_kind("pattern", "Patterns", &seen_ids)?;
+            if !global_patterns.nodes.is_empty() {
+                for n in &global_patterns.nodes { seen_ids.insert(n.id); }
+                sections.push(global_patterns);
+            }
+
+            let global_goals = self.generate_global_by_kind("goal", "Goals", &seen_ids)?;
+            if !global_goals.nodes.is_empty() {
+                for n in &global_goals.nodes { seen_ids.insert(n.id); }
+                sections.push(global_goals);
+            }
+
+            let global_decisions = self.generate_global_by_kind("decision", "Key Decisions", &seen_ids)?;
+            if !global_decisions.nodes.is_empty() {
+                for n in &global_decisions.nodes { seen_ids.insert(n.id); }
+                sections.push(global_decisions);
             }
         }
 
@@ -354,12 +373,32 @@ where
         let cutoff =
             Utc::now() - chrono::Duration::seconds(self.config.recent_window.as_secs() as i64);
 
-        let recent = self.storage.list_nodes(
+        // Try agent-specific first, then fall back to global
+        let mut recent = self.storage.list_nodes(
             NodeFilter::new()
                 .with_source_agent(agent_id.to_string())
                 .created_after(cutoff)
                 .with_limit(self.config.max_items_per_section * 3),
         )?;
+
+        // Fallback: if agent has no recent nodes, pull from the entire graph
+        if recent.is_empty() {
+            recent = self.storage.list_nodes(
+                NodeFilter::new()
+                    .created_after(cutoff)
+                    .with_min_importance(self.config.min_importance)
+                    .with_limit(self.config.max_items_per_section * 3),
+            )?;
+        }
+
+        // Last resort: if nothing recent, pull highest-importance nodes globally
+        if recent.is_empty() {
+            recent = self.storage.list_nodes(
+                NodeFilter::new()
+                    .with_min_importance(self.config.min_importance)
+                    .with_limit(self.config.max_items_per_section * 3),
+            )?;
+        }
 
         if recent.is_empty() {
             return Ok(BriefingSection {
@@ -540,15 +579,25 @@ where
         let cutoff =
             Utc::now() - chrono::Duration::seconds(self.config.recent_window.as_secs() as i64);
 
-        let candidates: Vec<Node> = self
-            .storage
-            .list_nodes(
+        // Try agent-specific events first, fall back to global
+        let mut raw = self.storage.list_nodes(
+            NodeFilter::new()
+                .with_source_agent(agent_id.to_string())
+                .with_kinds(vec![NodeKind::new("event").unwrap()])
+                .created_after(cutoff)
+                .with_limit(self.config.max_items_per_section * 2),
+        )?;
+
+        if raw.is_empty() {
+            raw = self.storage.list_nodes(
                 NodeFilter::new()
-                    .with_source_agent(agent_id.to_string())
                     .with_kinds(vec![NodeKind::new("event").unwrap()])
                     .created_after(cutoff)
                     .with_limit(self.config.max_items_per_section * 2),
-            )?
+            )?;
+        }
+
+        let candidates: Vec<Node> = raw
             .into_iter()
             .filter(|n| !seen.contains(&n.id))
             .collect();
@@ -561,8 +610,37 @@ where
             nodes,
         })
     }
-}
 
+    /// Global fallback: query nodes by kind without requiring graph traversal.
+    /// Used when no agent node exists in the graph.
+    fn generate_global_by_kind(
+        &self,
+        kind: &str,
+        section_title: &str,
+        seen: &HashSet<NodeId>,
+    ) -> Result<BriefingSection> {
+        let candidates: Vec<Node> = self
+            .storage
+            .list_nodes(
+                NodeFilter::new()
+                    .with_kinds(vec![NodeKind::new(kind).unwrap()])
+                    .with_min_importance(self.config.min_importance)
+                    .with_limit(self.config.max_items_per_section * 2),
+            )?
+            .into_iter()
+            .filter(|n| !seen.contains(&n.id))
+            .collect();
+
+        let mut nodes = self.rank(candidates);
+        nodes.truncate(self.config.max_items_per_section);
+
+        Ok(BriefingSection {
+            title: section_title.to_string(),
+            nodes,
+        })
+    }
+
+}
 #[cfg(test)]
 mod tests {
     use super::*;
