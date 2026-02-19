@@ -64,7 +64,7 @@ jobs:
       - name: Build (cross)
         if: matrix.use_cross
         run: |
-          cross build --release --bin cortex --no-default-features --target ${{ matrix.target }}
+          CROSS_CONTAINER_OPTS="" cross build --release --bin cortex --no-default-features --target ${{ matrix.target }}
 
       - name: Package tarball
         run: |
