@@ -1,0 +1,77 @@
+# Cortex Configuration
+# Copy to cortex.toml and adjust for your setup.
+# All values shown are defaults unless noted.
+
+# ─── Server ───────────────────────────────────────────────
+[server]
+grpc_addr = "0.0.0.0:9090"     # gRPC API (SDKs, agents)
+http_addr = "0.0.0.0:9091"     # HTTP API + graph visualiser
+data_dir = "./data"             # Where the redb database lives
+
+# ─── Node & Edge Types ────────────────────────────────────
+# Define your own kinds and relations. Lowercase + hyphens/underscores only.
+[kinds]
+allowed = [
+  "fact", "decision", "goal", "event", "pattern",
+  "observation", "preference", "agent",
+]
+
+[relations]
+allowed = [
+  "relates-to", "supports", "contradicts", "caused-by",
+  "depends-on", "similar-to", "supersedes",
+]
+
+# ─── Auto-Linker ──────────────────────────────────────────
+# Background process that discovers relationships automatically.
+[auto_linker]
+enabled = true
+interval_seconds = 60           # How often to run
+similarity_threshold = 0.75     # Min cosine similarity for auto-edges
+max_edges_per_node = 20         # Cap outgoing similarity edges
+
+# ─── Embedding ────────────────────────────────────────────
+[embedding]
+# model = "all-MiniLM-L6-v2"   # Local embedding model
+# dimensions = 384
+
+# ─── Briefing ─────────────────────────────────────────────
+# Context briefings synthesised for agents on demand.
+[briefing]
+max_tokens = 2000
+sections = ["identity", "goals", "patterns", "unresolved", "active_context"]
+
+# ─── Retention ────────────────────────────────────────────
+# Automatic node expiry. Disabled by default.
+[retention]
+default_ttl_days = 0            # 0 = keep forever
+grace_days = 7                  # Days before hard-deleting soft-deleted nodes
+
+# Per-kind TTL overrides (days). 0 = keep forever.
+[retention.by_kind]
+observation = 30
+event = 90
+decision = 0                    # Decisions kept forever
+pattern = 0
+
+# Hard cap on total node count (optional)
+# [retention.max_nodes]
+# limit = 100000
+# strategy = "oldest_lowest_importance"
+
+# ─── Security ─────────────────────────────────────────────
+[security]
+encryption = false
+# Set CORTEX_ENCRYPTION_KEY env var (base64, 32 bytes).
+# Generate with: cortex security generate-key
+
+# ─── Ingest ───────────────────────────────────────────────
+# NATS subscription for event-driven ingest (optional).
+# [ingest.nats]
+# url = "nats://localhost:4222"
+# subjects = ["cortex.ingest.>"]
+
+# ─── Stdin Ingest ─────────────────────────────────────────
+# Pipe text directly: echo '{"kind":"fact","title":"..."}' | cortex serve --stdin
+# [ingest.stdin]
+# enabled = false
