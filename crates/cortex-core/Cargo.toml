@@ -12,6 +12,7 @@ bincode.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
+anyhow.workspace = true
 redb.workspace = true
 fastembed.workspace = true
 instant-distance.workspace = true
@@ -19,6 +20,9 @@ rayon.workspace = true
 log.workspace = true
 async-trait.workspace = true
 futures.workspace = true
+aes-gcm = "0.10"
+base64 = "0.22"
+rand = "0.8"
 
 [dev-dependencies]
 proptest.workspace = true

@@ -6,7 +6,7 @@ authors.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "cortex-server"
+name = "cortex"
 path = "src/main.rs"
 
 [features]
@@ -55,8 +55,20 @@ chrono.workspace = true
 clap = { version = "4.5", features = ["derive", "env"] }
 toml = "0.8"
 
-# Database (for migration)
+# Database (for migration / direct access)
 reqwest = { version = "0.12", features = ["json"] }
+redb.workspace = true
+
+# CLI interactive prompts
+inquire = "0.7"
+rustyline = "14"
+
+# Backup checksums
+sha2 = "0.10"
+hex = "0.4"
+
+# Import/export
+csv = "1.3"
 
 # Utilities
 uuid.workspace = true

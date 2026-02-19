@@ -150,6 +150,11 @@ impl RedbStorage {
         bincode::deserialize(bytes).map_err(CortexError::from)
     }
 
+    /// Public helper for migration: attempt to deserialize a node from raw bytes.
+    pub fn try_deserialize_node(bytes: &[u8]) -> Result<Node> {
+        Self::deserialize_node(bytes)
+    }
+
     /// Serialize an edge to bytes
     fn serialize_edge(edge: &Edge) -> Result<Vec<u8>> {
         bincode::serialize(edge).map_err(CortexError::from)

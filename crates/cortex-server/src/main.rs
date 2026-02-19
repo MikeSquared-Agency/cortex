@@ -1,30 +1,23 @@
 #![allow(dead_code)]
 mod briefing;
+mod cli;
 mod config;
 mod grpc;
 mod http;
 mod ingest;
 mod migration;
+mod serve;
 
 #[cfg(feature = "warren")]
 mod nats;
 
+use clap::Parser;
+use cli::{Cli, Commands};
 use config::CortexConfig;
-use cortex_core::briefing::{BriefingConfig, BriefingEngine};
-use cortex_core::*;
-// cortex_core::* brings in a 1-arg Result alias; re-import std's 2-arg form
-// so that `Result<(), Box<dyn Error>>` and `?` conversions work correctly.
-use std::result::Result;
-use cortex_proto::cortex_service_server::CortexServiceServer;
-use std::sync::atomic::AtomicU64;
-use std::sync::{Arc, RwLock as StdRwLock};
-use std::time::Duration;
-use tokio::task::JoinHandle;
-use tonic::transport::Server;
-use tracing::{error, info};
+use tracing::error;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> anyhow::Result<()> {
     // Initialize tracing
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -33,281 +26,92 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .init();
 
-    // Load config from cortex.toml (or defaults)
-    let config_path = std::path::PathBuf::from("cortex.toml");
-    let config = CortexConfig::load_or_default(&config_path);
-    config.ensure_data_dir()?;
+    let cli = Cli::parse();
 
-    let validation_errors = config.validate();
-    if !validation_errors.is_empty() {
-        for e in &validation_errors {
-            error!("Config error: {}", e);
-        }
-        return Err("Invalid cortex.toml configuration".into());
+    // Load config for commands that need it (serve, local ops)
+    let mut config = CortexConfig::load_or_default(&cli.config);
+
+    // Override data_dir if specified on command line
+    if let Some(data_dir) = &cli.data_dir {
+        config.server.data_dir = data_dir.clone();
     }
 
-    info!("Starting Cortex server v{}", env!("CARGO_PKG_VERSION"));
-    info!("gRPC: {}", config.server.grpc_addr);
-    info!("HTTP: {}", config.server.http_addr);
-    info!("Data: {:?}", config.server.data_dir);
-
-    // Initialize storage
-    info!("Opening database...");
-    let storage = Arc::new(RedbStorage::open(config.db_path())?);
-    let stats = storage.stats()?;
-    info!(
-        "Database loaded: {} nodes, {} edges",
-        stats.node_count, stats.edge_count
-    );
-
-    // Initialize embedding service
-    info!("Loading embedding model...");
-    let embedding_service = Arc::new(FastEmbedService::new()?);
-    info!("Embedding model loaded: {}", embedding_service.model_name());
-
-    // Initialize vector index
-    info!("Initializing vector index...");
-    let vector_index = Arc::new(StdRwLock::new(HnswIndex::new(
-        embedding_service.dimension(),
-    )));
-
-    // Rebuild index from existing nodes
-    {
-        let nodes = storage.list_nodes(NodeFilter::new())?;
-        let mut index = vector_index.write().unwrap();
-        let mut indexed = 0;
-
-        for node in nodes {
-            if let Some(emb) = &node.embedding {
-                if index.insert(node.id, emb).is_ok() {
-                    indexed += 1;
+    match cli.command {
+        Commands::Serve => {
+            config.ensure_data_dir()?;
+            let errors = config.validate();
+            if !errors.is_empty() {
+                for e in &errors {
+                    error!("Config error: {}", e);
                 }
+                anyhow::bail!("Invalid cortex.toml configuration");
             }
+            serve::run(config).await?;
         }
 
-        if indexed > 0 {
-            index.rebuild()?;
-            info!("Indexed {} node embeddings", indexed);
-        }
-    }
-
-    // Initialize graph engine
-    let graph_engine = Arc::new(GraphEngineImpl::new(storage.clone()));
-
-    // Initialize auto-linker
-    info!("Initializing auto-linker...");
-    let auto_linker_config = config.auto_linker_config();
-    let auto_linker = Arc::new(StdRwLock::new(AutoLinker::new(
-        storage.clone(),
-        graph_engine.clone(),
-        vector_index.clone(),
-        embedding_service.clone(),
-        auto_linker_config.clone(),
-    )?));
-
-    info!(
-        "Auto-linker initialized (interval: {}s)",
-        auto_linker_config.interval.as_secs()
-    );
-
-    // Initialize graph version counter (shared across gRPC, HTTP, NATS)
-    let graph_version = Arc::new(AtomicU64::new(0));
-
-    // Initialize briefing engine
-    info!("Initializing briefing engine...");
-    let briefing_engine = Arc::new(BriefingEngine::new(
-        storage.clone(),
-        graph_engine.clone(),
-        RwLockVectorIndex(vector_index.clone()),
-        embedding_service.clone(),
-        graph_version.clone(),
-        BriefingConfig::default(),
-    ));
-    info!("Briefing engine ready");
-
-    // Start auto-linker background task
-    let auto_linker_task = {
-        let linker = auto_linker.clone();
-        let interval = auto_linker_config.interval;
-
-        tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(interval).await;
-
-                let mut linker = linker.write().unwrap();
-                if let Err(e) = linker.run_cycle() {
-                    error!("Auto-linker cycle failed: {}", e);
-                }
-            }
-        })
-    };
-
-    // Start briefing precomputer (warms cache for known agents)
-    let precompute_agents = if config.briefing.precompute_agents.is_empty() {
-        std::env::var("CORTEX_BRIEFING_AGENTS")
-            .unwrap_or_else(|_| "kai,dutybound".to_string())
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-    } else {
-        config.briefing.precompute_agents.clone()
-    };
-
-    let _precomputer_task = {
-        let engine = briefing_engine.clone();
-        let agents = precompute_agents.clone();
-        tokio::spawn(async move {
-            briefing::BriefingPrecomputer::new(engine, agents, Duration::from_secs(60))
-                .run()
-                .await;
-        })
-    };
-
-    // Optionally start file ingest loop (env var or config)
-    let ingest_dir = config
-        .ingest
-        .file
-        .as_ref()
-        .map(|f| f.watch_dir.clone())
-        .or_else(|| std::env::var("CORTEX_INGEST_DIR").ok().map(Into::into));
-
-    let _ingest_task: Option<JoinHandle<()>> = if let Some(ingest_path) = ingest_dir {
-        info!("File ingest enabled, watching {:?}", ingest_path);
-
-        let ingestor = cortex_core::briefing::ingest::FileIngest::new(
-            ingest_path,
-            storage.clone(),
-            embedding_service.clone(),
-            vector_index.clone(),
-            graph_version.clone(),
-        );
-
-        Some(tokio::spawn(async move {
-            loop {
-                match ingestor.scan_once() {
-                    Ok(n) if n > 0 => info!("File ingest: created {} nodes", n),
-                    Err(e) => error!("File ingest error: {}", e),
-                    _ => {}
-                }
-                tokio::time::sleep(Duration::from_secs(10)).await;
-            }
-        }))
-    } else {
-        None
-    };
-
-    // Start gRPC server
-    let grpc_task = {
-        let grpc_service = grpc::CortexServiceImpl::new(
-            storage.clone(),
-            graph_engine.clone(),
-            vector_index.clone(),
-            embedding_service.clone(),
-            auto_linker.clone(),
-            graph_version.clone(),
-            briefing_engine.clone(),
-        );
-
-        let addr = config.grpc_addr();
-
-        tokio::spawn(async move {
-            info!("Starting gRPC server on {}", addr);
-
-            Server::builder()
-                .add_service(CortexServiceServer::new(grpc_service))
-                .serve(addr)
-                .await
-                .expect("gRPC server failed");
-        })
-    };
-
-    // Start HTTP server
-    let http_task = {
-        let app_state = http::AppState {
-            storage: storage.clone(),
-            graph_engine: graph_engine.clone(),
-            vector_index: vector_index.clone(),
-            embedding_service: embedding_service.clone(),
-            auto_linker: auto_linker.clone(),
-            graph_version: graph_version.clone(),
-            briefing_engine: briefing_engine.clone(),
-            start_time: std::time::Instant::now(),
-        };
-
-        let app = http::create_router(app_state);
-        let addr = config.http_addr();
-
-        tokio::spawn(async move {
-            info!("Starting HTTP server on {}", addr);
-
-            let listener = tokio::net::TcpListener::bind(addr)
-                .await
-                .expect("Failed to bind HTTP server");
-
-            axum::serve(listener, app)
-                .await
-                .expect("HTTP server failed");
-        })
-    };
-
-    // Optionally start NATS consumer (Warren adapter or generic)
-    let nats_enabled = config.server.nats_enabled;
-    let nats_url = config.server.nats_url.clone();
-
-    let nats_task: Option<JoinHandle<()>> = if nats_enabled {
-        info!("Connecting to NATS at {}...", nats_url);
-
-        #[cfg(feature = "warren")]
-        {
-            match async_nats::connect(&nats_url).await {
-                Ok(client) => {
-                    info!("NATS connected (Warren adapter)");
-
-                    let nats_ingest = nats::NatsIngest::new(
-                        client,
-                        storage.clone(),
-                        embedding_service.clone(),
-                        vector_index.clone(),
-                        graph_version.clone(),
-                    );
-
-                    Some(tokio::spawn(async move {
-                        if let Err(e) = nats_ingest.start().await {
-                            error!("NATS ingest failed: {}", e);
-                        }
-                    }))
-                }
-                Err(e) => {
-                    error!("Failed to connect to NATS: {}", e);
-                    error!("Continuing without NATS consumer");
-                    None
-                }
-            }
+        Commands::Init => {
+            cli::init::run().await?;
         }
 
-        #[cfg(not(feature = "warren"))]
-        {
-            info!("NATS consumer not available (warren feature disabled)");
-            None
+        Commands::Shell => {
+            cli::shell::run(config, &cli.server, &cli.config).await?;
         }
-    } else {
-        info!("NATS consumer disabled");
-        None
-    };
 
-    info!("Cortex server ready");
+        Commands::Node(cmd) => {
+            cli::node::run(cmd, &cli.server).await?;
+        }
 
-    // Wait for shutdown signal
-    tokio::signal::ctrl_c().await?;
-    info!("Shutdown signal received, terminating...");
+        Commands::Edge(cmd) => {
+            cli::edge::run(cmd, &cli.server).await?;
+        }
 
-    // Cancel tasks
-    grpc_task.abort();
-    http_task.abort();
-    auto_linker_task.abort();
-    if let Some(task) = nats_task {
-        task.abort();
+        Commands::Search(a) => {
+            cli::search::run(a, &cli.server).await?;
+        }
+
+        Commands::Traverse(a) => {
+            cli::traverse::run(a, &cli.server).await?;
+        }
+
+        Commands::Path(a) => {
+            cli::traverse::run_path(a, &cli.server).await?;
+        }
+
+        Commands::Briefing(a) => {
+            cli::briefing::run(a, &cli.server).await?;
+        }
+
+        Commands::Import(a) => {
+            cli::import::run(a, config).await?;
+        }
+
+        Commands::Export(a) => {
+            cli::export::run(a, &cli.server).await?;
+        }
+
+        Commands::Backup(a) => {
+            cli::backup::run(a, config).await?;
+        }
+
+        Commands::Restore(a) => {
+            cli::backup::run_restore(a, config).await?;
+        }
+
+        Commands::Migrate => {
+            cli::migrate::run(config).await?;
+        }
+
+        Commands::Stats => {
+            cli::stats::run(&cli.server).await?;
+        }
+
+        Commands::Doctor => {
+            cli::doctor::run(config, &cli.server).await?;
+        }
+
+        Commands::Config(cmd) => {
+            cli::config_cmd::run(cmd, &cli.config).await?;
+        }
     }
 
     Ok(())
