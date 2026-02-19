@@ -12,5 +12,10 @@ prost-types = "0.13"
 serde.workspace = true
 serde_json.workspace = true
 
+[features]
+# Enable this to regenerate src/generated/ from proto/cortex.proto.
+# Requires protoc to be installed. Normal builds use the pre-generated file.
+regenerate = []
+
 [build-dependencies]
 tonic-build = "0.12"
