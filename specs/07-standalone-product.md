@@ -898,6 +898,14 @@ Warren-adapter and cloud components: proprietary or separate license.
 
 ## Revised Build Order (12 weeks)
 
+> **Detailed specs for each phase:**
+> - [Phase A: Core Decoupling](phase-a-core-decoupling.md)
+> - [Phase B: CLI & Library Mode](phase-b-cli-library.md)
+> - [Phase C: Access Control & Policies](phase-c-access-policies.md)
+> - [Phase D: Client SDKs](phase-d-sdks.md)
+> - [Phase E: Observability & Plugins](phase-e-observability-plugins.md)
+> - [Phase F: Documentation & Launch](phase-f-docs-launch.md)
+
 ### Phase A: Core Decoupling (Week 1-2)
 - [ ] NodeKind/Relation → string newtypes with registry
 - [ ] Configuration file parser (cortex.toml)
