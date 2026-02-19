@@ -12,6 +12,10 @@ pub struct NodeFilter {
     pub created_before: Option<DateTime<Utc>>,
     pub min_importance: Option<f32>,
     pub include_deleted: bool,
+    /// Only return soft-deleted nodes
+    pub deleted_only: bool,
+    /// Only return nodes with updated_at before this time (useful for purge)
+    pub updated_before: Option<DateTime<Utc>>,
     pub limit: Option<usize>,
     pub offset: Option<usize>,
 }
@@ -73,6 +77,19 @@ impl NodeFilter {
     /// Skip first N results
     pub fn with_offset(mut self, offset: usize) -> Self {
         self.offset = Some(offset);
+        self
+    }
+
+    /// Only return soft-deleted nodes
+    pub fn deleted_only(mut self) -> Self {
+        self.deleted_only = true;
+        self.include_deleted = true; // must include deleted to filter them
+        self
+    }
+
+    /// Filter by updated_at (before this time)
+    pub fn updated_before(mut self, time: DateTime<Utc>) -> Self {
+        self.updated_before = Some(time);
         self
     }
 }

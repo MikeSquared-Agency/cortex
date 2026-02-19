@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use redb::{Database, TableDefinition};
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -56,16 +57,20 @@ impl std::fmt::Display for AuditAction {
 /// Append-only log of every mutation, stored in a dedicated redb table.
 pub struct AuditLog {
     db: Arc<Database>,
+    /// Monotonic counter to disambiguate entries within the same nanosecond.
+    seq: AtomicU64,
 }
 
 impl AuditLog {
     pub fn new(db: Arc<Database>) -> Self {
-        Self { db }
+        Self { db, seq: AtomicU64::new(0) }
     }
 
     /// Append an audit entry. Key is timestamp_nanos for time-ordered iteration.
     pub fn log(&self, entry: AuditEntry) -> crate::Result<()> {
-        let key = entry.timestamp.timestamp_nanos_opt().unwrap_or(0) as u128;
+        let nanos = entry.timestamp.timestamp_nanos_opt().unwrap_or(0) as u128;
+        let seq = self.seq.fetch_add(1, Ordering::Relaxed) as u128;
+        let key = (nanos << 32) | (seq & 0xFFFF_FFFF);
         let value = serde_json::to_vec(&entry)
             .map_err(|e| crate::CortexError::Validation(format!("Audit serialise: {}", e)))?;
 

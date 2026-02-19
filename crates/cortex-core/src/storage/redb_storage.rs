@@ -334,6 +334,18 @@ impl RedbStorage {
             }
         }
 
+        // Check deleted_only (only return soft-deleted nodes)
+        if filter.deleted_only && !node.deleted {
+            return false;
+        }
+
+        // Check updated_before
+        if let Some(before) = filter.updated_before {
+            if node.updated_at > before {
+                return false;
+            }
+        }
+
         true
     }
 
@@ -524,8 +536,8 @@ impl Storage for RedbStorage {
             timestamp: Utc::now(),
             action: AuditAction::NodeHardDeleted,
             target_id: id,
-            actor: "retention-engine".to_string(),
-            details: None,
+            actor: node.source.agent.clone(),
+            details: Some("hard-deleted by retention engine".to_string()),
         });
 
         Ok(())
@@ -751,6 +763,18 @@ impl Storage for RedbStorage {
 
         write_txn.commit()?;
         self.decrement_meta_counter(STATS_EDGE_COUNT_KEY)?;
+
+        self.audit(AuditEntry {
+            timestamp: Utc::now(),
+            action: AuditAction::EdgePruned,
+            target_id: id,
+            actor: match &edge.provenance {
+                crate::types::EdgeProvenance::Manual { created_by } => created_by.clone(),
+                _ => "auto-linker".to_string(),
+            },
+            details: Some(format!("{} -> {} [{}]", edge.from, edge.to, edge.relation)),
+        });
+
         Ok(())
     }
 
