@@ -2,6 +2,7 @@ use super::{parse_subject, WarrenEvent};
 use async_nats::Client;
 use cortex_core::*;
 use futures::StreamExt;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::sync::RwLock as StdRwLock;
 
@@ -10,6 +11,7 @@ pub struct NatsIngest {
     storage: Arc<RedbStorage>,
     embedding_service: Arc<FastEmbedService>,
     vector_index: Arc<StdRwLock<HnswIndex>>,
+    graph_version: Arc<AtomicU64>,
 }
 
 impl NatsIngest {
@@ -18,12 +20,14 @@ impl NatsIngest {
         storage: Arc<RedbStorage>,
         embedding_service: Arc<FastEmbedService>,
         vector_index: Arc<StdRwLock<HnswIndex>>,
+        graph_version: Arc<AtomicU64>,
     ) -> Self {
         Self {
             client,
             storage,
             embedding_service,
             vector_index,
+            graph_version,
         }
     }
 
@@ -90,6 +94,9 @@ impl NatsIngest {
             let mut index = self.vector_index.write().unwrap();
             index.insert(node.id, &embedding)?;
         }
+
+        // Increment graph version so briefing cache invalidates
+        self.graph_version.fetch_add(1, Ordering::Relaxed);
 
         tracing::info!("Ingested Warren event as node: {}", node.id);
 

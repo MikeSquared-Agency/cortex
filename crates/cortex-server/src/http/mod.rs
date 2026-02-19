@@ -9,8 +9,19 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
+use cortex_core::briefing::BriefingEngine;
+use cortex_core::{FastEmbedService, GraphEngineImpl, HnswIndex, RedbStorage, RwLockVectorIndex};
 use serde::Serialize;
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
+
+/// Concrete briefing engine type shared across HTTP handlers
+pub type HttpBriefingEngine = BriefingEngine<
+    RedbStorage,
+    Arc<FastEmbedService>,
+    RwLockVectorIndex<HnswIndex>,
+    Arc<GraphEngineImpl<RedbStorage>>,
+>;
 
 /// Shared application state
 #[derive(Clone)]
@@ -27,6 +38,8 @@ pub struct AppState {
             cortex_core::GraphEngineImpl<cortex_core::RedbStorage>,
         >,
     >>,
+    pub graph_version: Arc<AtomicU64>,
+    pub briefing_engine: Arc<HttpBriefingEngine>,
     pub start_time: std::time::Instant,
 }
 

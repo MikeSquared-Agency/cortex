@@ -1,14 +1,24 @@
 use crate::grpc::conversions::*;
+use cortex_core::briefing::BriefingEngine;
 use cortex_core::*;
 // cortex_core::* imports a 1-arg `Result<T>` alias; re-import std's 2-arg form
 // so that tonic handler return types like `Result<Response<T>, Status>` resolve correctly.
 use std::result::Result;
 use cortex_proto::cortex_service_server::CortexService;
 use cortex_proto::*;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::sync::RwLock as StdRwLock;
 use std::time::Instant;
 use tonic::{Request, Response, Status};
+
+/// Concrete briefing engine type used by the server
+type ServerBriefingEngine = BriefingEngine<
+    RedbStorage,
+    Arc<FastEmbedService>,
+    RwLockVectorIndex<HnswIndex>,
+    Arc<GraphEngineImpl<RedbStorage>>,
+>;
 
 pub struct CortexServiceImpl {
     storage: Arc<RedbStorage>,
@@ -16,6 +26,8 @@ pub struct CortexServiceImpl {
     vector_index: Arc<StdRwLock<HnswIndex>>,
     embedding_service: Arc<FastEmbedService>,
     auto_linker: Arc<StdRwLock<AutoLinker<RedbStorage, FastEmbedService, HnswIndex, GraphEngineImpl<RedbStorage>>>>,
+    graph_version: Arc<AtomicU64>,
+    briefing_engine: Arc<ServerBriefingEngine>,
     start_time: Instant,
 }
 
@@ -26,6 +38,8 @@ impl CortexServiceImpl {
         vector_index: Arc<StdRwLock<HnswIndex>>,
         embedding_service: Arc<FastEmbedService>,
         auto_linker: Arc<StdRwLock<AutoLinker<RedbStorage, FastEmbedService, HnswIndex, GraphEngineImpl<RedbStorage>>>>,
+        graph_version: Arc<AtomicU64>,
+        briefing_engine: Arc<ServerBriefingEngine>,
     ) -> Self {
         Self {
             storage,
@@ -33,6 +47,8 @@ impl CortexServiceImpl {
             vector_index,
             embedding_service,
             auto_linker,
+            graph_version,
+            briefing_engine,
             start_time: Instant::now(),
         }
     }
@@ -41,6 +57,10 @@ impl CortexServiceImpl {
         let outgoing = self.storage.edges_from(node_id).unwrap_or_default();
         let incoming = self.storage.edges_to(node_id).unwrap_or_default();
         outgoing.len() + incoming.len()
+    }
+
+    fn bump_version(&self) {
+        self.graph_version.fetch_add(1, Ordering::Relaxed);
     }
 }
 
@@ -93,6 +113,8 @@ impl CortexService for CortexServiceImpl {
             index.insert(node.id, &embedding)
                 .map_err(|e| Status::internal(e.to_string()))?;
         }
+
+        self.bump_version();
 
         let edge_count = self.get_edge_count(node.id);
         Ok(Response::new(node_to_response(&node, edge_count)))
@@ -168,6 +190,8 @@ impl CortexService for CortexServiceImpl {
                 .map_err(|e| Status::internal(e.to_string()))?;
         }
 
+        self.bump_version();
+
         let edge_count = self.get_edge_count(node.id);
         Ok(Response::new(node_to_response(&node, edge_count)))
     }
@@ -184,6 +208,8 @@ impl CortexService for CortexServiceImpl {
             .delete_node(node_id)
             .map_err(|e| Status::internal(e.to_string()))?;
 
+        self.bump_version();
+
         Ok(Response::new(DeleteResponse { success: true }))
     }
 
@@ -196,7 +222,7 @@ impl CortexService for CortexServiceImpl {
         let mut filter = NodeFilter::new();
 
         if !req.kind_filter.is_empty() {
-            let kinds: Result<Vec<_>, _> = req.kind_filter.iter()
+            let kinds: std::result::Result<Vec<_>, _> = req.kind_filter.iter()
                 .map(|s| parse_node_kind(s))
                 .collect();
             filter = filter.with_kinds(kinds.map_err(|e| Status::invalid_argument(e.to_string()))?);
@@ -272,6 +298,8 @@ impl CortexService for CortexServiceImpl {
             .put_edge(&edge)
             .map_err(|e| Status::internal(e.to_string()))?;
 
+        self.bump_version();
+
         Ok(Response::new(edge_to_response(&edge)))
     }
 
@@ -326,6 +354,8 @@ impl CortexService for CortexServiceImpl {
             .delete_edge(edge_id)
             .map_err(|e| Status::internal(e.to_string()))?;
 
+        self.bump_version();
+
         Ok(Response::new(DeleteResponse { success: true }))
     }
 
@@ -335,7 +365,7 @@ impl CortexService for CortexServiceImpl {
     ) -> Result<Response<SubgraphResponse>, Status> {
         let req = request.into_inner();
 
-        let start: Result<Vec<_>, _> = req.start_ids.iter()
+        let start: std::result::Result<Vec<_>, _> = req.start_ids.iter()
             .map(|s| s.parse::<uuid::Uuid>())
             .collect();
         let start = start.map_err(|e| Status::invalid_argument(format!("Invalid start_ids: {}", e)))?;
@@ -353,14 +383,14 @@ impl CortexService for CortexServiceImpl {
         };
 
         if !req.relation_filter.is_empty() {
-            let relations: Result<Vec<_>, _> = req.relation_filter.iter()
+            let relations: std::result::Result<Vec<_>, _> = req.relation_filter.iter()
                 .map(|s| parse_relation(s))
                 .collect();
             traverse_req.relation_filter = Some(relations.map_err(|e| Status::invalid_argument(e.to_string()))?);
         }
 
         if !req.kind_filter.is_empty() {
-            let kinds: Result<Vec<_>, _> = req.kind_filter.iter()
+            let kinds: std::result::Result<Vec<_>, _> = req.kind_filter.iter()
                 .map(|s| parse_node_kind(s))
                 .collect();
             traverse_req.kind_filter = Some(kinds.map_err(|e| Status::invalid_argument(e.to_string()))?);
@@ -486,7 +516,7 @@ impl CortexService for CortexServiceImpl {
 
         let mut filter = VectorFilter::new();
         if !req.kind_filter.is_empty() {
-            let kinds: Result<Vec<_>, _> = req.kind_filter.iter()
+            let kinds: std::result::Result<Vec<_>, _> = req.kind_filter.iter()
                 .map(|s| parse_node_kind(s))
                 .collect();
             filter = filter.with_kinds(kinds.map_err(|e| Status::invalid_argument(e.to_string()))?);
@@ -529,7 +559,7 @@ impl CortexService for CortexServiceImpl {
     ) -> Result<Response<HybridSearchResponse>, Status> {
         let req = request.into_inner();
 
-        let anchors: Result<Vec<_>, _> = req.anchor_ids.iter()
+        let anchors: std::result::Result<Vec<_>, _> = req.anchor_ids.iter()
             .map(|s| s.parse::<uuid::Uuid>())
             .collect();
         let anchors = anchors.map_err(|e| Status::invalid_argument(format!("Invalid anchor_ids: {}", e)))?;
@@ -541,7 +571,7 @@ impl CortexService for CortexServiceImpl {
             .with_max_anchor_depth(if req.max_anchor_depth > 0 { req.max_anchor_depth } else { 3 });
 
         if !req.kind_filter.is_empty() {
-            let kinds: Result<Vec<_>, _> = req.kind_filter.iter()
+            let kinds: std::result::Result<Vec<_>, _> = req.kind_filter.iter()
                 .map(|s| parse_node_kind(s))
                 .collect();
             query = query.with_kind_filter(kinds.map_err(|e| Status::invalid_argument(e.to_string()))?);
@@ -580,10 +610,44 @@ impl CortexService for CortexServiceImpl {
 
     async fn get_briefing(
         &self,
-        _request: Request<BriefingRequest>,
+        request: Request<BriefingRequest>,
     ) -> Result<Response<BriefingResponse>, Status> {
-        // Briefings are Phase 6 - return placeholder for now
-        Err(Status::unimplemented("Briefings are coming in Phase 6"))
+        let req = request.into_inner();
+        let agent_id = &req.agent_id;
+        let compact = req.compact;
+
+        let briefing = self
+            .briefing_engine
+            .generate(agent_id)
+            .map_err(|e| Status::internal(e.to_string()))?;
+
+        let rendered = self.briefing_engine.render(&briefing, compact);
+
+        // Convert cortex_core::briefing::BriefingSection to proto BriefingSection
+        let sections: Vec<BriefingSection> = briefing
+            .sections
+            .iter()
+            .map(|s| BriefingSection {
+                title: s.title.clone(),
+                nodes: s
+                    .nodes
+                    .iter()
+                    .map(|n| {
+                        let edge_count = self.get_edge_count(n.id);
+                        node_to_response(n, edge_count)
+                    })
+                    .collect(),
+            })
+            .collect();
+
+        Ok(Response::new(BriefingResponse {
+            agent_id: briefing.agent_id.clone(),
+            rendered,
+            sections,
+            generated_at: briefing.generated_at.to_rfc3339(),
+            nodes_consulted: briefing.nodes_consulted as u32,
+            cached: briefing.cached,
+        }))
     }
 
     async fn stats(

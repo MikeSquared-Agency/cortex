@@ -1,7 +1,6 @@
 use super::{AppResult, AppState, JsonResponse, GRAPH_VIZ_HTML};
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
     response::{Html, IntoResponse, Json},
     routing::{get, post},
     Router,
@@ -440,12 +439,72 @@ async fn trigger_auto_link(
     }))))
 }
 
+#[derive(Deserialize)]
+struct BriefingQuery {
+    compact: Option<bool>,
+}
+
+#[derive(Serialize)]
+struct BriefingSectionData {
+    title: String,
+    nodes: Vec<NodeData>,
+}
+
+#[derive(Serialize)]
+struct BriefingData {
+    agent_id: String,
+    generated_at: String,
+    nodes_consulted: usize,
+    sections: Vec<BriefingSectionData>,
+    rendered: String,
+    cached: bool,
+}
+
 async fn get_briefing(
-    State(_state): State<AppState>,
-    Path(_agent_id): Path<String>,
-) -> impl IntoResponse {
-    (
-        StatusCode::NOT_IMPLEMENTED,
-        "Briefings coming in Phase 6",
-    )
+    State(state): State<AppState>,
+    Path(agent_id): Path<String>,
+    Query(query): Query<BriefingQuery>,
+) -> AppResult<Json<JsonResponse<BriefingData>>> {
+    let compact = query.compact.unwrap_or(false);
+
+    let briefing = state.briefing_engine.generate(&agent_id)?;
+    let rendered = state.briefing_engine.render(&briefing, compact);
+
+    let sections: Vec<BriefingSectionData> = briefing
+        .sections
+        .iter()
+        .map(|s| {
+            let nodes = s
+                .nodes
+                .iter()
+                .map(|n| {
+                    let outgoing = state.storage.edges_from(n.id).unwrap_or_default();
+                    let incoming = state.storage.edges_to(n.id).unwrap_or_default();
+                    NodeData {
+                        id: n.id.to_string(),
+                        kind: format!("{:?}", n.kind),
+                        title: n.data.title.clone(),
+                        body: n.data.body.clone(),
+                        tags: n.data.tags.clone(),
+                        importance: n.importance,
+                        source_agent: n.source.agent.clone(),
+                        edge_count: outgoing.len() + incoming.len(),
+                    }
+                })
+                .collect();
+            BriefingSectionData {
+                title: s.title.clone(),
+                nodes,
+            }
+        })
+        .collect();
+
+    Ok(Json(JsonResponse::ok(BriefingData {
+        agent_id: briefing.agent_id.clone(),
+        generated_at: briefing.generated_at.to_rfc3339(),
+        nodes_consulted: briefing.nodes_consulted,
+        sections,
+        rendered,
+        cached: briefing.cached,
+    })))
 }

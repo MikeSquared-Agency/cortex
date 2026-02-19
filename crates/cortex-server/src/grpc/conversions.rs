@@ -135,7 +135,6 @@ pub fn stats_to_response(stats: StorageStats, db_size: u64) -> StatsResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cortex_core::*;
 
     fn make_source(agent: &str) -> Source {
         Source { agent: agent.to_string(), session: None, channel: None }

@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+mod briefing;
 mod config;
 mod grpc;
 mod http;
@@ -7,15 +8,18 @@ mod migration;
 
 use clap::Parser;
 use config::Config;
+use cortex_core::briefing::{BriefingConfig, BriefingEngine};
 use cortex_core::*;
 // cortex_core::* brings in a 1-arg Result alias; re-import std's 2-arg form
 // so that `Result<(), Box<dyn Error>>` and `?` conversions work correctly.
 use std::result::Result;
 use cortex_proto::cortex_service_server::CortexServiceServer;
+use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, RwLock as StdRwLock};
+use std::time::Duration;
 use tokio::task::JoinHandle;
 use tonic::transport::Server;
-use tracing::{info, error};
+use tracing::{error, info};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -95,6 +99,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         auto_linker_config.interval.as_secs()
     );
 
+    // Initialize graph version counter (shared across gRPC, HTTP, NATS)
+    let graph_version = Arc::new(AtomicU64::new(0));
+
+    // Initialize briefing engine
+    info!("Initializing briefing engine...");
+    let briefing_engine = Arc::new(BriefingEngine::new(
+        storage.clone(),
+        graph_engine.clone(),
+        RwLockVectorIndex(vector_index.clone()),
+        embedding_service.clone(),
+        graph_version.clone(),
+        BriefingConfig::default(),
+    ));
+    info!("Briefing engine ready");
+
     // Start auto-linker background task
     let auto_linker_task = {
         let linker = auto_linker.clone();
@@ -112,6 +131,52 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
     };
 
+    // Start briefing precomputer (warms cache for known agents)
+    let precomputer_agents: Vec<String> = std::env::var("CORTEX_BRIEFING_AGENTS")
+        .unwrap_or_else(|_| "kai,dutybound".to_string())
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    let _precomputer_task = {
+        let engine = briefing_engine.clone();
+        let agents = precomputer_agents.clone();
+        tokio::spawn(async move {
+            briefing::BriefingPrecomputer::new(engine, agents, Duration::from_secs(60))
+                .run()
+                .await;
+        })
+    };
+
+    // Optionally start file ingest loop
+    let _ingest_task: Option<JoinHandle<()>> =
+        if let Ok(ingest_dir) = std::env::var("CORTEX_INGEST_DIR") {
+            let ingest_path = std::path::PathBuf::from(&ingest_dir);
+            info!("File ingest enabled, watching {:?}", ingest_path);
+
+            let ingestor = cortex_core::briefing::ingest::FileIngest::new(
+                ingest_path,
+                storage.clone(),
+                embedding_service.clone(),
+                vector_index.clone(),
+                graph_version.clone(),
+            );
+
+            Some(tokio::spawn(async move {
+                loop {
+                    match ingestor.scan_once() {
+                        Ok(n) if n > 0 => info!("File ingest: created {} nodes", n),
+                        Err(e) => error!("File ingest error: {}", e),
+                        _ => {}
+                    }
+                    tokio::time::sleep(Duration::from_secs(10)).await;
+                }
+            }))
+        } else {
+            None
+        };
+
     // Start gRPC server
     let grpc_task = {
         let grpc_service = grpc::CortexServiceImpl::new(
@@ -120,6 +185,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             vector_index.clone(),
             embedding_service.clone(),
             auto_linker.clone(),
+            graph_version.clone(),
+            briefing_engine.clone(),
         );
 
         let addr = config.grpc_addr;
@@ -143,6 +210,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             vector_index: vector_index.clone(),
             embedding_service: embedding_service.clone(),
             auto_linker: auto_linker.clone(),
+            graph_version: graph_version.clone(),
+            briefing_engine: briefing_engine.clone(),
             start_time: std::time::Instant::now(),
         };
 
@@ -175,6 +244,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     storage.clone(),
                     embedding_service.clone(),
                     vector_index.clone(),
+                    graph_version.clone(),
                 );
 
                 Some(tokio::spawn(async move {

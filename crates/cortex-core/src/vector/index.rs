@@ -103,6 +103,12 @@ pub trait VectorIndex: Send + Sync {
 /// with HybridSearch without requiring Clone on the underlying index.
 pub struct RwLockVectorIndex<V: VectorIndex>(pub std::sync::Arc<std::sync::RwLock<V>>);
 
+impl<V: VectorIndex> Clone for RwLockVectorIndex<V> {
+    fn clone(&self) -> Self {
+        RwLockVectorIndex(std::sync::Arc::clone(&self.0))
+    }
+}
+
 impl<V: VectorIndex> VectorIndex for RwLockVectorIndex<V> {
     fn insert(&mut self, id: NodeId, embedding: &Embedding) -> Result<()> {
         self.0.write().unwrap().insert(id, embedding)

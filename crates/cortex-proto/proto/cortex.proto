@@ -253,20 +253,20 @@ message HybridResultEntry {
 
 message BriefingRequest {
     string agent_id = 1;      // e.g. "kai", "dutybound"
-    uint32 max_items = 2;     // Max nodes per section. Default 10.
-    bool include_contradictions = 3;  // Surface unresolved contradictions
+    bool compact = 2;         // Use compact renderer (~4× density)
 }
 
 message BriefingResponse {
     string agent_id = 1;
-    string briefing_text = 2;   // Synthesised markdown text
+    string rendered = 2;        // Rendered markdown/compact text
     repeated BriefingSection sections = 3;
-    google.protobuf.Timestamp generated_at = 4;
+    string generated_at = 4;    // ISO-8601 timestamp string
     uint32 nodes_consulted = 5;
+    bool cached = 6;
 }
 
 message BriefingSection {
-    string title = 1;           // e.g. "Identity", "Recent Decisions"
+    string title = 1;           // e.g. "Identity & Preferences", "Patterns"
     repeated NodeResponse nodes = 2;
 }
 
