@@ -1,0 +1,31 @@
+{
+  "name": "@cortex-memory/client",
+  "version": "0.1.0",
+  "description": "Graph memory for AI agents",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MikeSquared-Agency/cortex"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist",
+    "proto"
+  ],
+  "dependencies": {
+    "@grpc/grpc-js": "^1.14.3",
+    "@grpc/proto-loader": "^0.7.15"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.33",
+    "jest": "^29",
+    "ts-jest": "^29",
+    "typescript": "^5.9.3"
+  }
+}

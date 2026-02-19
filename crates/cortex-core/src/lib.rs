@@ -9,11 +9,13 @@ pub mod kinds;
 pub mod relations;
 pub mod ingest;
 pub mod api;
+pub mod policies;
 
 pub use error::{CortexError, Result};
 pub use types::*;
 pub use storage::{Storage, NodeFilter, StorageStats, RedbStorage, CURRENT_SCHEMA_VERSION};
 pub use api::{Cortex, LibraryConfig};
+pub use policies::{AuditAction, AuditEntry, AuditFilter, AuditLog, RetentionConfig, RetentionEngine, RetentionMaxNodes};
 pub use graph::{
     GraphEngine, GraphEngineImpl, Subgraph, TraversalRequest, TraversalDirection,
     TraversalStrategy, PathRequest, PathResult, Path, TraversalBudget,

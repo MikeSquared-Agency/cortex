@@ -1,0 +1,82 @@
+# cortex-memory
+
+Python client SDK for the [Cortex](https://github.com/MikeSquared-Agency/cortex) graph memory engine.
+
+## Installation
+
+```bash
+pip install cortex-memory
+```
+
+## Quick start
+
+```python
+from cortex_memory import Cortex
+
+# Connect to a running server
+with Cortex("localhost:9090") as cx:
+    # Store knowledge
+    node_id = cx.store(
+        "decision",
+        "Use FastAPI for the backend",
+        body="Chose FastAPI over Flask for async support and type hints",
+        tags=["backend", "python"],
+        importance=0.8,
+    )
+
+    # Semantic search
+    results = cx.search("backend technology choices", limit=5)
+    for r in results:
+        print(f"{r.score:.2f} — {r.title}")
+
+    # Get a briefing
+    briefing = cx.briefing("my-agent")
+    print(briefing)  # Ready-to-inject markdown
+```
+
+## Library mode (embedded server)
+
+```python
+cx = Cortex.open("./memory.redb")
+# Works identically — starts a local server subprocess
+```
+
+## Testing
+
+```python
+from cortex_memory.testing import mock_cortex
+
+def test_my_agent():
+    with mock_cortex() as cx:
+        cx.store("fact", "test data")
+        results = cx.search("test")
+        assert len(results) == 1
+        cx.assert_stored("fact", "test data")
+```
+
+### pytest fixture
+
+```python
+import pytest
+from cortex_memory.testing import mock_cortex
+
+@pytest.fixture
+def cortex():
+    with mock_cortex() as cx:
+        yield cx
+
+def test_store_and_search(cortex):
+    cortex.store("decision", "Use FastAPI", body="Async support", importance=0.8)
+    results = cortex.search("FastAPI")
+    assert results[0].title == "Use FastAPI"
+```
+
+## Proto generation
+
+The `cortex_pb2.py` and `cortex_pb2_grpc.py` stubs are pre-generated from
+`crates/cortex-proto/proto/cortex.proto`. To regenerate after a proto change:
+
+```bash
+pip install grpcio-tools
+./scripts/generate_protos.sh
+```

@@ -1,4 +1,5 @@
 use crate::error::{CortexError, Result};
+use crate::policies::audit::{AuditAction, AuditEntry, AuditLog};
 use crate::storage::filters::{NodeFilter, StorageStats};
 use crate::storage::traits::Storage;
 use crate::types::{Edge, EdgeId, Node, NodeId};
@@ -11,6 +12,7 @@ use std::sync::Arc;
 // Table definitions
 const NODES: TableDefinition<&[u8; 16], &[u8]> = TableDefinition::new("nodes");
 const EDGES: TableDefinition<&[u8; 16], &[u8]> = TableDefinition::new("edges");
+const AUDIT_TABLE: TableDefinition<u128, &[u8]> = TableDefinition::new("audit");
 
 // Secondary indexes (v2: kind stored as &str, not u8)
 const NODES_BY_KIND: MultimapTableDefinition<&str, &[u8; 16]> =
@@ -40,6 +42,7 @@ pub struct RedbStorage {
     db: Arc<Database>,
     #[allow(dead_code)]
     path: PathBuf,
+    audit_log: Option<Arc<AuditLog>>,
 }
 
 impl RedbStorage {
@@ -63,6 +66,7 @@ impl RedbStorage {
             {
                 let _ = write_txn.open_table(NODES)?;
                 let _ = write_txn.open_table(EDGES)?;
+                let _ = write_txn.open_table(AUDIT_TABLE)?;
                 let _ = write_txn.open_multimap_table(NODES_BY_KIND)?;
                 let _ = write_txn.open_multimap_table(EDGES_BY_FROM)?;
                 let _ = write_txn.open_multimap_table(EDGES_BY_TO)?;
@@ -75,11 +79,12 @@ impl RedbStorage {
         } else {
             // Existing database: check schema version
             Self::check_schema_version(&db)?;
-            // Ensure tables exist
+            // Ensure tables exist (creates new tables for existing DBs, e.g. audit)
             let write_txn = db.begin_write()?;
             {
                 let _ = write_txn.open_table(NODES)?;
                 let _ = write_txn.open_table(EDGES)?;
+                let _ = write_txn.open_table(AUDIT_TABLE)?;
                 let _ = write_txn.open_multimap_table(NODES_BY_KIND)?;
                 let _ = write_txn.open_multimap_table(EDGES_BY_FROM)?;
                 let _ = write_txn.open_multimap_table(EDGES_BY_TO)?;
@@ -93,6 +98,7 @@ impl RedbStorage {
         Ok(Self {
             db: Arc::new(db),
             path,
+            audit_log: None,
         })
     }
 
@@ -128,6 +134,26 @@ impl RedbStorage {
     /// Get the database file path
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Attach an audit log. Returns `self` for builder-style chaining.
+    pub fn with_audit_log(mut self, log: Arc<AuditLog>) -> Self {
+        self.audit_log = Some(log);
+        self
+    }
+
+    /// Create an AuditLog backed by the same redb Database instance.
+    pub fn create_audit_log(&self) -> AuditLog {
+        AuditLog::new(self.db.clone())
+    }
+
+    /// Fire-and-forget audit helper. Logs errors but does not propagate them.
+    fn audit(&self, entry: AuditEntry) {
+        if let Some(ref log) = self.audit_log {
+            if let Err(e) = log.log(entry) {
+                log::error!("Audit log write failed: {}", e);
+            }
+        }
     }
 
     /// Helper to convert UUID to byte array
@@ -385,9 +411,22 @@ impl Storage for RedbStorage {
         write_txn.commit()?;
 
         // Increment node count for new nodes
-        if old_node.is_none() {
+        let is_new = old_node.is_none();
+        if is_new {
             self.increment_meta_counter(STATS_NODE_COUNT_KEY)?;
         }
+
+        self.audit(AuditEntry {
+            timestamp: Utc::now(),
+            action: if is_new {
+                AuditAction::NodeCreated
+            } else {
+                AuditAction::NodeUpdated
+            },
+            target_id: node.id,
+            actor: node.source.agent.clone(),
+            details: None,
+        });
 
         Ok(())
     }
@@ -413,9 +452,82 @@ impl Storage for RedbStorage {
         node.deleted = true;
         node.updated_at = Utc::now();
 
-        // put_node won't increment (node already exists), decrement manually
+        // put_node won't increment (node already exists), decrement manually.
+        // put_node also fires NodeUpdated audit; we override with NodeDeleted below.
         self.put_node(&node)?;
         self.decrement_meta_counter(STATS_NODE_COUNT_KEY)?;
+
+        // Override the NodeUpdated audit entry emitted by put_node
+        self.audit(AuditEntry {
+            timestamp: Utc::now(),
+            action: AuditAction::NodeDeleted,
+            target_id: id,
+            actor: node.source.agent.clone(),
+            details: None,
+        });
+        Ok(())
+    }
+
+    fn hard_delete_node(&self, id: NodeId) -> Result<()> {
+        // Retrieve the node (may be soft-deleted)
+        let node = match {
+            let read_txn = self.db.begin_read()?;
+            let table = read_txn.open_table(NODES)?;
+            let id_bytes = Self::uuid_to_bytes(&id);
+            table
+                .get(&id_bytes)?
+                .map(|v| Self::deserialize_node(v.value()))
+                .transpose()?
+        } {
+            Some(n) => n,
+            None => return Ok(()), // already gone
+        };
+
+        // Delete all connected edges (ignore EdgeNotFound — race with other deletes)
+        for edge in self.edges_from(id)? {
+            match self.delete_edge(edge.id) {
+                Ok(()) | Err(CortexError::EdgeNotFound(_)) => {}
+                Err(e) => return Err(e),
+            }
+        }
+        for edge in self.edges_to(id)? {
+            match self.delete_edge(edge.id) {
+                Ok(()) | Err(CortexError::EdgeNotFound(_)) => {}
+                Err(e) => return Err(e),
+            }
+        }
+
+        // Physically remove the node from all tables
+        let id_bytes = Self::uuid_to_bytes(&id);
+        let write_txn = self.db.begin_write()?;
+        {
+            let mut nodes_table = write_txn.open_table(NODES)?;
+            nodes_table.remove(&id_bytes)?;
+        }
+        {
+            let mut kind_table = write_txn.open_multimap_table(NODES_BY_KIND)?;
+            kind_table.remove(node.kind.as_str(), &id_bytes)?;
+        }
+        {
+            let mut source_table = write_txn.open_multimap_table(NODES_BY_SOURCE)?;
+            source_table.remove(node.source.agent.as_str(), &id_bytes)?;
+        }
+        {
+            let mut tag_table = write_txn.open_multimap_table(NODES_BY_TAG)?;
+            for tag in &node.data.tags {
+                tag_table.remove(tag.as_str(), &id_bytes)?;
+            }
+        }
+        write_txn.commit()?;
+
+        self.audit(AuditEntry {
+            timestamp: Utc::now(),
+            action: AuditAction::NodeHardDeleted,
+            target_id: id,
+            actor: "retention-engine".to_string(),
+            details: None,
+        });
+
         Ok(())
     }
 
@@ -588,6 +700,22 @@ impl Storage for RedbStorage {
 
         write_txn.commit()?;
         self.increment_meta_counter(STATS_EDGE_COUNT_KEY)?;
+
+        self.audit(AuditEntry {
+            timestamp: Utc::now(),
+            action: AuditAction::EdgeCreated,
+            target_id: edge.id,
+            actor: match &edge.provenance {
+                crate::types::EdgeProvenance::Manual { created_by } => created_by.clone(),
+                crate::types::EdgeProvenance::AutoSimilarity { .. } => "auto-linker".to_string(),
+                crate::types::EdgeProvenance::AutoStructural { .. } => "auto-linker".to_string(),
+                crate::types::EdgeProvenance::AutoContradiction { .. } => "auto-linker".to_string(),
+                crate::types::EdgeProvenance::AutoDedup { .. } => "auto-linker".to_string(),
+                crate::types::EdgeProvenance::Imported { source } => source.clone(),
+            },
+            details: None,
+        });
+
         Ok(())
     }
 

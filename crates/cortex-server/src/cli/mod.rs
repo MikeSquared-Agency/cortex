@@ -1,3 +1,4 @@
+pub mod audit;
 pub mod backup;
 pub mod briefing;
 pub mod config_cmd;
@@ -9,6 +10,7 @@ pub mod init;
 pub mod migrate;
 pub mod node;
 pub mod search;
+pub mod security;
 pub mod shell;
 pub mod stats;
 pub mod traverse;
@@ -75,6 +77,11 @@ pub enum Commands {
     /// Configuration commands
     #[command(subcommand)]
     Config(ConfigCommands),
+    /// Query the audit log
+    Audit(AuditArgs),
+    /// Security utilities (key generation, etc.)
+    #[command(subcommand)]
+    Security(SecurityCommands),
 }
 
 #[derive(Subcommand, Debug)]
@@ -95,6 +102,33 @@ pub enum EdgeCommands {
 pub enum ConfigCommands {
     Validate,
     Show,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum SecurityCommands {
+    /// Generate a new 256-bit AES encryption key
+    GenerateKey,
+}
+
+// --- Audit args ---
+
+#[derive(Args, Debug)]
+pub struct AuditArgs {
+    /// Only show entries since this duration (e.g. "24h", "7d", "1h30m")
+    #[arg(long)]
+    pub since: Option<String>,
+    /// Filter by node/edge ID
+    #[arg(long)]
+    pub node: Option<String>,
+    /// Filter by actor name (e.g. "kai", "auto-linker")
+    #[arg(long)]
+    pub actor: Option<String>,
+    /// Output format: table (default) | json
+    #[arg(long, default_value = "table")]
+    pub format: String,
+    /// Maximum number of entries to return
+    #[arg(long, default_value = "100")]
+    pub limit: usize,
 }
 
 // --- Node args ---

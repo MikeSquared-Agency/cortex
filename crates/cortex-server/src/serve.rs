@@ -1,5 +1,6 @@
 use crate::config::CortexConfig;
 use cortex_core::briefing::{BriefingConfig, BriefingEngine};
+use cortex_core::storage::encrypted;
 use cortex_core::*;
 use cortex_proto::cortex_service_server::CortexServiceServer;
 use std::sync::atomic::AtomicU64;
@@ -9,15 +10,62 @@ use tokio::task::JoinHandle;
 use tonic::transport::Server;
 use tracing::{error, info};
 
+/// RAII guard: re-encrypts the temp DB file back to the original encrypted path on drop.
+struct EncryptedDbGuard {
+    temp_path: std::path::PathBuf,
+    encrypted_path: std::path::PathBuf,
+    key: [u8; 32],
+}
+
+impl Drop for EncryptedDbGuard {
+    fn drop(&mut self) {
+        if let Err(e) = encrypted::encrypt_file(&self.temp_path, &self.key) {
+            eprintln!("ERROR: Failed to re-encrypt database: {}", e);
+            return;
+        }
+        if let Err(e) = std::fs::rename(&self.temp_path, &self.encrypted_path) {
+            eprintln!("ERROR: Failed to replace encrypted database file: {}", e);
+        }
+    }
+}
+
 pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
     info!("Starting Cortex server v{}", env!("CARGO_PKG_VERSION"));
     info!("gRPC: {}", config.server.grpc_addr);
     info!("HTTP: {}", config.server.http_addr);
     info!("Data: {:?}", config.server.data_dir);
 
-    // Initialize storage
+    // Encryption at rest: decrypt to a temp file before opening with redb
+    let db_path = config.db_path();
+    let (_encrypted_guard, storage_path) = if config.security.encryption {
+        let key = encrypted::derive_key()
+            .map_err(|e| anyhow::anyhow!("Encryption key error: {}", e))?;
+
+        let temp_path = db_path.with_extension("redb.tmp");
+
+        if db_path.exists() {
+            info!("Decrypting database to temp file...");
+            std::fs::copy(&db_path, &temp_path)?;
+            encrypted::decrypt_file(&temp_path, &key)
+                .map_err(|e| anyhow::anyhow!("Failed to decrypt database: {}", e))?;
+        }
+
+        info!("Encryption at rest enabled — database will be re-encrypted on shutdown.");
+        let guard = EncryptedDbGuard {
+            temp_path: temp_path.clone(),
+            encrypted_path: db_path,
+            key,
+        };
+        (Some(guard), temp_path)
+    } else {
+        (None, db_path)
+    };
+
+    // Initialize storage with audit log
     info!("Opening database...");
-    let storage = Arc::new(RedbStorage::open(config.db_path())?);
+    let storage_inner = RedbStorage::open(&storage_path)?;
+    let audit_log = Arc::new(storage_inner.create_audit_log());
+    let storage = Arc::new(storage_inner.with_audit_log(audit_log));
     let stats = storage.stats()?;
     info!(
         "Database loaded: {} nodes, {} edges",
@@ -89,17 +137,44 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
     ));
     info!("Briefing engine ready");
 
-    // Start auto-linker background task
+    // Start auto-linker background task (also runs retention sweep each cycle)
     let auto_linker_task = {
         let linker = auto_linker.clone();
+        let storage_for_retention = storage.clone();
         let interval = auto_linker_config.interval;
+        let retention_cfg = config.retention.clone();
+        let has_retention = retention_cfg.default_ttl_days > 0
+            || !retention_cfg.by_kind.is_empty()
+            || retention_cfg.max_nodes.is_some();
 
         tokio::spawn(async move {
+            let retention_engine = if has_retention {
+                Some(RetentionEngine::new(retention_cfg))
+            } else {
+                None
+            };
+
             loop {
                 tokio::time::sleep(interval).await;
-                let mut linker = linker.write().unwrap();
-                if let Err(e) = linker.run_cycle() {
-                    error!("Auto-linker cycle failed: {}", e);
+
+                {
+                    let mut linker = linker.write().unwrap();
+                    if let Err(e) = linker.run_cycle() {
+                        error!("Auto-linker cycle failed: {}", e);
+                    }
+                }
+
+                if let Some(ref retention) = retention_engine {
+                    match retention.sweep(storage_for_retention.as_ref()) {
+                        Ok(0) => {}
+                        Ok(n) => info!("Retention: soft-deleted {} nodes", n),
+                        Err(e) => error!("Retention sweep failed: {}", e),
+                    }
+                    match retention.purge_expired(storage_for_retention.as_ref()) {
+                        Ok(0) => {}
+                        Ok(n) => info!("Retention: hard-deleted {} expired nodes", n),
+                        Err(e) => error!("Retention purge failed: {}", e),
+                    }
                 }
             }
         })

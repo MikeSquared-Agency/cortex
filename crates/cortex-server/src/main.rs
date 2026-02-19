@@ -112,6 +112,14 @@ async fn main() -> anyhow::Result<()> {
         Commands::Config(cmd) => {
             cli::config_cmd::run(cmd, &cli.config).await?;
         }
+
+        Commands::Audit(args) => {
+            cli::audit::run(args, config).await?;
+        }
+
+        Commands::Security(cmd) => {
+            cli::security::run(cmd).await?;
+        }
     }
 
     Ok(())

@@ -104,6 +104,8 @@ async fn dispatch(
         Commands::Stats      => super::stats::run(server).await?,
         Commands::Doctor     => super::doctor::run(config, server).await?,
         Commands::Config(cmd)=> super::config_cmd::run(cmd, config_path).await?,
+        Commands::Audit(a)   => super::audit::run(a, config).await?,
+        Commands::Security(c)=> super::security::run(c).await?,
     }
     Ok(())
 }

@@ -1,6 +1,8 @@
 use cortex_core::{AutoLinkerConfig, NodeKind, Relation, SimilarityConfig};
+
+// Re-export from cortex-core so cortex-server code can use them from config
+pub use cortex_core::policies::{RetentionConfig, RetentionMaxNodes};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -191,19 +193,6 @@ pub struct ObservabilityConfig {
     pub prometheus_port: u16,
     pub opentelemetry: bool,
     pub otlp_endpoint: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct RetentionConfig {
-    pub default_ttl_days: u64,
-    pub by_kind: HashMap<String, u64>,
-    pub max_nodes: Option<RetentionMaxNodes>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RetentionMaxNodes {
-    pub limit: usize,
-    pub strategy: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

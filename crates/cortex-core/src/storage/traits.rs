@@ -16,6 +16,16 @@ pub trait Storage: Send + Sync {
     /// Soft delete a node (sets tombstone flag)
     fn delete_node(&self, id: NodeId) -> Result<()>;
 
+    /// Permanently remove a node and its edges from storage.
+    /// Only call after the node has been soft-deleted and the grace period has passed.
+    /// Default implementation returns an error for backends that do not support hard deletion.
+    fn hard_delete_node(&self, id: NodeId) -> Result<()> {
+        let _ = id;
+        Err(crate::error::CortexError::Validation(
+            "hard_delete_node is not supported by this storage backend".to_string(),
+        ))
+    }
+
     /// List nodes matching the filter
     fn list_nodes(&self, filter: NodeFilter) -> Result<Vec<Node>>;
 
