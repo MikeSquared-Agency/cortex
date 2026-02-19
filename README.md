@@ -21,8 +21,11 @@ Your agent's memory shouldn't be a text file. It should be a living graph that w
 ### Install
 
 ```bash
-# Cargo
-cargo install cortex-server
+# Linux / macOS — one line, no Rust or protoc needed
+curl -sSf https://raw.githubusercontent.com/MikeSquared-Agency/cortex/main/install.sh | sh
+
+# Via Cargo
+cargo install cortex-memory
 
 # Docker
 docker run -p 9090:9090 -p 9091:9091 mikesquared/cortex:latest

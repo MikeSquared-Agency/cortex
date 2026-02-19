@@ -741,19 +741,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cortex-proto"
-version = "0.1.0"
-dependencies = [
- "prost",
- "prost-types",
- "serde",
- "serde_json",
- "tonic",
- "tonic-build",
-]
-
-[[package]]
-name = "cortex-server"
+name = "cortex-memory"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -790,6 +778,18 @@ dependencies = [
  "urlencoding",
  "uuid",
  "warren-adapter",
+]
+
+[[package]]
+name = "cortex-proto"
+version = "0.1.0"
+dependencies = [
+ "prost",
+ "prost-types",
+ "serde",
+ "serde_json",
+ "tonic",
+ "tonic-build",
 ]
 
 [[package]]

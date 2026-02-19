@@ -1,13 +1,17 @@
 [package]
-name = "cortex-server"
+name = "cortex-memory"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 description = "Cortex — embedded graph memory for AI agents. Single binary, single file, zero dependencies."
 repository = "https://github.com/MikeSquared-Agency/cortex"
+homepage = "https://github.com/MikeSquared-Agency/cortex"
+documentation = "https://github.com/MikeSquared-Agency/cortex/tree/main/docs"
+readme = "../../README.md"
 keywords = ["graph", "memory", "ai", "agent", "grpc"]
 categories = ["database", "command-line-utilities"]
+publish = true
 
 [[bin]]
 name = "cortex"
