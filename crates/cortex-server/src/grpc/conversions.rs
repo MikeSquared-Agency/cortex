@@ -11,7 +11,10 @@ pub fn node_to_response(node: &Node, edge_count: usize) -> NodeResponse {
         title: node.data.title.clone(),
         body: node.data.body.clone(),
         // Proto metadata is HashMap<String, String>; convert serde_json::Value to String
-        metadata: node.data.metadata.iter()
+        metadata: node
+            .data
+            .metadata
+            .iter()
             .map(|(k, v)| (k.clone(), v.to_string()))
             .collect(),
         tags: node.data.tags.clone(),
@@ -129,22 +132,56 @@ mod tests {
     use super::*;
 
     fn make_source(agent: &str) -> Source {
-        Source { agent: agent.to_string(), session: None, channel: None }
+        Source {
+            agent: agent.to_string(),
+            session: None,
+            channel: None,
+        }
     }
 
     #[test]
     fn test_parse_node_kind_all_variants() {
         // Case-insensitive — uppercase/mixed is lowercased before validation
-        assert_eq!(parse_node_kind("fact").unwrap(), NodeKind::new("fact").unwrap());
-        assert_eq!(parse_node_kind("Fact").unwrap(), NodeKind::new("fact").unwrap());
-        assert_eq!(parse_node_kind("FACT").unwrap(), NodeKind::new("fact").unwrap());
-        assert_eq!(parse_node_kind("decision").unwrap(), NodeKind::new("decision").unwrap());
-        assert_eq!(parse_node_kind("event").unwrap(), NodeKind::new("event").unwrap());
-        assert_eq!(parse_node_kind("observation").unwrap(), NodeKind::new("observation").unwrap());
-        assert_eq!(parse_node_kind("pattern").unwrap(), NodeKind::new("pattern").unwrap());
-        assert_eq!(parse_node_kind("agent").unwrap(), NodeKind::new("agent").unwrap());
-        assert_eq!(parse_node_kind("goal").unwrap(), NodeKind::new("goal").unwrap());
-        assert_eq!(parse_node_kind("preference").unwrap(), NodeKind::new("preference").unwrap());
+        assert_eq!(
+            parse_node_kind("fact").unwrap(),
+            NodeKind::new("fact").unwrap()
+        );
+        assert_eq!(
+            parse_node_kind("Fact").unwrap(),
+            NodeKind::new("fact").unwrap()
+        );
+        assert_eq!(
+            parse_node_kind("FACT").unwrap(),
+            NodeKind::new("fact").unwrap()
+        );
+        assert_eq!(
+            parse_node_kind("decision").unwrap(),
+            NodeKind::new("decision").unwrap()
+        );
+        assert_eq!(
+            parse_node_kind("event").unwrap(),
+            NodeKind::new("event").unwrap()
+        );
+        assert_eq!(
+            parse_node_kind("observation").unwrap(),
+            NodeKind::new("observation").unwrap()
+        );
+        assert_eq!(
+            parse_node_kind("pattern").unwrap(),
+            NodeKind::new("pattern").unwrap()
+        );
+        assert_eq!(
+            parse_node_kind("agent").unwrap(),
+            NodeKind::new("agent").unwrap()
+        );
+        assert_eq!(
+            parse_node_kind("goal").unwrap(),
+            NodeKind::new("goal").unwrap()
+        );
+        assert_eq!(
+            parse_node_kind("preference").unwrap(),
+            NodeKind::new("preference").unwrap()
+        );
     }
 
     #[test]
@@ -163,20 +200,62 @@ mod tests {
 
     #[test]
     fn test_parse_relation_all_variants() {
-        assert_eq!(parse_relation("informedby").unwrap(), Relation::new("informed_by").unwrap());
-        assert_eq!(parse_relation("informed_by").unwrap(), Relation::new("informed_by").unwrap());
-        assert_eq!(parse_relation("ledto").unwrap(), Relation::new("led_to").unwrap());
-        assert_eq!(parse_relation("led_to").unwrap(), Relation::new("led_to").unwrap());
-        assert_eq!(parse_relation("dependson").unwrap(), Relation::new("depends_on").unwrap());
-        assert_eq!(parse_relation("depends_on").unwrap(), Relation::new("depends_on").unwrap());
-        assert_eq!(parse_relation("contradicts").unwrap(), Relation::new("contradicts").unwrap());
-        assert_eq!(parse_relation("supersedes").unwrap(), Relation::new("supersedes").unwrap());
-        assert_eq!(parse_relation("appliesto").unwrap(), Relation::new("applies_to").unwrap());
-        assert_eq!(parse_relation("applies_to").unwrap(), Relation::new("applies_to").unwrap());
-        assert_eq!(parse_relation("relatedto").unwrap(), Relation::new("related_to").unwrap());
-        assert_eq!(parse_relation("related_to").unwrap(), Relation::new("related_to").unwrap());
-        assert_eq!(parse_relation("instanceof").unwrap(), Relation::new("instance_of").unwrap());
-        assert_eq!(parse_relation("instance_of").unwrap(), Relation::new("instance_of").unwrap());
+        assert_eq!(
+            parse_relation("informedby").unwrap(),
+            Relation::new("informed_by").unwrap()
+        );
+        assert_eq!(
+            parse_relation("informed_by").unwrap(),
+            Relation::new("informed_by").unwrap()
+        );
+        assert_eq!(
+            parse_relation("ledto").unwrap(),
+            Relation::new("led_to").unwrap()
+        );
+        assert_eq!(
+            parse_relation("led_to").unwrap(),
+            Relation::new("led_to").unwrap()
+        );
+        assert_eq!(
+            parse_relation("dependson").unwrap(),
+            Relation::new("depends_on").unwrap()
+        );
+        assert_eq!(
+            parse_relation("depends_on").unwrap(),
+            Relation::new("depends_on").unwrap()
+        );
+        assert_eq!(
+            parse_relation("contradicts").unwrap(),
+            Relation::new("contradicts").unwrap()
+        );
+        assert_eq!(
+            parse_relation("supersedes").unwrap(),
+            Relation::new("supersedes").unwrap()
+        );
+        assert_eq!(
+            parse_relation("appliesto").unwrap(),
+            Relation::new("applies_to").unwrap()
+        );
+        assert_eq!(
+            parse_relation("applies_to").unwrap(),
+            Relation::new("applies_to").unwrap()
+        );
+        assert_eq!(
+            parse_relation("relatedto").unwrap(),
+            Relation::new("related_to").unwrap()
+        );
+        assert_eq!(
+            parse_relation("related_to").unwrap(),
+            Relation::new("related_to").unwrap()
+        );
+        assert_eq!(
+            parse_relation("instanceof").unwrap(),
+            Relation::new("instance_of").unwrap()
+        );
+        assert_eq!(
+            parse_relation("instance_of").unwrap(),
+            Relation::new("instance_of").unwrap()
+        );
     }
 
     #[test]
@@ -194,15 +273,27 @@ mod tests {
 
     #[test]
     fn test_parse_direction_known_values() {
-        assert!(matches!(parse_direction("outgoing"), TraversalDirection::Outgoing));
-        assert!(matches!(parse_direction("incoming"), TraversalDirection::Incoming));
+        assert!(matches!(
+            parse_direction("outgoing"),
+            TraversalDirection::Outgoing
+        ));
+        assert!(matches!(
+            parse_direction("incoming"),
+            TraversalDirection::Incoming
+        ));
         assert!(matches!(parse_direction("both"), TraversalDirection::Both));
-        assert!(matches!(parse_direction("OUTGOING"), TraversalDirection::Outgoing));
+        assert!(matches!(
+            parse_direction("OUTGOING"),
+            TraversalDirection::Outgoing
+        ));
     }
 
     #[test]
     fn test_parse_direction_defaults_to_both() {
-        assert!(matches!(parse_direction("unknown"), TraversalDirection::Both));
+        assert!(matches!(
+            parse_direction("unknown"),
+            TraversalDirection::Both
+        ));
         assert!(matches!(parse_direction(""), TraversalDirection::Both));
     }
 
@@ -210,7 +301,10 @@ mod tests {
     fn test_parse_strategy_known_values() {
         assert!(matches!(parse_strategy("bfs"), TraversalStrategy::Bfs));
         assert!(matches!(parse_strategy("dfs"), TraversalStrategy::Dfs));
-        assert!(matches!(parse_strategy("weighted"), TraversalStrategy::Weighted));
+        assert!(matches!(
+            parse_strategy("weighted"),
+            TraversalStrategy::Weighted
+        ));
     }
 
     #[test]
@@ -225,7 +319,10 @@ mod tests {
         let ts = datetime_to_timestamp(now);
         let restored = timestamp_to_datetime(ts);
         let diff_ms = (now - restored).num_milliseconds().abs();
-        assert!(diff_ms < 1, "Timestamp roundtrip should preserve millisecond precision");
+        assert!(
+            diff_ms < 1,
+            "Timestamp roundtrip should preserve millisecond precision"
+        );
     }
 
     #[test]
@@ -264,7 +361,13 @@ mod tests {
 
     #[test]
     fn test_node_to_response_kind_string() {
-        let node = Node::new(NodeKind::new("pattern").unwrap(), "P".to_string(), "".to_string(), make_source("a"), 0.5);
+        let node = Node::new(
+            NodeKind::new("pattern").unwrap(),
+            "P".to_string(),
+            "".to_string(),
+            make_source("a"),
+            0.5,
+        );
         let response = node_to_response(&node, 0);
         // Debug impl produces PascalCase: "pattern" → "Pattern"
         assert_eq!(response.kind, "Pattern");
@@ -276,7 +379,10 @@ mod tests {
         let from = Uuid::now_v7();
         let to = Uuid::now_v7();
         let edge = Edge::new(
-            from, to, Relation::new("related_to").unwrap(), 0.7,
+            from,
+            to,
+            Relation::new("related_to").unwrap(),
+            0.7,
             EdgeProvenance::AutoSimilarity { score: 0.85 },
         );
         let response = edge_to_response(&edge);

@@ -1,5 +1,5 @@
 use cortex_core::{
-    Edge, EdgeProvenance, Node, NodeFilter, NodeKind, Relation, RedbStorage, Source, Storage,
+    Edge, EdgeProvenance, Node, NodeFilter, NodeKind, RedbStorage, Relation, Source, Storage,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -138,10 +138,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 4. Query nodes by kind
     println!("4. Querying nodes...");
 
-    let filter = NodeFilter::new().with_kinds(vec![NodeKind::new("decision").unwrap(), NodeKind::new("fact").unwrap()]);
+    let filter = NodeFilter::new().with_kinds(vec![
+        NodeKind::new("decision").unwrap(),
+        NodeKind::new("fact").unwrap(),
+    ]);
     let results = storage.list_nodes(filter)?;
 
-    println!("   ✓ Found {} nodes of kind Decision or Fact:", results.len());
+    println!(
+        "   ✓ Found {} nodes of kind Decision or Fact:",
+        results.len()
+    );
     for node in &results {
         println!("     - [{:?}] {}", node.kind, node.data.title);
     }
@@ -168,10 +174,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     for edge in &outgoing {
         let to_node = storage.get_node(edge.to)?.unwrap();
-        println!(
-            "     - --[{}]--> {}",
-            edge.relation, to_node.data.title
-        );
+        println!("     - --[{}]--> {}", edge.relation, to_node.data.title);
     }
     println!();
 
@@ -183,10 +186,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     for edge in &incoming {
         let from_node = storage.get_node(edge.from)?.unwrap();
-        println!(
-            "     - {} --[{}]-->",
-            from_node.data.title, edge.relation
-        );
+        println!("     - {} --[{}]-->", from_node.data.title, edge.relation);
     }
     println!();
 
@@ -215,10 +215,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     storage.put_node(&kai_node)?;
 
     let kai_updated = storage.get_node(kai.id)?.unwrap();
-    println!(
-        "   ✓ Updated access count: {}",
-        kai_updated.access_count
-    );
+    println!("   ✓ Updated access count: {}", kai_updated.access_count);
     println!();
 
     // 9. Soft delete
@@ -233,7 +230,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let filter = NodeFilter::new();
     let active_nodes = storage.list_nodes(filter.clone())?;
-    println!("   ✓ Active nodes (deleted excluded): {}", active_nodes.len());
+    println!(
+        "   ✓ Active nodes (deleted excluded): {}",
+        active_nodes.len()
+    );
 
     let filter_with_deleted = filter.include_deleted();
     let all_nodes = storage.list_nodes(filter_with_deleted)?;

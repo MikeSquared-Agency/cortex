@@ -47,7 +47,6 @@ pub struct ServerConfig {
     pub max_message_size: usize,
 }
 
-
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
@@ -230,8 +229,6 @@ pub struct PluginConfig {
     /// "ingest" | "linker_rule" | "briefing_section" | "export_format" | "classifier"
     pub r#type: String,
 }
-
-
 
 impl CortexConfig {
     /// Load from a cortex.toml file.

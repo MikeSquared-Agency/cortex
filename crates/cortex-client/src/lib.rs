@@ -78,11 +78,7 @@ impl CortexClient {
     }
 
     /// Semantic similarity search. Returns scored result entries.
-    pub async fn search(
-        &mut self,
-        query: &str,
-        limit: u32,
-    ) -> anyhow::Result<SearchResponse> {
+    pub async fn search(&mut self, query: &str, limit: u32) -> anyhow::Result<SearchResponse> {
         let resp = self
             .inner
             .similarity_search(SimilaritySearchRequest {
@@ -167,11 +163,7 @@ impl CortexClient {
 
     /// Get graph statistics.
     pub async fn stats(&mut self) -> anyhow::Result<StatsResponse> {
-        let resp = self
-            .inner
-            .stats(StatsRequest {})
-            .await?;
+        let resp = self.inner.stats(StatsRequest {}).await?;
         Ok(resp.into_inner())
     }
-
 }

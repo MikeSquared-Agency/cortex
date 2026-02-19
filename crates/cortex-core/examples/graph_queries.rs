@@ -1,6 +1,6 @@
 use cortex_core::{
-    Edge, EdgeProvenance, GraphEngine, GraphEngineImpl, Node, NodeKind, PathRequest, Relation,
-    RedbStorage, Source, Storage, TraversalDirection, TraversalRequest, TraversalStrategy,
+    Edge, EdgeProvenance, GraphEngine, GraphEngineImpl, Node, NodeKind, PathRequest, RedbStorage,
+    Relation, Source, Storage, TraversalDirection, TraversalRequest, TraversalStrategy,
 };
 use std::sync::Arc;
 
@@ -90,8 +90,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let goal = Node::new(
         NodeKind::new("goal").unwrap(),
         "Maintain API latency under 100ms".to_string(),
-        "Ongoing goal to keep P95 API latency under 100ms for all endpoints."
-            .to_string(),
+        "Ongoing goal to keep P95 API latency under 100ms for all endpoints.".to_string(),
         Source {
             agent: "warren".to_string(),
             session: None,
@@ -182,7 +181,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ..Default::default()
     })?;
 
-    println!("   ✓ Found {} nodes in the consequence chain:", consequences.nodes.len());
+    println!(
+        "   ✓ Found {} nodes in the consequence chain:",
+        consequences.nodes.len()
+    );
     for (node_id, node) in &consequences.nodes {
         let depth = consequences.depths.get(node_id).unwrap();
         println!(
@@ -219,7 +221,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         start: vec![problem.id],
         max_depth: Some(3),
         direction: TraversalDirection::Outgoing,
-        kind_filter: Some(vec![NodeKind::new("decision").unwrap(), NodeKind::new("fact").unwrap()]),
+        kind_filter: Some(vec![
+            NodeKind::new("decision").unwrap(),
+            NodeKind::new("fact").unwrap(),
+        ]),
         include_start: false,
         ..Default::default()
     })?;

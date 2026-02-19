@@ -77,16 +77,21 @@ fn parse_duration(s: &str) -> Result<chrono::DateTime<Utc>> {
     let mut total_seconds: i64 = 0;
 
     while !remaining.is_empty() {
-        let split_at = remaining
-            .find(|c: char| c.is_alphabetic())
-            .ok_or_else(|| anyhow::anyhow!("Cannot parse duration '{}': expected format like '24h', '7d', '1h30m'", s))?;
+        let split_at = remaining.find(|c: char| c.is_alphabetic()).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Cannot parse duration '{}': expected format like '24h', '7d', '1h30m'",
+                s
+            )
+        })?;
 
         let num: i64 = remaining[..split_at]
             .parse()
             .map_err(|_| anyhow::anyhow!("Invalid number in duration '{}'", s))?;
 
         let rest = &remaining[split_at..];
-        let unit_end = rest.find(|c: char| c.is_ascii_digit()).unwrap_or(rest.len());
+        let unit_end = rest
+            .find(|c: char| c.is_ascii_digit())
+            .unwrap_or(rest.len());
         let unit = &rest[..unit_end];
 
         let secs = match unit {

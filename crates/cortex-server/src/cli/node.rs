@@ -1,12 +1,15 @@
+use crate::cli::{
+    grpc_connect, print_node_table, NodeCommands, NodeCreateArgs, NodeDeleteArgs, NodeGetArgs,
+    NodeListArgs,
+};
 use anyhow::Result;
 use cortex_proto::*;
-use crate::cli::{NodeCommands, NodeCreateArgs, NodeDeleteArgs, NodeGetArgs, NodeListArgs, grpc_connect, print_node_table};
 
 pub async fn run(cmd: NodeCommands, server: &str) -> Result<()> {
     match cmd {
         NodeCommands::Create(args) => create(args, server).await,
-        NodeCommands::Get(args)    => get(args, server).await,
-        NodeCommands::List(args)   => list(args, server).await,
+        NodeCommands::Get(args) => get(args, server).await,
+        NodeCommands::List(args) => list(args, server).await,
         NodeCommands::Delete(args) => delete(args, server).await,
     }
 }
@@ -36,12 +39,15 @@ async fn create(args: NodeCreateArgs, server: &str) -> Result<()> {
     let resp = client.create_node(req).await?.into_inner();
 
     if args.format == "json" {
-        println!("{}", serde_json::json!({
-            "id": resp.id,
-            "kind": resp.kind,
-            "title": resp.title,
-            "importance": resp.importance,
-        }));
+        println!(
+            "{}",
+            serde_json::json!({
+                "id": resp.id,
+                "kind": resp.kind,
+                "title": resp.title,
+                "importance": resp.importance,
+            })
+        );
     } else {
         println!("Created node {}", resp.id);
         print_node_detail(&resp);
@@ -52,20 +58,26 @@ async fn create(args: NodeCreateArgs, server: &str) -> Result<()> {
 
 async fn get(args: NodeGetArgs, server: &str) -> Result<()> {
     let mut client = grpc_connect(server).await?;
-    let resp = client.get_node(GetNodeRequest { id: args.id }).await?.into_inner();
+    let resp = client
+        .get_node(GetNodeRequest { id: args.id })
+        .await?
+        .into_inner();
 
     if args.format == "json" {
-        println!("{}", serde_json::json!({
-            "id": resp.id,
-            "kind": resp.kind,
-            "title": resp.title,
-            "body": resp.body,
-            "importance": resp.importance,
-            "tags": resp.tags,
-            "source_agent": resp.source_agent,
-            "access_count": resp.access_count,
-            "has_embedding": resp.has_embedding,
-        }));
+        println!(
+            "{}",
+            serde_json::json!({
+                "id": resp.id,
+                "kind": resp.kind,
+                "title": resp.title,
+                "body": resp.body,
+                "importance": resp.importance,
+                "tags": resp.tags,
+                "source_agent": resp.source_agent,
+                "access_count": resp.access_count,
+                "has_embedding": resp.has_embedding,
+            })
+        );
     } else {
         print_node_detail(&resp);
     }
@@ -90,12 +102,18 @@ async fn list(args: NodeListArgs, server: &str) -> Result<()> {
         .into_inner();
 
     if args.format == "json" {
-        let nodes: Vec<_> = resp.nodes.iter().map(|n| serde_json::json!({
-            "id": n.id,
-            "kind": n.kind,
-            "title": n.title,
-            "importance": n.importance,
-        })).collect();
+        let nodes: Vec<_> = resp
+            .nodes
+            .iter()
+            .map(|n| {
+                serde_json::json!({
+                    "id": n.id,
+                    "kind": n.kind,
+                    "title": n.title,
+                    "importance": n.importance,
+                })
+            })
+            .collect();
         println!("{}", serde_json::to_string_pretty(&nodes)?);
     } else {
         println!("Total: {} nodes", resp.total_count);
@@ -119,7 +137,9 @@ async fn delete(args: NodeDeleteArgs, server: &str) -> Result<()> {
 
     let mut client = grpc_connect(server).await?;
     let resp = client
-        .delete_node(DeleteNodeRequest { id: args.id.clone() })
+        .delete_node(DeleteNodeRequest {
+            id: args.id.clone(),
+        })
         .await?
         .into_inner();
 

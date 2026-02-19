@@ -1,6 +1,6 @@
+use crate::cli::{grpc_connect, BriefingArgs};
 use anyhow::Result;
 use cortex_proto::BriefingRequest;
-use crate::cli::{BriefingArgs, grpc_connect};
 
 pub async fn run(args: BriefingArgs, server: &str) -> Result<()> {
     let mut client = grpc_connect(server).await?;
@@ -15,13 +15,16 @@ pub async fn run(args: BriefingArgs, server: &str) -> Result<()> {
 
     match args.format.as_str() {
         "json" => {
-            println!("{}", serde_json::json!({
-                "agent_id": resp.agent_id,
-                "rendered": resp.rendered,
-                "generated_at": resp.generated_at,
-                "nodes_consulted": resp.nodes_consulted,
-                "cached": resp.cached,
-            }));
+            println!(
+                "{}",
+                serde_json::json!({
+                    "agent_id": resp.agent_id,
+                    "rendered": resp.rendered,
+                    "generated_at": resp.generated_at,
+                    "nodes_consulted": resp.nodes_consulted,
+                    "cached": resp.cached,
+                })
+            );
         }
         _ => {
             if resp.cached {

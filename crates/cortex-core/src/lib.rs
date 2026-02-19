@@ -1,34 +1,36 @@
-pub mod types;
-pub mod storage;
+pub mod api;
+pub mod briefing;
 pub mod error;
 pub mod graph;
-pub mod vector;
-pub mod linker;
-pub mod briefing;
-pub mod kinds;
-pub mod relations;
 pub mod ingest;
-pub mod api;
+pub mod kinds;
+pub mod linker;
 pub mod policies;
+pub mod relations;
+pub mod storage;
+pub mod types;
+pub mod vector;
 
-pub use error::{CortexError, Result};
-pub use types::*;
-pub use storage::{Storage, NodeFilter, StorageStats, RedbStorage, CURRENT_SCHEMA_VERSION};
 pub use api::{Cortex, LibraryConfig};
-pub use policies::{AuditAction, AuditEntry, AuditFilter, AuditLog, RetentionConfig, RetentionEngine, RetentionMaxNodes};
+pub use error::{CortexError, Result};
 pub use graph::{
-    GraphEngine, GraphEngineImpl, Subgraph, TraversalRequest, TraversalDirection,
-    TraversalStrategy, PathRequest, PathResult, Path, TraversalBudget,
-};
-pub use vector::{
-    EmbeddingService, FastEmbedService, VectorIndex, HnswIndex, RwLockVectorIndex,
-    SimilarityResult, VectorFilter, HybridQuery, HybridResult, HybridSearch,
-    SimilarityConfig, embedding_input,
+    GraphEngine, GraphEngineImpl, Path, PathRequest, PathResult, Subgraph, TraversalBudget,
+    TraversalDirection, TraversalRequest, TraversalStrategy,
 };
 pub use linker::{
-    AutoLinker, AutoLinkerConfig, AutoLinkerMetrics, DecayConfig, DecayEngine,
-    DedupScanner, DedupAction, DuplicatePair, LinkRule, ProposedEdge,
-    SimilarityLinkRule, StructuralRule, Contradiction, ContradictionDetector, Resolution,
+    AutoLinker, AutoLinkerConfig, AutoLinkerMetrics, Contradiction, ContradictionDetector,
+    DecayConfig, DecayEngine, DedupAction, DedupScanner, DuplicatePair, LinkRule, ProposedEdge,
+    Resolution, SimilarityLinkRule, StructuralRule,
+};
+pub use policies::{
+    AuditAction, AuditEntry, AuditFilter, AuditLog, RetentionConfig, RetentionEngine,
+    RetentionMaxNodes,
+};
+pub use storage::{NodeFilter, RedbStorage, Storage, StorageStats, CURRENT_SCHEMA_VERSION};
+pub use types::*;
+pub use vector::{
+    embedding_input, EmbeddingService, FastEmbedService, HnswIndex, HybridQuery, HybridResult,
+    HybridSearch, RwLockVectorIndex, SimilarityConfig, SimilarityResult, VectorFilter, VectorIndex,
 };
 
 #[cfg(test)]

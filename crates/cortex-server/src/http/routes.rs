@@ -174,7 +174,6 @@ async fn list_nodes(
     Ok(Json(JsonResponse::ok(node_data)))
 }
 
-
 #[derive(Deserialize)]
 struct CreateNodeBody {
     kind: Option<String>,
@@ -190,8 +189,7 @@ async fn create_node(
     Json(body): Json<CreateNodeBody>,
 ) -> AppResult<impl IntoResponse> {
     let kind_str = body.kind.as_deref().unwrap_or("fact");
-    let kind = NodeKind::new(kind_str)
-        .map_err(|e| anyhow::anyhow!("Invalid kind: {}", e))?;
+    let kind = NodeKind::new(kind_str).map_err(|e| anyhow::anyhow!("Invalid kind: {}", e))?;
     let importance = body.importance.unwrap_or(0.5);
     let tags = body.tags.unwrap_or_default();
     let source_agent = body.source_agent.unwrap_or_else(|| "http".to_string());
@@ -211,7 +209,9 @@ async fn create_node(
     node.data.tags = tags;
 
     // Generate embedding
-    let embedding = state.embedding_service.embed(&format!("{} {}", node.data.title, node.data.body))?;
+    let embedding = state
+        .embedding_service
+        .embed(&format!("{} {}", node.data.title, node.data.body))?;
 
     // Store node
     state.storage.put_node(&node)?;
@@ -241,13 +241,17 @@ async fn create_edge(
     State(state): State<AppState>,
     Json(body): Json<CreateEdgeBody>,
 ) -> AppResult<impl IntoResponse> {
-    let from: uuid::Uuid = body.from_id.parse()
+    let from: uuid::Uuid = body
+        .from_id
+        .parse()
         .map_err(|_| anyhow::anyhow!("Invalid from_id UUID"))?;
-    let to: uuid::Uuid = body.to_id.parse()
+    let to: uuid::Uuid = body
+        .to_id
+        .parse()
         .map_err(|_| anyhow::anyhow!("Invalid to_id UUID"))?;
     let relation_str = body.relation.as_deref().unwrap_or("relates-to");
-    let relation = Relation::new(relation_str)
-        .map_err(|e| anyhow::anyhow!("Invalid relation: {}", e))?;
+    let relation =
+        Relation::new(relation_str).map_err(|e| anyhow::anyhow!("Invalid relation: {}", e))?;
     let weight = body.weight.unwrap_or(1.0);
 
     let edge = Edge {
@@ -295,20 +299,25 @@ async fn hybrid_search(
         .iter()
         .take(limit)
         .filter_map(|r| {
-            state.storage.get_node(r.node_id).ok().flatten().map(|node| {
-                let edge_count = state.storage.edges_from(node.id).unwrap_or_default().len()
-                    + state.storage.edges_to(node.id).unwrap_or_default().len();
-                let graph_boost = (edge_count as f32 * 0.05).min(0.3);
-                serde_json::json!({
-                    "id": node.id.to_string(),
-                    "kind": format!("{:?}", node.kind),
-                    "title": node.data.title,
-                    "body": node.data.body,
-                    "score": r.score + graph_boost,
-                    "vector_score": r.score,
-                    "graph_boost": graph_boost,
+            state
+                .storage
+                .get_node(r.node_id)
+                .ok()
+                .flatten()
+                .map(|node| {
+                    let edge_count = state.storage.edges_from(node.id).unwrap_or_default().len()
+                        + state.storage.edges_to(node.id).unwrap_or_default().len();
+                    let graph_boost = (edge_count as f32 * 0.05).min(0.3);
+                    serde_json::json!({
+                        "id": node.id.to_string(),
+                        "kind": format!("{:?}", node.kind),
+                        "title": node.data.title,
+                        "body": node.data.body,
+                        "score": r.score + graph_boost,
+                        "vector_score": r.score,
+                        "graph_boost": graph_boost,
+                    })
                 })
-            })
         })
         .collect();
 
@@ -319,9 +328,7 @@ async fn get_node(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> AppResult<impl IntoResponse> {
-    let node_id: uuid::Uuid = id
-        .parse()
-        .map_err(|_| anyhow::anyhow!("Invalid UUID"))?;
+    let node_id: uuid::Uuid = id.parse().map_err(|_| anyhow::anyhow!("Invalid UUID"))?;
 
     let node = state
         .storage
@@ -356,9 +363,7 @@ async fn node_neighbors(
     Path(id): Path<String>,
     Query(query): Query<NeighborQuery>,
 ) -> AppResult<impl IntoResponse> {
-    let node_id: uuid::Uuid = id
-        .parse()
-        .map_err(|_| anyhow::anyhow!("Invalid UUID"))?;
+    let node_id: uuid::Uuid = id.parse().map_err(|_| anyhow::anyhow!("Invalid UUID"))?;
 
     let depth = query.depth.unwrap_or(1);
 
@@ -409,9 +414,7 @@ async fn get_edge(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> AppResult<impl IntoResponse> {
-    let edge_id: uuid::Uuid = id
-        .parse()
-        .map_err(|_| anyhow::anyhow!("Invalid UUID"))?;
+    let edge_id: uuid::Uuid = id.parse().map_err(|_| anyhow::anyhow!("Invalid UUID"))?;
 
     let edge = state
         .storage
@@ -507,7 +510,9 @@ struct EdgeExport {
 }
 
 async fn graph_export(State(state): State<AppState>) -> AppResult<Json<JsonResponse<GraphExport>>> {
-    let nodes = state.storage.list_nodes(NodeFilter::new().with_limit(1000))?;
+    let nodes = state
+        .storage
+        .list_nodes(NodeFilter::new().with_limit(1000))?;
 
     // Single pass: collect edges and track edge counts simultaneously
     let mut edges = Vec::new();
@@ -548,9 +553,7 @@ async fn graph_export(State(state): State<AppState>) -> AppResult<Json<JsonRespo
     })))
 }
 
-async fn auto_linker_status(
-    State(state): State<AppState>,
-) -> AppResult<impl IntoResponse> {
+async fn auto_linker_status(State(state): State<AppState>) -> AppResult<impl IntoResponse> {
     let linker = state.auto_linker.read().unwrap();
     let metrics = linker.metrics();
 
@@ -563,9 +566,7 @@ async fn auto_linker_status(
     }))))
 }
 
-async fn trigger_auto_link(
-    State(state): State<AppState>,
-) -> AppResult<impl IntoResponse> {
+async fn trigger_auto_link(State(state): State<AppState>) -> AppResult<impl IntoResponse> {
     let mut linker = state.auto_linker.write().unwrap();
     linker.run_cycle()?;
 

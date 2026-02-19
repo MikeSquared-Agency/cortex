@@ -3,9 +3,9 @@ use cortex_core::briefing::BriefingEngine;
 use cortex_core::*;
 // cortex_core::* imports a 1-arg `Result<T>` alias; re-import std's 2-arg form
 // so that tonic handler return types like `Result<Response<T>, Status>` resolve correctly.
-use std::result::Result;
 use cortex_proto::cortex_service_server::CortexService;
 use cortex_proto::*;
+use std::result::Result;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::sync::RwLock as StdRwLock;
@@ -25,7 +25,11 @@ pub struct CortexServiceImpl {
     graph_engine: Arc<GraphEngineImpl<RedbStorage>>,
     vector_index: Arc<StdRwLock<HnswIndex>>,
     embedding_service: Arc<FastEmbedService>,
-    auto_linker: Arc<StdRwLock<AutoLinker<RedbStorage, FastEmbedService, HnswIndex, GraphEngineImpl<RedbStorage>>>>,
+    auto_linker: Arc<
+        StdRwLock<
+            AutoLinker<RedbStorage, FastEmbedService, HnswIndex, GraphEngineImpl<RedbStorage>>,
+        >,
+    >,
     graph_version: Arc<AtomicU64>,
     briefing_engine: Arc<ServerBriefingEngine>,
     start_time: Instant,
@@ -37,7 +41,11 @@ impl CortexServiceImpl {
         graph_engine: Arc<GraphEngineImpl<RedbStorage>>,
         vector_index: Arc<StdRwLock<HnswIndex>>,
         embedding_service: Arc<FastEmbedService>,
-        auto_linker: Arc<StdRwLock<AutoLinker<RedbStorage, FastEmbedService, HnswIndex, GraphEngineImpl<RedbStorage>>>>,
+        auto_linker: Arc<
+            StdRwLock<
+                AutoLinker<RedbStorage, FastEmbedService, HnswIndex, GraphEngineImpl<RedbStorage>>,
+            >,
+        >,
         graph_version: Arc<AtomicU64>,
         briefing_engine: Arc<ServerBriefingEngine>,
     ) -> Self {
@@ -72,7 +80,8 @@ impl CortexService for CortexServiceImpl {
     ) -> Result<Response<NodeResponse>, Status> {
         let req = request.into_inner();
 
-        let kind = parse_node_kind(&req.kind).map_err(|e| Status::invalid_argument(e.to_string()))?;
+        let kind =
+            parse_node_kind(&req.kind).map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         let source = Source {
             agent: req.source_agent,
@@ -80,16 +89,11 @@ impl CortexService for CortexServiceImpl {
             channel: req.source_channel,
         };
 
-        let mut node = Node::new(
-            kind,
-            req.title,
-            req.body,
-            source,
-            req.importance,
-        );
+        let mut node = Node::new(kind, req.title, req.body, source, req.importance);
 
         // Proto metadata is HashMap<String, String>; node metadata is HashMap<String, Value>
-        node.data.metadata = req.metadata
+        node.data.metadata = req
+            .metadata
             .into_iter()
             .map(|(k, v)| (k, serde_json::Value::String(v)))
             .collect();
@@ -97,7 +101,8 @@ impl CortexService for CortexServiceImpl {
 
         // Generate embedding
         let text = embedding_input(&node);
-        let embedding = self.embedding_service
+        let embedding = self
+            .embedding_service
             .embed(&text)
             .map_err(|e| Status::internal(e.to_string()))?;
         node.embedding = Some(embedding.clone());
@@ -110,7 +115,8 @@ impl CortexService for CortexServiceImpl {
         // Index embedding
         {
             let mut index = self.vector_index.write().unwrap();
-            index.insert(node.id, &embedding)
+            index
+                .insert(node.id, &embedding)
                 .map_err(|e| Status::internal(e.to_string()))?;
         }
 
@@ -125,10 +131,13 @@ impl CortexService for CortexServiceImpl {
         request: Request<GetNodeRequest>,
     ) -> Result<Response<NodeResponse>, Status> {
         let req = request.into_inner();
-        let node_id = req.id.parse::<uuid::Uuid>()
+        let node_id = req
+            .id
+            .parse::<uuid::Uuid>()
             .map_err(|e| Status::invalid_argument(format!("Invalid UUID: {}", e)))?;
 
-        let node = self.storage
+        let node = self
+            .storage
             .get_node(node_id)
             .map_err(|e| Status::internal(e.to_string()))?
             .ok_or_else(|| Status::not_found("Node not found"))?;
@@ -142,10 +151,13 @@ impl CortexService for CortexServiceImpl {
         request: Request<UpdateNodeRequest>,
     ) -> Result<Response<NodeResponse>, Status> {
         let req = request.into_inner();
-        let node_id = req.id.parse::<uuid::Uuid>()
+        let node_id = req
+            .id
+            .parse::<uuid::Uuid>()
             .map_err(|e| Status::invalid_argument(format!("Invalid UUID: {}", e)))?;
 
-        let mut node = self.storage
+        let mut node = self
+            .storage
             .get_node(node_id)
             .map_err(|e| Status::internal(e.to_string()))?
             .ok_or_else(|| Status::not_found("Node not found"))?;
@@ -158,7 +170,8 @@ impl CortexService for CortexServiceImpl {
             node.data.body = body;
         }
         if !req.metadata.is_empty() {
-            node.data.metadata = req.metadata
+            node.data.metadata = req
+                .metadata
                 .into_iter()
                 .map(|(k, v)| (k, serde_json::Value::String(v)))
                 .collect();
@@ -172,7 +185,8 @@ impl CortexService for CortexServiceImpl {
 
         // Re-generate embedding
         let text = embedding_input(&node);
-        let embedding = self.embedding_service
+        let embedding = self
+            .embedding_service
             .embed(&text)
             .map_err(|e| Status::internal(e.to_string()))?;
         node.embedding = Some(embedding.clone());
@@ -186,7 +200,8 @@ impl CortexService for CortexServiceImpl {
         // Update index
         {
             let mut index = self.vector_index.write().unwrap();
-            index.insert(node.id, &embedding)
+            index
+                .insert(node.id, &embedding)
                 .map_err(|e| Status::internal(e.to_string()))?;
         }
 
@@ -201,7 +216,9 @@ impl CortexService for CortexServiceImpl {
         request: Request<DeleteNodeRequest>,
     ) -> Result<Response<DeleteResponse>, Status> {
         let req = request.into_inner();
-        let node_id = req.id.parse::<uuid::Uuid>()
+        let node_id = req
+            .id
+            .parse::<uuid::Uuid>()
             .map_err(|e| Status::invalid_argument(format!("Invalid UUID: {}", e)))?;
 
         self.storage
@@ -222,9 +239,8 @@ impl CortexService for CortexServiceImpl {
         let mut filter = NodeFilter::new();
 
         if !req.kind_filter.is_empty() {
-            let kinds: std::result::Result<Vec<_>, _> = req.kind_filter.iter()
-                .map(|s| parse_node_kind(s))
-                .collect();
+            let kinds: std::result::Result<Vec<_>, _> =
+                req.kind_filter.iter().map(|s| parse_node_kind(s)).collect();
             filter = filter.with_kinds(kinds.map_err(|e| Status::invalid_argument(e.to_string()))?);
         }
 
@@ -248,11 +264,13 @@ impl CortexService for CortexServiceImpl {
             filter = filter.with_offset(req.offset as usize);
         }
 
-        let nodes = self.storage
+        let nodes = self
+            .storage
             .list_nodes(filter.clone())
             .map_err(|e| Status::internal(e.to_string()))?;
 
-        let total_count = self.storage
+        let total_count = self
+            .storage
             .count_nodes(filter)
             .map_err(|e| Status::internal(e.to_string()))?;
 
@@ -276,13 +294,17 @@ impl CortexService for CortexServiceImpl {
     ) -> Result<Response<EdgeResponse>, Status> {
         let req = request.into_inner();
 
-        let from_id = req.from_id.parse::<uuid::Uuid>()
+        let from_id = req
+            .from_id
+            .parse::<uuid::Uuid>()
             .map_err(|e| Status::invalid_argument(format!("Invalid from_id: {}", e)))?;
-        let to_id = req.to_id.parse::<uuid::Uuid>()
+        let to_id = req
+            .to_id
+            .parse::<uuid::Uuid>()
             .map_err(|e| Status::invalid_argument(format!("Invalid to_id: {}", e)))?;
 
-        let relation = parse_relation(&req.relation)
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        let relation =
+            parse_relation(&req.relation).map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         let edge = Edge::new(
             from_id,
@@ -309,7 +331,9 @@ impl CortexService for CortexServiceImpl {
     ) -> Result<Response<GetEdgesResponse>, Status> {
         let req = request.into_inner();
 
-        let node_id = req.node_id.parse::<uuid::Uuid>()
+        let node_id = req
+            .node_id
+            .parse::<uuid::Uuid>()
             .map_err(|e| Status::invalid_argument(format!("Invalid UUID: {}", e)))?;
 
         let direction = parse_direction(&req.direction);
@@ -318,17 +342,25 @@ impl CortexService for CortexServiceImpl {
 
         match direction {
             TraversalDirection::Outgoing => {
-                edges = self.storage.edges_from(node_id)
+                edges = self
+                    .storage
+                    .edges_from(node_id)
                     .map_err(|e| Status::internal(e.to_string()))?;
             }
             TraversalDirection::Incoming => {
-                edges = self.storage.edges_to(node_id)
+                edges = self
+                    .storage
+                    .edges_to(node_id)
                     .map_err(|e| Status::internal(e.to_string()))?;
             }
             TraversalDirection::Both => {
-                let outgoing = self.storage.edges_from(node_id)
+                let outgoing = self
+                    .storage
+                    .edges_from(node_id)
                     .map_err(|e| Status::internal(e.to_string()))?;
-                let incoming = self.storage.edges_to(node_id)
+                let incoming = self
+                    .storage
+                    .edges_to(node_id)
                     .map_err(|e| Status::internal(e.to_string()))?;
                 edges.extend(outgoing);
                 edges.extend(incoming);
@@ -347,7 +379,9 @@ impl CortexService for CortexServiceImpl {
         request: Request<DeleteEdgeRequest>,
     ) -> Result<Response<DeleteResponse>, Status> {
         let req = request.into_inner();
-        let edge_id = req.id.parse::<uuid::Uuid>()
+        let edge_id = req
+            .id
+            .parse::<uuid::Uuid>()
             .map_err(|e| Status::invalid_argument(format!("Invalid UUID: {}", e)))?;
 
         self.storage
@@ -365,46 +399,63 @@ impl CortexService for CortexServiceImpl {
     ) -> Result<Response<SubgraphResponse>, Status> {
         let req = request.into_inner();
 
-        let start: std::result::Result<Vec<_>, _> = req.start_ids.iter()
+        let start: std::result::Result<Vec<_>, _> = req
+            .start_ids
+            .iter()
             .map(|s| s.parse::<uuid::Uuid>())
             .collect();
-        let start = start.map_err(|e| Status::invalid_argument(format!("Invalid start_ids: {}", e)))?;
+        let start =
+            start.map_err(|e| Status::invalid_argument(format!("Invalid start_ids: {}", e)))?;
 
         let direction = parse_direction(&req.direction);
         let strategy = parse_strategy(&req.strategy);
 
         let mut traverse_req = TraversalRequest {
             start,
-            max_depth: if req.max_depth > 0 { Some(req.max_depth) } else { None },
+            max_depth: if req.max_depth > 0 {
+                Some(req.max_depth)
+            } else {
+                None
+            },
             direction,
             strategy,
-            limit: if req.limit > 0 { Some(req.limit as usize) } else { None },
+            limit: if req.limit > 0 {
+                Some(req.limit as usize)
+            } else {
+                None
+            },
             ..Default::default()
         };
 
         if !req.relation_filter.is_empty() {
-            let relations: std::result::Result<Vec<_>, _> = req.relation_filter.iter()
+            let relations: std::result::Result<Vec<_>, _> = req
+                .relation_filter
+                .iter()
                 .map(|s| parse_relation(s))
                 .collect();
-            traverse_req.relation_filter = Some(relations.map_err(|e| Status::invalid_argument(e.to_string()))?);
+            traverse_req.relation_filter =
+                Some(relations.map_err(|e| Status::invalid_argument(e.to_string()))?);
         }
 
         if !req.kind_filter.is_empty() {
-            let kinds: std::result::Result<Vec<_>, _> = req.kind_filter.iter()
-                .map(|s| parse_node_kind(s))
-                .collect();
-            traverse_req.kind_filter = Some(kinds.map_err(|e| Status::invalid_argument(e.to_string()))?);
+            let kinds: std::result::Result<Vec<_>, _> =
+                req.kind_filter.iter().map(|s| parse_node_kind(s)).collect();
+            traverse_req.kind_filter =
+                Some(kinds.map_err(|e| Status::invalid_argument(e.to_string()))?);
         }
 
         if req.min_weight > 0.0 {
             traverse_req.min_weight = Some(req.min_weight);
         }
 
-        let subgraph = self.graph_engine
+        let subgraph = self
+            .graph_engine
             .traverse(traverse_req)
             .map_err(|e| Status::internal(e.to_string()))?;
 
-        let nodes: Vec<_> = subgraph.nodes.values()
+        let nodes: Vec<_> = subgraph
+            .nodes
+            .values()
             .map(|n| {
                 let edge_count = self.get_edge_count(n.id);
                 node_to_response(n, edge_count)
@@ -413,7 +464,8 @@ impl CortexService for CortexServiceImpl {
 
         let edges: Vec<_> = subgraph.edges.iter().map(edge_to_response).collect();
 
-        let depths: std::collections::HashMap<String, u32> = subgraph.depths
+        let depths: std::collections::HashMap<String, u32> = subgraph
+            .depths
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))
             .collect();
@@ -433,24 +485,39 @@ impl CortexService for CortexServiceImpl {
     ) -> Result<Response<PathsResponse>, Status> {
         let req = request.into_inner();
 
-        let from = req.from_id.parse::<uuid::Uuid>()
+        let from = req
+            .from_id
+            .parse::<uuid::Uuid>()
             .map_err(|e| Status::invalid_argument(format!("Invalid from_id: {}", e)))?;
-        let to = req.to_id.parse::<uuid::Uuid>()
+        let to = req
+            .to_id
+            .parse::<uuid::Uuid>()
             .map_err(|e| Status::invalid_argument(format!("Invalid to_id: {}", e)))?;
 
         let path_req = PathRequest {
             from,
             to,
-            max_paths: if req.max_paths > 0 { req.max_paths as usize } else { 1 },
-            max_length: if req.max_depth > 0 { Some(req.max_depth) } else { None },
+            max_paths: if req.max_paths > 0 {
+                req.max_paths as usize
+            } else {
+                1
+            },
+            max_length: if req.max_depth > 0 {
+                Some(req.max_depth)
+            } else {
+                None
+            },
             ..Default::default()
         };
 
-        let paths = self.graph_engine
+        let paths = self
+            .graph_engine
             .find_paths(path_req)
             .map_err(|e| Status::internal(e.to_string()))?;
 
-        let path_entries: Vec<_> = paths.paths.iter()
+        let path_entries: Vec<_> = paths
+            .paths
+            .iter()
             .map(|p| PathEntry {
                 node_ids: p.nodes.iter().map(|id| id.to_string()).collect(),
                 total_weight: p.total_weight,
@@ -469,17 +536,22 @@ impl CortexService for CortexServiceImpl {
     ) -> Result<Response<SubgraphResponse>, Status> {
         let req = request.into_inner();
 
-        let node_id = req.node_id.parse::<uuid::Uuid>()
+        let node_id = req
+            .node_id
+            .parse::<uuid::Uuid>()
             .map_err(|e| Status::invalid_argument(format!("Invalid UUID: {}", e)))?;
 
         let _direction = parse_direction(&req.direction);
         let depth = if req.depth > 0 { req.depth } else { 1 };
 
-        let subgraph = self.graph_engine
+        let subgraph = self
+            .graph_engine
             .neighborhood(node_id, depth)
             .map_err(|e| Status::internal(e.to_string()))?;
 
-        let nodes: Vec<_> = subgraph.nodes.values()
+        let nodes: Vec<_> = subgraph
+            .nodes
+            .values()
             .map(|n| {
                 let edge_count = self.get_edge_count(n.id);
                 node_to_response(n, edge_count)
@@ -488,7 +560,8 @@ impl CortexService for CortexServiceImpl {
 
         let edges: Vec<_> = subgraph.edges.iter().map(edge_to_response).collect();
 
-        let depths: std::collections::HashMap<String, u32> = subgraph.depths
+        let depths: std::collections::HashMap<String, u32> = subgraph
+            .depths
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))
             .collect();
@@ -508,42 +581,49 @@ impl CortexService for CortexServiceImpl {
     ) -> Result<Response<SearchResponse>, Status> {
         let req = request.into_inner();
 
-        let embedding = self.embedding_service
+        let embedding = self
+            .embedding_service
             .embed(&req.query)
             .map_err(|e| Status::internal(e.to_string()))?;
 
-        let limit = if req.limit > 0 { req.limit as usize } else { 10 };
+        let limit = if req.limit > 0 {
+            req.limit as usize
+        } else {
+            10
+        };
 
         let mut filter = VectorFilter::new();
         if !req.kind_filter.is_empty() {
-            let kinds: std::result::Result<Vec<_>, _> = req.kind_filter.iter()
-                .map(|s| parse_node_kind(s))
-                .collect();
+            let kinds: std::result::Result<Vec<_>, _> =
+                req.kind_filter.iter().map(|s| parse_node_kind(s)).collect();
             filter = filter.with_kinds(kinds.map_err(|e| Status::invalid_argument(e.to_string()))?);
         }
 
-        let index = self.vector_index.read()
+        let index = self
+            .vector_index
+            .read()
             .map_err(|_| Status::unavailable("Vector index is being rebuilt, try again shortly"))?;
         let results = if req.min_score > 0.0 {
-            index.search_threshold(&embedding, req.min_score, Some(&filter))
+            index
+                .search_threshold(&embedding, req.min_score, Some(&filter))
                 .map_err(|e| Status::internal(e.to_string()))?
         } else {
-            index.search(&embedding, limit, Some(&filter))
+            index
+                .search(&embedding, limit, Some(&filter))
                 .map_err(|e| Status::internal(e.to_string()))?
         };
         drop(index);
 
-        let search_results: Vec<_> = results.iter()
+        let search_results: Vec<_> = results
+            .iter()
             .filter_map(|r| {
-                self.storage.get_node(r.node_id).ok()
-                    .flatten()
-                    .map(|node| {
-                        let edge_count = self.get_edge_count(node.id);
-                        SearchResultEntry {
-                            node: Some(node_to_response(&node, edge_count)),
-                            score: r.score,
-                        }
-                    })
+                self.storage.get_node(r.node_id).ok().flatten().map(|node| {
+                    let edge_count = self.get_edge_count(node.id);
+                    SearchResultEntry {
+                        node: Some(node_to_response(&node, edge_count)),
+                        score: r.score,
+                    }
+                })
             })
             .take(limit)
             .collect();
@@ -559,22 +639,37 @@ impl CortexService for CortexServiceImpl {
     ) -> Result<Response<HybridSearchResponse>, Status> {
         let req = request.into_inner();
 
-        let anchors: std::result::Result<Vec<_>, _> = req.anchor_ids.iter()
+        let anchors: std::result::Result<Vec<_>, _> = req
+            .anchor_ids
+            .iter()
             .map(|s| s.parse::<uuid::Uuid>())
             .collect();
-        let anchors = anchors.map_err(|e| Status::invalid_argument(format!("Invalid anchor_ids: {}", e)))?;
+        let anchors =
+            anchors.map_err(|e| Status::invalid_argument(format!("Invalid anchor_ids: {}", e)))?;
 
         let mut query = HybridQuery::new(req.query)
             .with_anchors(anchors)
-            .with_vector_weight(if req.vector_weight > 0.0 { req.vector_weight } else { 0.7 })
-            .with_limit(if req.limit > 0 { req.limit as usize } else { 10 })
-            .with_max_anchor_depth(if req.max_anchor_depth > 0 { req.max_anchor_depth } else { 3 });
+            .with_vector_weight(if req.vector_weight > 0.0 {
+                req.vector_weight
+            } else {
+                0.7
+            })
+            .with_limit(if req.limit > 0 {
+                req.limit as usize
+            } else {
+                10
+            })
+            .with_max_anchor_depth(if req.max_anchor_depth > 0 {
+                req.max_anchor_depth
+            } else {
+                3
+            });
 
         if !req.kind_filter.is_empty() {
-            let kinds: std::result::Result<Vec<_>, _> = req.kind_filter.iter()
-                .map(|s| parse_node_kind(s))
-                .collect();
-            query = query.with_kind_filter(kinds.map_err(|e| Status::invalid_argument(e.to_string()))?);
+            let kinds: std::result::Result<Vec<_>, _> =
+                req.kind_filter.iter().map(|s| parse_node_kind(s)).collect();
+            query =
+                query.with_kind_filter(kinds.map_err(|e| Status::invalid_argument(e.to_string()))?);
         }
 
         // Arc<E> and Arc<G> implement EmbeddingService/GraphEngine via blanket impls.
@@ -586,10 +681,12 @@ impl CortexService for CortexServiceImpl {
             self.graph_engine.clone(),
         );
 
-        let results = hybrid.search(query)
+        let results = hybrid
+            .search(query)
             .map_err(|e| Status::internal(e.to_string()))?;
 
-        let hybrid_results: Vec<_> = results.iter()
+        let hybrid_results: Vec<_> = results
+            .iter()
             .map(|r| {
                 let edge_count = self.get_edge_count(r.node.id);
                 HybridResultEntry {
@@ -654,7 +751,9 @@ impl CortexService for CortexServiceImpl {
         &self,
         _request: Request<StatsRequest>,
     ) -> Result<Response<StatsResponse>, Status> {
-        let stats = self.storage.stats()
+        let stats = self
+            .storage
+            .stats()
             .map_err(|e| Status::internal(e.to_string()))?;
 
         // Try to get DB file size
@@ -708,7 +807,9 @@ impl CortexService for CortexServiceImpl {
         &self,
         _request: Request<ReindexRequest>,
     ) -> Result<Response<ReindexResponse>, Status> {
-        let nodes = self.storage.list_nodes(NodeFilter::new())
+        let nodes = self
+            .storage
+            .list_nodes(NodeFilter::new())
             .map_err(|e| Status::internal(e.to_string()))?;
 
         // Generate all embeddings without holding the write lock — embedding is CPU-bound
@@ -717,7 +818,9 @@ impl CortexService for CortexServiceImpl {
             .iter()
             .filter_map(|node| {
                 let text = embedding_input(node);
-                self.embedding_service.embed(&text).ok()
+                self.embedding_service
+                    .embed(&text)
+                    .ok()
                     .map(|emb| (node.id, emb))
             })
             .collect();
@@ -746,7 +849,9 @@ impl CortexService for CortexServiceImpl {
         &self,
         _request: Request<HealthRequest>,
     ) -> Result<Response<HealthResponse>, Status> {
-        let stats = self.storage.stats()
+        let stats = self
+            .storage
+            .stats()
             .map_err(|e| Status::internal(e.to_string()))?;
 
         let db_size = std::fs::metadata(self.storage.path())

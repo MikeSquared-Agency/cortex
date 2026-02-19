@@ -63,7 +63,10 @@ pub struct AuditLog {
 
 impl AuditLog {
     pub fn new(db: Arc<Database>) -> Self {
-        Self { db, seq: AtomicU64::new(0) }
+        Self {
+            db,
+            seq: AtomicU64::new(0),
+        }
     }
 
     /// Append an audit entry. Key is timestamp_nanos for time-ordered iteration.
@@ -113,8 +116,8 @@ impl AuditLog {
             .range(since_nanos..)
             .map_err(|e| crate::CortexError::Validation(format!("Audit range: {}", e)))?
         {
-            let (_, value) = result
-                .map_err(|e| crate::CortexError::Validation(format!("Audit iter: {}", e)))?;
+            let (_, value) =
+                result.map_err(|e| crate::CortexError::Validation(format!("Audit iter: {}", e)))?;
             let entry = match serde_json::from_slice::<AuditEntry>(value.value()) {
                 Ok(e) => e,
                 Err(_) => continue, // skip corrupt entries
@@ -193,7 +196,8 @@ mod tests {
     #[test]
     fn test_log_and_query_all() {
         let (log, _dir) = make_audit_log();
-        log.log(make_entry(AuditAction::NodeCreated, "kai")).unwrap();
+        log.log(make_entry(AuditAction::NodeCreated, "kai"))
+            .unwrap();
         log.log(make_entry(AuditAction::EdgeCreated, "auto-linker"))
             .unwrap();
 
@@ -204,7 +208,8 @@ mod tests {
     #[test]
     fn test_query_filter_by_actor() {
         let (log, _dir) = make_audit_log();
-        log.log(make_entry(AuditAction::NodeCreated, "kai")).unwrap();
+        log.log(make_entry(AuditAction::NodeCreated, "kai"))
+            .unwrap();
         log.log(make_entry(AuditAction::EdgeCreated, "auto-linker"))
             .unwrap();
 
@@ -221,8 +226,10 @@ mod tests {
     #[test]
     fn test_query_filter_by_action() {
         let (log, _dir) = make_audit_log();
-        log.log(make_entry(AuditAction::NodeCreated, "kai")).unwrap();
-        log.log(make_entry(AuditAction::NodeUpdated, "kai")).unwrap();
+        log.log(make_entry(AuditAction::NodeCreated, "kai"))
+            .unwrap();
+        log.log(make_entry(AuditAction::NodeUpdated, "kai"))
+            .unwrap();
         log.log(make_entry(AuditAction::EdgeCreated, "auto-linker"))
             .unwrap();
 
@@ -248,7 +255,8 @@ mod tests {
             details: None,
         })
         .unwrap();
-        log.log(make_entry(AuditAction::NodeCreated, "kai")).unwrap();
+        log.log(make_entry(AuditAction::NodeCreated, "kai"))
+            .unwrap();
 
         let entries = log
             .query(AuditFilter {

@@ -1,9 +1,11 @@
 use crate::error::Result;
-use crate::graph::{Subgraph, TraversalBudget, TraversalDirection, TraversalRequest, TraversalStrategy};
+use crate::graph::{
+    Subgraph, TraversalBudget, TraversalDirection, TraversalRequest, TraversalStrategy,
+};
 use crate::storage::Storage;
 use crate::types::{Edge, NodeId};
-use std::collections::{BinaryHeap, HashSet, VecDeque};
 use std::cmp::Ordering;
+use std::collections::{BinaryHeap, HashSet, VecDeque};
 use std::time::Instant;
 
 /// Weighted node for priority queue traversal
@@ -332,7 +334,12 @@ fn traverse_weighted<S: Storage>(
         visited.insert(*node_id);
     }
 
-    while let Some(WeightedNode { id: current_id, depth, weight: _ }) = queue.pop() {
+    while let Some(WeightedNode {
+        id: current_id,
+        depth,
+        weight: _,
+    }) = queue.pop()
+    {
         // Check budget
         if result.visited_count >= budget.max_visited {
             result.truncated = true;

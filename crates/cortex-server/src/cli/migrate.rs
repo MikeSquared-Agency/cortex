@@ -1,5 +1,5 @@
-use anyhow::Result;
 use crate::config::CortexConfig;
+use anyhow::Result;
 use redb::{Database, ReadableTable, TableDefinition};
 
 const META: TableDefinition<&str, &[u8]> = TableDefinition::new("meta");
@@ -9,7 +9,10 @@ pub async fn run(config: CortexConfig) -> Result<()> {
     let db_path = config.db_path();
 
     if !db_path.exists() {
-        anyhow::bail!("Database not found at {}. Run `cortex init` first.", db_path.display());
+        anyhow::bail!(
+            "Database not found at {}. Run `cortex init` first.",
+            db_path.display()
+        );
     }
 
     println!("Cortex data at {}", db_path.display());
@@ -28,7 +31,8 @@ pub async fn run(config: CortexConfig) -> Result<()> {
     if current_version > target_version {
         anyhow::bail!(
             "Database schema v{} is newer than this binary (v{}). Upgrade Cortex.",
-            current_version, target_version
+            current_version,
+            target_version
         );
     }
 
@@ -56,14 +60,16 @@ fn read_schema_version(path: &std::path::Path) -> Result<u32> {
     let read_txn = db.begin_read()?;
 
     let version = match read_txn.open_table(META) {
-        Ok(table) => {
-            table
-                .get("schema_version")
-                .ok()
-                .flatten()
-                .and_then(|v| std::str::from_utf8(v.value()).ok().and_then(|s| s.parse::<u32>().ok()))
-                .unwrap_or(1)
-        }
+        Ok(table) => table
+            .get("schema_version")
+            .ok()
+            .flatten()
+            .and_then(|v| {
+                std::str::from_utf8(v.value())
+                    .ok()
+                    .and_then(|s| s.parse::<u32>().ok())
+            })
+            .unwrap_or(1),
         Err(_) => 1,
     };
 

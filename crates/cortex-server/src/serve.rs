@@ -38,8 +38,8 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
     // Encryption at rest: decrypt to a temp file before opening with redb
     let db_path = config.db_path();
     let (_encrypted_guard, storage_path) = if config.security.encryption {
-        let key = encrypted::derive_key()
-            .map_err(|e| anyhow::anyhow!("Encryption key error: {}", e))?;
+        let key =
+            encrypted::derive_key().map_err(|e| anyhow::anyhow!("Encryption key error: {}", e))?;
 
         let temp_path = db_path.with_extension("redb.tmp");
 

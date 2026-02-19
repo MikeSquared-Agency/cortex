@@ -1,7 +1,7 @@
-use anyhow::Result;
-use std::path::Path;
 use crate::cli::{BackupArgs, RestoreArgs};
 use crate::config::CortexConfig;
+use anyhow::Result;
+use std::path::Path;
 
 pub async fn run(args: BackupArgs, config: CortexConfig) -> Result<()> {
     let db_path = config.db_path();
@@ -10,7 +10,11 @@ pub async fn run(args: BackupArgs, config: CortexConfig) -> Result<()> {
         anyhow::bail!("Database not found at {}", db_path.display());
     }
 
-    println!("Creating backup: {} → {}", db_path.display(), args.path.display());
+    println!(
+        "Creating backup: {} → {}",
+        db_path.display(),
+        args.path.display()
+    );
 
     // Ensure destination directory exists
     if let Some(parent) = args.path.parent() {
@@ -23,7 +27,10 @@ pub async fn run(args: BackupArgs, config: CortexConfig) -> Result<()> {
     // Write SHA-256 checksum sidecar
     let checksum = sha256_file(&args.path)?;
     let checksum_path = args.path.with_extension("sha256");
-    std::fs::write(&checksum_path, format!("{}  {}\n", checksum, args.path.display()))?;
+    std::fs::write(
+        &checksum_path,
+        format!("{}  {}\n", checksum, args.path.display()),
+    )?;
 
     if args.encrypt {
         eprintln!("Warning: --encrypt not yet implemented (CORTEX_ENCRYPTION_KEY not supported)");
@@ -85,7 +92,11 @@ pub async fn run_restore(args: RestoreArgs, config: CortexConfig) -> Result<()> 
     }
 
     std::fs::copy(backup_path, &db_path)?;
-    println!("✅ Restored {} to {}", backup_path.display(), db_path.display());
+    println!(
+        "✅ Restored {} to {}",
+        backup_path.display(),
+        db_path.display()
+    );
     println!("   Run `cortex migrate` if you upgraded Cortex since this backup was made.");
 
     Ok(())

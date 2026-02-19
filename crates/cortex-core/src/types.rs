@@ -306,7 +306,10 @@ impl Node {
 
         // Importance range check
         if !(0.0..=1.0).contains(&self.importance) {
-            return Err(format!("Importance {} out of range [0.0, 1.0]", self.importance));
+            return Err(format!(
+                "Importance {} out of range [0.0, 1.0]",
+                self.importance
+            ));
         }
 
         // Tags validation

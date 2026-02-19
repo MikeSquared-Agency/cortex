@@ -97,7 +97,12 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex> FileIngest<S, E, V> {
             }
 
             let kind = classify_chunk(chunk);
-            let raw_title = chunk.lines().next().unwrap_or("Untitled").trim().to_string();
+            let raw_title = chunk
+                .lines()
+                .next()
+                .unwrap_or("Untitled")
+                .trim()
+                .to_string();
             let title = raw_title.trim_start_matches('#').trim().to_string();
             let title = if title.len() > 200 {
                 title[..200].to_string()
@@ -193,20 +198,12 @@ pub fn classify_chunk(text: &str) -> NodeKind {
         || lower.contains("style")
     {
         NodeKind::new("preference").unwrap()
-    } else if lower.contains("pattern")
-        || lower.contains("recurring")
-        || lower.contains("tendency")
+    } else if lower.contains("pattern") || lower.contains("recurring") || lower.contains("tendency")
     {
         NodeKind::new("pattern").unwrap()
-    } else if lower.contains("happened")
-        || lower.contains("event")
-        || lower.contains("occurred")
-    {
+    } else if lower.contains("happened") || lower.contains("event") || lower.contains("occurred") {
         NodeKind::new("event").unwrap()
-    } else if lower.contains("observed")
-        || lower.contains("noticed")
-        || lower.contains("note")
-    {
+    } else if lower.contains("observed") || lower.contains("noticed") || lower.contains("note") {
         NodeKind::new("observation").unwrap()
     } else {
         NodeKind::new("fact").unwrap()
@@ -278,7 +275,9 @@ mod tests {
             queries: &[(crate::types::NodeId, crate::types::Embedding)],
             _k: usize,
             _filter: Option<&crate::vector::VectorFilter>,
-        ) -> crate::error::Result<std::collections::HashMap<crate::types::NodeId, Vec<crate::vector::SimilarityResult>>> {
+        ) -> crate::error::Result<
+            std::collections::HashMap<crate::types::NodeId, Vec<crate::vector::SimilarityResult>>,
+        > {
             Ok(queries.iter().map(|(id, _)| (*id, vec![])).collect())
         }
         fn len(&self) -> usize {
@@ -312,53 +311,119 @@ mod tests {
 
     #[test]
     fn test_classify_chunk_decision() {
-        assert_eq!(classify_chunk("We decided to use Rust"), NodeKind::new("decision").unwrap());
-        assert_eq!(classify_chunk("The decision was final"), NodeKind::new("decision").unwrap());
-        assert_eq!(classify_chunk("We chose Tokio"), NodeKind::new("decision").unwrap());
-        assert_eq!(classify_chunk("We will use async/await"), NodeKind::new("decision").unwrap());
+        assert_eq!(
+            classify_chunk("We decided to use Rust"),
+            NodeKind::new("decision").unwrap()
+        );
+        assert_eq!(
+            classify_chunk("The decision was final"),
+            NodeKind::new("decision").unwrap()
+        );
+        assert_eq!(
+            classify_chunk("We chose Tokio"),
+            NodeKind::new("decision").unwrap()
+        );
+        assert_eq!(
+            classify_chunk("We will use async/await"),
+            NodeKind::new("decision").unwrap()
+        );
     }
 
     #[test]
     fn test_classify_chunk_goal() {
-        assert_eq!(classify_chunk("Our goal is to ship v1"), NodeKind::new("goal").unwrap());
-        assert_eq!(classify_chunk("Target: 100ms latency"), NodeKind::new("goal").unwrap());
-        assert_eq!(classify_chunk("The aim of this project"), NodeKind::new("goal").unwrap());
-        assert_eq!(classify_chunk("Objective: reduce cost"), NodeKind::new("goal").unwrap());
+        assert_eq!(
+            classify_chunk("Our goal is to ship v1"),
+            NodeKind::new("goal").unwrap()
+        );
+        assert_eq!(
+            classify_chunk("Target: 100ms latency"),
+            NodeKind::new("goal").unwrap()
+        );
+        assert_eq!(
+            classify_chunk("The aim of this project"),
+            NodeKind::new("goal").unwrap()
+        );
+        assert_eq!(
+            classify_chunk("Objective: reduce cost"),
+            NodeKind::new("goal").unwrap()
+        );
     }
 
     #[test]
     fn test_classify_chunk_preference() {
-        assert_eq!(classify_chunk("I prefer async code"), NodeKind::new("preference").unwrap());
-        assert_eq!(classify_chunk("Always use rustfmt"), NodeKind::new("preference").unwrap());
-        assert_eq!(classify_chunk("Never commit secrets"), NodeKind::new("preference").unwrap());
-        assert_eq!(classify_chunk("Coding style: idiomatic"), NodeKind::new("preference").unwrap());
+        assert_eq!(
+            classify_chunk("I prefer async code"),
+            NodeKind::new("preference").unwrap()
+        );
+        assert_eq!(
+            classify_chunk("Always use rustfmt"),
+            NodeKind::new("preference").unwrap()
+        );
+        assert_eq!(
+            classify_chunk("Never commit secrets"),
+            NodeKind::new("preference").unwrap()
+        );
+        assert_eq!(
+            classify_chunk("Coding style: idiomatic"),
+            NodeKind::new("preference").unwrap()
+        );
     }
 
     #[test]
     fn test_classify_chunk_pattern() {
-        assert_eq!(classify_chunk("A recurring issue in PRs"), NodeKind::new("pattern").unwrap());
-        assert_eq!(classify_chunk("There is a pattern here"), NodeKind::new("pattern").unwrap());
-        assert_eq!(classify_chunk("A tendency to over-engineer"), NodeKind::new("pattern").unwrap());
+        assert_eq!(
+            classify_chunk("A recurring issue in PRs"),
+            NodeKind::new("pattern").unwrap()
+        );
+        assert_eq!(
+            classify_chunk("There is a pattern here"),
+            NodeKind::new("pattern").unwrap()
+        );
+        assert_eq!(
+            classify_chunk("A tendency to over-engineer"),
+            NodeKind::new("pattern").unwrap()
+        );
     }
 
     #[test]
     fn test_classify_chunk_event() {
-        assert_eq!(classify_chunk("It happened last Tuesday"), NodeKind::new("event").unwrap());
-        assert_eq!(classify_chunk("An event occurred at 3pm"), NodeKind::new("event").unwrap());
+        assert_eq!(
+            classify_chunk("It happened last Tuesday"),
+            NodeKind::new("event").unwrap()
+        );
+        assert_eq!(
+            classify_chunk("An event occurred at 3pm"),
+            NodeKind::new("event").unwrap()
+        );
     }
 
     #[test]
     fn test_classify_chunk_observation() {
-        assert_eq!(classify_chunk("I observed slow queries"), NodeKind::new("observation").unwrap());
-        assert_eq!(classify_chunk("Noticed higher latency"), NodeKind::new("observation").unwrap());
-        assert_eq!(classify_chunk("Note: cache hit rate dropped"), NodeKind::new("observation").unwrap());
+        assert_eq!(
+            classify_chunk("I observed slow queries"),
+            NodeKind::new("observation").unwrap()
+        );
+        assert_eq!(
+            classify_chunk("Noticed higher latency"),
+            NodeKind::new("observation").unwrap()
+        );
+        assert_eq!(
+            classify_chunk("Note: cache hit rate dropped"),
+            NodeKind::new("observation").unwrap()
+        );
     }
 
     #[test]
     fn test_classify_chunk_default_fact() {
         // No keywords → Fact
-        assert_eq!(classify_chunk("Rust 1.78 was released"), NodeKind::new("fact").unwrap());
-        assert_eq!(classify_chunk("The server listens on port 8080"), NodeKind::new("fact").unwrap());
+        assert_eq!(
+            classify_chunk("Rust 1.78 was released"),
+            NodeKind::new("fact").unwrap()
+        );
+        assert_eq!(
+            classify_chunk("The server listens on port 8080"),
+            NodeKind::new("fact").unwrap()
+        );
         assert_eq!(classify_chunk(""), NodeKind::new("fact").unwrap());
     }
 
@@ -390,10 +455,13 @@ mod tests {
 
     #[test]
     fn test_chunk_plain_splits_into_20_line_groups() {
-        let text = (0..50).map(|i| format!("line {}", i)).collect::<Vec<_>>().join("\n");
+        let text = (0..50)
+            .map(|i| format!("line {}", i))
+            .collect::<Vec<_>>()
+            .join("\n");
         let chunks = FileIngest::<RedbStorage, NoopEmbedder, NoopIndex>::chunk_plain(&text);
         assert_eq!(chunks.len(), 3); // 50 lines / 20 = 3 chunks (last partial)
-        // Each chunk except the last should have 20 lines
+                                     // Each chunk except the last should have 20 lines
         assert_eq!(chunks[0].lines().count(), 20);
         assert_eq!(chunks[1].lines().count(), 20);
         assert_eq!(chunks[2].lines().count(), 10);
@@ -423,7 +491,10 @@ mod tests {
         let ingest = make_ingest(&dir);
 
         // 25 lines → 2 chunks (20 + 5)
-        let content = (0..25).map(|i| format!("line {}", i)).collect::<Vec<_>>().join("\n");
+        let content = (0..25)
+            .map(|i| format!("line {}", i))
+            .collect::<Vec<_>>()
+            .join("\n");
         std::fs::write(dir.path().join("notes.txt"), content).unwrap();
 
         let created = ingest.scan_once().unwrap();

@@ -66,9 +66,7 @@ fn find_unweighted_shortest_path<S: Storage>(
         if current == request.to {
             // Found path, reconstruct it
             let path = reconstruct_path(request.from, request.to, &parent, storage)?;
-            return Ok(PathResult {
-                paths: vec![path],
-            });
+            return Ok(PathResult { paths: vec![path] });
         }
 
         // Check max length
@@ -197,10 +195,7 @@ fn find_weighted_shortest_path<S: Storage>(
 }
 
 /// Find k-shortest paths using Yen's algorithm
-fn find_k_shortest_paths<S: Storage>(
-    storage: &S,
-    request: &PathRequest,
-) -> Result<PathResult> {
+fn find_k_shortest_paths<S: Storage>(storage: &S, request: &PathRequest) -> Result<PathResult> {
     let mut result_paths = Vec::new();
 
     // Find first shortest path
@@ -276,9 +271,11 @@ fn find_k_shortest_paths<S: Storage>(
 
         // Sort candidates by length/weight
         candidates.sort_by(|a, b| {
-            a.length
-                .cmp(&b.length)
-                .then(b.total_weight.partial_cmp(&a.total_weight).unwrap_or(Ordering::Equal))
+            a.length.cmp(&b.length).then(
+                b.total_weight
+                    .partial_cmp(&a.total_weight)
+                    .unwrap_or(Ordering::Equal),
+            )
         });
 
         // Take the best candidate

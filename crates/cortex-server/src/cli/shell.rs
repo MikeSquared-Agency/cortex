@@ -1,9 +1,13 @@
+use crate::config::CortexConfig;
 use anyhow::Result;
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
-use crate::config::CortexConfig;
 
-pub async fn run(config: CortexConfig, server: &str, config_path: &std::path::PathBuf) -> Result<()> {
+pub async fn run(
+    config: CortexConfig,
+    server: &str,
+    config_path: &std::path::PathBuf,
+) -> Result<()> {
     let mut rl = DefaultEditor::new()?;
 
     println!();
@@ -87,26 +91,26 @@ async fn dispatch(
 ) -> Result<()> {
     use super::Commands;
     match cli.command {
-        Commands::Serve      => println!("Use 'exit' first, then run `cortex serve`."),
-        Commands::Init       => super::init::run().await?,
-        Commands::Shell      => println!("Already in shell mode."),
-        Commands::Node(cmd)  => super::node::run(cmd, server).await?,
-        Commands::Edge(cmd)  => super::edge::run(cmd, server).await?,
-        Commands::Search(a)  => super::search::run(a, server).await?,
-        Commands::Traverse(a)=> super::traverse::run(a, server).await?,
-        Commands::Path(a)    => super::traverse::run_path(a, server).await?,
-        Commands::Briefing(a)=> super::briefing::run(a, server).await?,
-        Commands::Import(a)  => super::import::run(a, config).await?,
-        Commands::Export(a)  => super::export::run(a, server).await?,
-        Commands::Backup(a)  => super::backup::run(a, config).await?,
+        Commands::Serve => println!("Use 'exit' first, then run `cortex serve`."),
+        Commands::Init => super::init::run().await?,
+        Commands::Shell => println!("Already in shell mode."),
+        Commands::Node(cmd) => super::node::run(cmd, server).await?,
+        Commands::Edge(cmd) => super::edge::run(cmd, server).await?,
+        Commands::Search(a) => super::search::run(a, server).await?,
+        Commands::Traverse(a) => super::traverse::run(a, server).await?,
+        Commands::Path(a) => super::traverse::run_path(a, server).await?,
+        Commands::Briefing(a) => super::briefing::run(a, server).await?,
+        Commands::Import(a) => super::import::run(a, config).await?,
+        Commands::Export(a) => super::export::run(a, server).await?,
+        Commands::Backup(a) => super::backup::run(a, config).await?,
         Commands::Restore(a) => super::backup::run_restore(a, config).await?,
-        Commands::Migrate    => super::migrate::run(config).await?,
-        Commands::Stats      => super::stats::run(server).await?,
-        Commands::Doctor     => super::doctor::run(config, server).await?,
-        Commands::Config(cmd)=> super::config_cmd::run(cmd, config_path).await?,
-        Commands::Audit(a)   => super::audit::run(a, config).await?,
-        Commands::Security(c)=> super::security::run(c).await?,
-        Commands::Mcp(_)     => println!("Run `cortex mcp` outside the shell to start the MCP server."),
+        Commands::Migrate => super::migrate::run(config).await?,
+        Commands::Stats => super::stats::run(server).await?,
+        Commands::Doctor => super::doctor::run(config, server).await?,
+        Commands::Config(cmd) => super::config_cmd::run(cmd, config_path).await?,
+        Commands::Audit(a) => super::audit::run(a, config).await?,
+        Commands::Security(c) => super::security::run(c).await?,
+        Commands::Mcp(_) => println!("Run `cortex mcp` outside the shell to start the MCP server."),
     }
     Ok(())
 }

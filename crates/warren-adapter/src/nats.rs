@@ -70,9 +70,9 @@ impl WarrenNatsAdapter {
                 .with_limit(100),
         )?;
 
-        let duplicate = existing.iter().any(|n| {
-            n.data.title == node.data.title && n.source.session == node.source.session
-        });
+        let duplicate = existing
+            .iter()
+            .any(|n| n.data.title == node.data.title && n.source.session == node.source.session);
 
         if duplicate {
             tracing::debug!("Skipping duplicate event: {}", node.data.title);

@@ -1,6 +1,6 @@
-use anyhow::Result;
-use cortex_core::{RedbStorage, Storage, NodeFilter};
 use crate::config::CortexConfig;
+use anyhow::Result;
+use cortex_core::{NodeFilter, RedbStorage, Storage};
 
 #[derive(Debug)]
 enum CheckStatus {
@@ -108,7 +108,8 @@ pub async fn run(config: CortexConfig, _server: &str) -> Result<()> {
         });
 
         // Check 5: Missing embeddings
-        let missing_embeddings = all_nodes.iter()
+        let missing_embeddings = all_nodes
+            .iter()
             .filter(|n| !n.deleted && n.embedding.is_none())
             .count();
 
@@ -133,9 +134,12 @@ pub async fn run(config: CortexConfig, _server: &str) -> Result<()> {
     let mut has_errors = false;
     for r in &results {
         let (symbol, _) = match r.status {
-            CheckStatus::Ok      => ("[✓]", false),
+            CheckStatus::Ok => ("[✓]", false),
             CheckStatus::Warning => ("[⚠]", false),
-            CheckStatus::Error   => { has_errors = true; ("[✗]", true) }
+            CheckStatus::Error => {
+                has_errors = true;
+                ("[✗]", true)
+            }
         };
         println!("{} {}: {}", symbol, r.name, r.detail);
         if let Some(hint) = &r.fix_hint {

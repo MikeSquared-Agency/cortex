@@ -1,12 +1,9 @@
-use crate::{
-    CortexError, Result,
-    Node, Edge, NodeId, NodeKind, Source,
-    NodeFilter,
-    RedbStorage, FastEmbedService, HnswIndex,
-    GraphEngineImpl, GraphEngine, Storage, VectorIndex, EmbeddingService,
-};
-use crate::vector::embedding_input;
 use crate::linker::AutoLinkerConfig;
+use crate::vector::embedding_input;
+use crate::{
+    CortexError, Edge, EmbeddingService, FastEmbedService, GraphEngine, GraphEngineImpl, HnswIndex,
+    Node, NodeFilter, NodeId, NodeKind, RedbStorage, Result, Source, Storage, VectorIndex,
+};
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 
@@ -73,7 +70,13 @@ impl Cortex {
 
         let graph_engine = Arc::new(GraphEngineImpl::new(storage.clone()));
 
-        Ok(Self { storage, embedding, index, graph_engine, config })
+        Ok(Self {
+            storage,
+            embedding,
+            index,
+            graph_engine,
+            config,
+        })
     }
 
     fn create_embedding_service(model: &str) -> Result<FastEmbedService> {
@@ -94,7 +97,8 @@ impl Cortex {
         let id = node.id;
         let emb = node.embedding.clone().unwrap();
         self.storage.put_node(&node)?;
-        self.index.write()
+        self.index
+            .write()
             .map_err(|_| CortexError::Validation("Vector index lock poisoned".into()))?
             .insert(id, &emb)?;
         Ok(id)
@@ -103,7 +107,9 @@ impl Cortex {
     /// Semantic similarity search. Returns nodes ranked by score.
     pub fn search(&self, query: &str, limit: usize) -> Result<Vec<(f32, Node)>> {
         let query_emb = self.embedding.embed(query)?;
-        let results = self.index.read()
+        let results = self
+            .index
+            .read()
             .map_err(|_| CortexError::Validation("Vector index lock poisoned".into()))?
             .search(&query_emb, limit, None)?;
         let mut out = Vec::new();
@@ -156,7 +162,11 @@ impl Cortex {
             NodeKind::new(kind).unwrap(),
             title.into(),
             body.into(),
-            Source { agent: "library".into(), session: None, channel: None },
+            Source {
+                agent: "library".into(),
+                session: None,
+                channel: None,
+            },
             importance,
         )
     }

@@ -1,17 +1,17 @@
 use crate::error::{CortexError, Result};
 use crate::types::{Embedding, NodeId, NodeKind};
 use instant_distance::{Builder, HnswMap, Point, Search};
+use rayon::prelude::*;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use rayon::prelude::*;
 
 /// Result from a similarity search
 #[derive(Debug, Clone)]
 pub struct SimilarityResult {
     pub node_id: NodeId,
-    pub score: f32,     // Cosine similarity, 0.0 to 1.0
-    pub distance: f32,  // 1.0 - score
+    pub score: f32,    // Cosine similarity, 0.0 to 1.0
+    pub distance: f32, // 1.0 - score
 }
 
 /// Filter for vector searches
@@ -130,7 +130,10 @@ impl<V: VectorIndex> VectorIndex for RwLockVectorIndex<V> {
         threshold: f32,
         filter: Option<&VectorFilter>,
     ) -> Result<Vec<SimilarityResult>> {
-        self.0.read().unwrap().search_threshold(query, threshold, filter)
+        self.0
+            .read()
+            .unwrap()
+            .search_threshold(query, threshold, filter)
     }
     fn search_batch(
         &self,
@@ -214,13 +217,8 @@ impl HnswIndex {
 
     /// Set metadata for a node
     pub fn set_metadata(&mut self, id: NodeId, kind: NodeKind, source_agent: String) {
-        self.metadata.insert(
-            id,
-            NodeMetadata {
-                kind,
-                source_agent,
-            },
-        );
+        self.metadata
+            .insert(id, NodeMetadata { kind, source_agent });
     }
 
     /// Check if a result matches the filter
@@ -265,7 +263,9 @@ impl HnswIndex {
         filter: Option<&VectorFilter>,
     ) -> Result<Vec<SimilarityResult>> {
         let query_point = EmbeddingPoint(query.clone());
-        let mut results: Vec<SimilarityResult> = self.vectors.iter()
+        let mut results: Vec<SimilarityResult> = self
+            .vectors
+            .iter()
             .map(|(id, vec)| {
                 let distance = query_point.distance(&EmbeddingPoint(vec.clone()));
                 (*id, distance)
@@ -284,7 +284,11 @@ impl HnswIndex {
             })
             .collect();
 
-        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         results.truncate(k);
         Ok(results)
     }
@@ -431,12 +435,8 @@ impl VectorIndex for HnswIndex {
     }
 
     fn save(&self, path: &Path) -> Result<()> {
-        let data = bincode::serialize(&(
-            &self.vectors,
-            &self.metadata,
-            self.dimension,
-        ))
-        .map_err(|e| CortexError::Validation(format!("Failed to serialize index: {}", e)))?;
+        let data = bincode::serialize(&(&self.vectors, &self.metadata, self.dimension))
+            .map_err(|e| CortexError::Validation(format!("Failed to serialize index: {}", e)))?;
 
         fs::write(path, data)
             .map_err(|e| CortexError::Validation(format!("Failed to write index file: {}", e)))?;
@@ -451,9 +451,12 @@ impl VectorIndex for HnswIndex {
         let data = fs::read(path)
             .map_err(|e| CortexError::Validation(format!("Failed to read index file: {}", e)))?;
 
-        let (vectors, metadata, dimension): (HashMap<NodeId, Vec<f32>>, HashMap<NodeId, NodeMetadata>, usize) =
-            bincode::deserialize(&data)
-                .map_err(|e| CortexError::Validation(format!("Failed to deserialize index: {}", e)))?;
+        let (vectors, metadata, dimension): (
+            HashMap<NodeId, Vec<f32>>,
+            HashMap<NodeId, NodeMetadata>,
+            usize,
+        ) = bincode::deserialize(&data)
+            .map_err(|e| CortexError::Validation(format!("Failed to deserialize index: {}", e)))?;
 
         let mut index = Self {
             index: None,
@@ -485,14 +488,22 @@ mod tests {
         let id2 = NodeId::now_v7();
         let id3 = NodeId::now_v7();
 
-        index.insert(id1, &create_test_embedding(vec![1.0, 0.0, 0.0])).unwrap();
-        index.insert(id2, &create_test_embedding(vec![0.9, 0.1, 0.0])).unwrap();
-        index.insert(id3, &create_test_embedding(vec![0.0, 1.0, 0.0])).unwrap();
+        index
+            .insert(id1, &create_test_embedding(vec![1.0, 0.0, 0.0]))
+            .unwrap();
+        index
+            .insert(id2, &create_test_embedding(vec![0.9, 0.1, 0.0]))
+            .unwrap();
+        index
+            .insert(id3, &create_test_embedding(vec![0.0, 1.0, 0.0]))
+            .unwrap();
 
         index.rebuild().unwrap();
 
         // Search for something close to [1.0, 0.0, 0.0]
-        let results = index.search(&create_test_embedding(vec![1.0, 0.0, 0.0]), 2, None).unwrap();
+        let results = index
+            .search(&create_test_embedding(vec![1.0, 0.0, 0.0]), 2, None)
+            .unwrap();
 
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].node_id, id1);
@@ -505,17 +516,19 @@ mod tests {
         let id1 = NodeId::now_v7();
         let id2 = NodeId::now_v7();
 
-        index.insert(id1, &create_test_embedding(vec![1.0, 0.0, 0.0])).unwrap();
-        index.insert(id2, &create_test_embedding(vec![0.0, 1.0, 0.0])).unwrap();
+        index
+            .insert(id1, &create_test_embedding(vec![1.0, 0.0, 0.0]))
+            .unwrap();
+        index
+            .insert(id2, &create_test_embedding(vec![0.0, 1.0, 0.0]))
+            .unwrap();
 
         index.rebuild().unwrap();
 
         // High threshold should only return very similar vectors
-        let results = index.search_threshold(
-            &create_test_embedding(vec![1.0, 0.0, 0.0]),
-            0.95,
-            None,
-        ).unwrap();
+        let results = index
+            .search_threshold(&create_test_embedding(vec![1.0, 0.0, 0.0]), 0.95, None)
+            .unwrap();
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].node_id, id1);
@@ -531,7 +544,9 @@ mod tests {
         let mut index = HnswIndex::new(3);
         let id1 = NodeId::now_v7();
 
-        index.insert(id1, &create_test_embedding(vec![1.0, 0.0, 0.0])).unwrap();
+        index
+            .insert(id1, &create_test_embedding(vec![1.0, 0.0, 0.0]))
+            .unwrap();
         index.rebuild().unwrap();
 
         // Save
@@ -543,7 +558,9 @@ mod tests {
         assert_eq!(loaded_index.len(), 1);
 
         // Search should work on loaded index
-        let results = loaded_index.search(&create_test_embedding(vec![1.0, 0.0, 0.0]), 1, None).unwrap();
+        let results = loaded_index
+            .search(&create_test_embedding(vec![1.0, 0.0, 0.0]), 1, None)
+            .unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].node_id, id1);
     }
@@ -601,7 +618,9 @@ mod additional_tests {
         index.rebuild().unwrap();
 
         let filter = VectorFilter::new().with_kinds(vec![NodeKind::new("decision").unwrap()]);
-        let results = index.search(&vec![1.0, 0.0, 0.0], 5, Some(&filter)).unwrap();
+        let results = index
+            .search(&vec![1.0, 0.0, 0.0], 5, Some(&filter))
+            .unwrap();
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].node_id, id2);
@@ -618,7 +637,9 @@ mod additional_tests {
         index.rebuild().unwrap();
 
         let filter = VectorFilter::new().excluding(vec![id1]);
-        let results = index.search(&vec![1.0, 0.0, 0.0], 5, Some(&filter)).unwrap();
+        let results = index
+            .search(&vec![1.0, 0.0, 0.0], 5, Some(&filter))
+            .unwrap();
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].node_id, id2);
@@ -654,10 +675,7 @@ mod additional_tests {
         index.insert(id3, &vec![0.0, 0.0, 1.0]).unwrap();
         index.rebuild().unwrap();
 
-        let queries = vec![
-            (id1, vec![1.0, 0.0, 0.0]),
-            (id2, vec![0.0, 1.0, 0.0]),
-        ];
+        let queries = vec![(id1, vec![1.0, 0.0, 0.0]), (id2, vec![0.0, 1.0, 0.0])];
         let results = index.search_batch(&queries, 1, None).unwrap();
 
         assert_eq!(results.len(), 2);
@@ -679,8 +697,11 @@ mod additional_tests {
 
         // All scores should be in [0.0, 1.0]
         for r in &results {
-            assert!(r.score >= 0.0 && r.score <= 1.0,
-                "Score {} out of range", r.score);
+            assert!(
+                r.score >= 0.0 && r.score <= 1.0,
+                "Score {} out of range",
+                r.score
+            );
         }
         // First result (same vector) should have score ~1.0
         assert!(results[0].score > 0.99);
@@ -697,7 +718,9 @@ mod additional_tests {
         index.insert(id_far, &vec![0.0, 0.0, 1.0]).unwrap();
         index.rebuild().unwrap();
 
-        let results = index.search_threshold(&vec![1.0, 0.0, 0.0], 0.5, None).unwrap();
+        let results = index
+            .search_threshold(&vec![1.0, 0.0, 0.0], 0.5, None)
+            .unwrap();
 
         // Only the close vector should be above threshold
         assert!(results.iter().all(|r| r.score >= 0.5));

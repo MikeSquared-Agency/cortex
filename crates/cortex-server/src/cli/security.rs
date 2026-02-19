@@ -11,9 +11,7 @@ pub async fn run(cmd: SecurityCommands) -> Result<()> {
             println!();
             println!("  export CORTEX_ENCRYPTION_KEY=\"{}\"", key);
             println!();
-            println!(
-                "Keep this key safe — data encrypted with it cannot be recovered without it."
-            );
+            println!("Keep this key safe — data encrypted with it cannot be recovered without it.");
             println!("Store it in a password manager or secrets vault.");
         }
     }

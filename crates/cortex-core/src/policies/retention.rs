@@ -112,11 +112,8 @@ impl RetentionEngine {
         let cutoff = Utc::now() - Duration::days(grace as i64);
 
         // Only fetch soft-deleted nodes updated before the grace cutoff
-        let candidates = storage.list_nodes(
-            NodeFilter::new()
-                .deleted_only()
-                .updated_before(cutoff),
-        )?;
+        let candidates =
+            storage.list_nodes(NodeFilter::new().deleted_only().updated_before(cutoff))?;
         let mut purged = 0;
         for node in candidates {
             storage.hard_delete_node(node.id)?;

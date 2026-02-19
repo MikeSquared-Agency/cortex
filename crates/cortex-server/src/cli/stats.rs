@@ -1,6 +1,6 @@
+use crate::cli::grpc_connect;
 use anyhow::Result;
 use cortex_proto::StatsRequest;
-use crate::cli::grpc_connect;
 
 pub async fn run(server: &str) -> Result<()> {
     let mut client = grpc_connect(server).await?;

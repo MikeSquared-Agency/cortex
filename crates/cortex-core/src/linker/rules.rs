@@ -15,7 +15,13 @@ pub struct ProposedEdge {
 
 impl ProposedEdge {
     pub fn to_edge(self) -> Edge {
-        Edge::new(self.from, self.to, self.relation, self.weight, self.provenance)
+        Edge::new(
+            self.from,
+            self.to,
+            self.relation,
+            self.weight,
+            self.provenance,
+        )
     }
 }
 
@@ -62,31 +68,19 @@ pub enum StructuralRule {
     SameAgent { weight: f32 },
 
     /// Temporal proximity → RelatedTo.
-    TemporalProximity {
-        window: Duration,
-        weight: f32,
-    },
+    TemporalProximity { window: Duration, weight: f32 },
 
     /// Shared tags → RelatedTo.
-    SharedTags {
-        min_shared: usize,
-        base_weight: f32,
-    },
+    SharedTags { min_shared: usize, base_weight: f32 },
 
     /// Decision → Event in same session → LedTo.
     DecisionToEvent { weight: f32 },
 
     /// Observation → Pattern with same tags → InstanceOf.
-    ObservationToPattern {
-        min_similarity: f32,
-        weight: f32,
-    },
+    ObservationToPattern { min_similarity: f32, weight: f32 },
 
     /// New fact supersedes old fact with same title/tags.
-    FactSupersedes {
-        title_similarity: f32,
-        weight: f32,
-    },
+    FactSupersedes { title_similarity: f32, weight: f32 },
 }
 
 impl Default for StructuralRule {
@@ -183,7 +177,8 @@ impl StructuralRule {
 
                 if shared_count >= *min_shared && node.id != other.id {
                     // Scale weight by number of shared tags
-                    let scaled_weight = base_weight * (1.0 + (shared_count - min_shared) as f32 * 0.1);
+                    let scaled_weight =
+                        base_weight * (1.0 + (shared_count - min_shared) as f32 * 0.1);
                     let clamped_weight = scaled_weight.min(1.0);
 
                     Some(ProposedEdge {
@@ -364,7 +359,14 @@ impl ContradictionDetector {
     /// Detect negation patterns between two nodes
     fn has_negation_pattern(&self, a: &Node, b: &Node) -> bool {
         let negation_words = [
-            "not", "never", "no longer", "stopped", "removed", "deprecated", "replaced", "obsolete",
+            "not",
+            "never",
+            "no longer",
+            "stopped",
+            "removed",
+            "deprecated",
+            "replaced",
+            "obsolete",
         ];
 
         let a_text = format!("{} {}", a.data.title, a.data.body).to_lowercase();
@@ -408,7 +410,10 @@ mod tests {
         // Above threshold
         let result = rule.evaluate(&node1, &node2, 0.8, &config);
         assert!(result.is_some());
-        assert_eq!(result.unwrap().relation, Relation::new("related_to").unwrap());
+        assert_eq!(
+            result.unwrap().relation,
+            Relation::new("related_to").unwrap()
+        );
 
         // Below threshold
         let result = rule.evaluate(&node1, &node2, 0.5, &config);
@@ -438,9 +443,16 @@ mod tests {
     fn test_contradiction_detection() {
         let detector = ContradictionDetector::default();
 
-        let node1 = create_test_node(NodeKind::new("fact").unwrap(), "System online", "The system is running");
-        let node2 =
-            create_test_node(NodeKind::new("fact").unwrap(), "System offline", "The system is not running");
+        let node1 = create_test_node(
+            NodeKind::new("fact").unwrap(),
+            "System online",
+            "The system is running",
+        );
+        let node2 = create_test_node(
+            NodeKind::new("fact").unwrap(),
+            "System offline",
+            "The system is not running",
+        );
 
         let result = detector.check(&node1, &node2, 0.85);
         assert!(result.is_some());

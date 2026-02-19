@@ -38,10 +38,7 @@ where
 
     /// Run the pre-computation loop. Call via `tokio::spawn`.
     pub async fn run(self) {
-        info!(
-            "BriefingPrecomputer started for agents: {:?}",
-            self.agents
-        );
+        info!("BriefingPrecomputer started for agents: {:?}", self.agents);
         loop {
             for agent_id in &self.agents {
                 match self.engine.generate(agent_id) {

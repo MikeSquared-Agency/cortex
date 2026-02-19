@@ -62,9 +62,8 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
             StructuralRule::fact_supersedes(),
         ];
         let similarity_rule = SimilarityLinkRule;
-        let contradiction_detector = ContradictionDetector::new(
-            config.similarity.contradiction_threshold,
-        );
+        let contradiction_detector =
+            ContradictionDetector::new(config.similarity.contradiction_threshold);
 
         Ok(Self {
             storage,
@@ -249,7 +248,8 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
             );
 
             let result = dedup_scanner.scan()?;
-            self.metrics.add_duplicates_found(result.duplicates.len() as u64);
+            self.metrics
+                .add_duplicates_found(result.duplicates.len() as u64);
 
             // Execute dedup actions; skip if edge already exists (created by similarity rule)
             for pair in result.duplicates {
@@ -328,7 +328,9 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
         let mut edges = Vec::new();
 
         // Similarity rule (pre-allocated)
-        if let Some(edge) = self.similarity_rule.evaluate(node, neighbor, score, &self.config.similarity)
+        if let Some(edge) =
+            self.similarity_rule
+                .evaluate(node, neighbor, score, &self.config.similarity)
         {
             edges.push(edge);
         }
@@ -352,7 +354,6 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
                     reason: contradiction.reason,
                 },
             });
-
         }
 
         Ok(edges)

@@ -3,11 +3,11 @@
 
 #[cfg(test)]
 mod integration_tests {
-    
+
     use crate::storage::{RedbStorage, Storage};
     use crate::types::*;
     use crate::vector::*;
-    
+
     use tempfile::TempDir;
 
     fn create_test_node(kind: NodeKind, title: &str, body: &str) -> Node {
@@ -62,21 +62,16 @@ mod integration_tests {
         for node in [&rust_node, &python_node, &cooking_node] {
             let input_text = embedding_input(node);
             let embedding = embedding_service.embed(&input_text).unwrap();
-            vector_index
-                .set_metadata(node.id, node.kind.clone(), node.source.agent.clone());
+            vector_index.set_metadata(node.id, node.kind.clone(), node.source.agent.clone());
             vector_index.insert(node.id, &embedding).unwrap();
         }
 
         vector_index.rebuild().unwrap();
 
         // Test similarity search
-        let query_embedding = embedding_service
-            .embed("programming languages")
-            .unwrap();
+        let query_embedding = embedding_service.embed("programming languages").unwrap();
 
-        let results = vector_index
-            .search(&query_embedding, 2, None)
-            .unwrap();
+        let results = vector_index.search(&query_embedding, 2, None).unwrap();
 
         assert_eq!(results.len(), 2);
 
@@ -105,9 +100,7 @@ mod integration_tests {
         let embedding_service = FastEmbedService::new().unwrap();
         let mut vector_index = HnswIndex::new(384);
 
-        let embedding = embedding_service
-            .embed(&embedding_input(&node))
-            .unwrap();
+        let embedding = embedding_service.embed(&embedding_input(&node)).unwrap();
 
         vector_index.insert(node.id, &embedding).unwrap();
         vector_index.rebuild().unwrap();

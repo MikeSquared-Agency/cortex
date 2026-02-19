@@ -100,7 +100,8 @@ impl<S: Storage> DecayEngine<S> {
         let outgoing = self.storage.edges_from(node_id)?;
         let incoming = self.storage.edges_to(node_id)?;
 
-        let updated_edges: Vec<Edge> = outgoing.into_iter()
+        let updated_edges: Vec<Edge> = outgoing
+            .into_iter()
             .chain(incoming.into_iter())
             .map(|mut edge| {
                 edge.updated_at = now;
@@ -347,32 +348,59 @@ mod importance_tests {
 
         // High importance node
         let high = Node::new(
-            NodeKind::new("decision").unwrap(), "Important".into(), "Critical decision".into(),
-            Source { agent: "test".into(), session: None, channel: None }, 0.95,
+            NodeKind::new("decision").unwrap(),
+            "Important".into(),
+            "Critical decision".into(),
+            Source {
+                agent: "test".into(),
+                session: None,
+                channel: None,
+            },
+            0.95,
         );
         // Low importance node
         let low = Node::new(
-            NodeKind::new("observation").unwrap(), "Trivial".into(), "Minor observation".into(),
-            Source { agent: "test".into(), session: None, channel: None }, 0.1,
+            NodeKind::new("observation").unwrap(),
+            "Trivial".into(),
+            "Minor observation".into(),
+            Source {
+                agent: "test".into(),
+                session: None,
+                channel: None,
+            },
+            0.1,
         );
         storage.put_node(&high).unwrap();
         storage.put_node(&low).unwrap();
 
         // Two edges with same initial weight, same age
         let mut edge_important = Edge::new(
-            high.id, low.id, Relation::new("led_to").unwrap(), 0.8,
+            high.id,
+            low.id,
+            Relation::new("led_to").unwrap(),
+            0.8,
             EdgeProvenance::AutoSimilarity { score: 0.8 },
         );
         edge_important.updated_at = Utc::now() - Duration::days(30);
 
         let other_low = Node::new(
-            NodeKind::new("observation").unwrap(), "Other low".into(), "Another minor one".into(),
-            Source { agent: "test".into(), session: None, channel: None }, 0.1,
+            NodeKind::new("observation").unwrap(),
+            "Other low".into(),
+            "Another minor one".into(),
+            Source {
+                agent: "test".into(),
+                session: None,
+                channel: None,
+            },
+            0.1,
         );
         storage.put_node(&other_low).unwrap();
 
         let mut edge_unimportant = Edge::new(
-            low.id, other_low.id, Relation::new("related_to").unwrap(), 0.8,
+            low.id,
+            other_low.id,
+            Relation::new("related_to").unwrap(),
+            0.8,
             EdgeProvenance::AutoSimilarity { score: 0.8 },
         );
         edge_unimportant.updated_at = Utc::now() - Duration::days(30);
@@ -388,9 +416,12 @@ mod importance_tests {
         let unimportant_after = storage.get_edge(edge_unimportant.id).unwrap().unwrap();
 
         // Important edge should have decayed LESS
-        assert!(important_after.weight > unimportant_after.weight,
+        assert!(
+            important_after.weight > unimportant_after.weight,
             "Important edge ({}) should decay slower than unimportant edge ({})",
-            important_after.weight, unimportant_after.weight);
+            important_after.weight,
+            unimportant_after.weight
+        );
     }
 
     #[test]
@@ -400,18 +431,35 @@ mod importance_tests {
         let storage = Arc::new(RedbStorage::open(&db_path).unwrap());
 
         let n1 = Node::new(
-            NodeKind::new("observation").unwrap(), "Old".into(), "body".into(),
-            Source { agent: "test".into(), session: None, channel: None }, 0.1,
+            NodeKind::new("observation").unwrap(),
+            "Old".into(),
+            "body".into(),
+            Source {
+                agent: "test".into(),
+                session: None,
+                channel: None,
+            },
+            0.1,
         );
         let n2 = Node::new(
-            NodeKind::new("observation").unwrap(), "Also old".into(), "body".into(),
-            Source { agent: "test".into(), session: None, channel: None }, 0.1,
+            NodeKind::new("observation").unwrap(),
+            "Also old".into(),
+            "body".into(),
+            Source {
+                agent: "test".into(),
+                session: None,
+                channel: None,
+            },
+            0.1,
         );
         storage.put_node(&n1).unwrap();
         storage.put_node(&n2).unwrap();
 
         let mut edge = Edge::new(
-            n1.id, n2.id, Relation::new("related_to").unwrap(), 0.1, // Already weak
+            n1.id,
+            n2.id,
+            Relation::new("related_to").unwrap(),
+            0.1, // Already weak
             EdgeProvenance::AutoSimilarity { score: 0.1 },
         );
         edge.updated_at = Utc::now() - Duration::days(365); // A year old

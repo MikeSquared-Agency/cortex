@@ -1,6 +1,6 @@
+use async_trait::async_trait;
 use cortex_core::ingest::{IngestAdapter, IngestEvent};
 use cortex_core::Result;
-use async_trait::async_trait;
 use futures::stream::{self, BoxStream, StreamExt};
 
 pub struct StdinAdapter;

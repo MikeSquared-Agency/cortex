@@ -4,7 +4,9 @@ use crate::storage::filters::{NodeFilter, StorageStats};
 use crate::storage::traits::Storage;
 use crate::types::{Edge, EdgeId, Node, NodeId};
 use chrono::{DateTime, Utc};
-use redb::{Database, MultimapTableDefinition, ReadableMultimapTable, ReadableTable, TableDefinition};
+use redb::{
+    Database, MultimapTableDefinition, ReadableMultimapTable, ReadableTable, TableDefinition,
+};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -73,7 +75,10 @@ impl RedbStorage {
                 let _ = write_txn.open_multimap_table(NODES_BY_TAG)?;
                 let _ = write_txn.open_multimap_table(NODES_BY_SOURCE)?;
                 let mut meta = write_txn.open_table(META)?;
-                meta.insert(SCHEMA_VERSION_KEY, CURRENT_SCHEMA_VERSION.to_string().as_bytes())?;
+                meta.insert(
+                    SCHEMA_VERSION_KEY,
+                    CURRENT_SCHEMA_VERSION.to_string().as_bytes(),
+                )?;
             }
             write_txn.commit()?;
         } else {
@@ -349,16 +354,18 @@ impl RedbStorage {
         true
     }
 
-
     fn increment_meta_counter(&self, key: &str) -> Result<()> {
         let write_txn = self.db.begin_write()?;
         {
             let mut meta = write_txn.open_table(META)?;
-            let current = meta.get(key)?.map(|v| {
-                let mut bytes = [0u8; 8];
-                bytes.copy_from_slice(v.value());
-                u64::from_le_bytes(bytes)
-            }).unwrap_or(0);
+            let current = meta
+                .get(key)?
+                .map(|v| {
+                    let mut bytes = [0u8; 8];
+                    bytes.copy_from_slice(v.value());
+                    u64::from_le_bytes(bytes)
+                })
+                .unwrap_or(0);
             meta.insert(key, (current + 1).to_le_bytes().as_slice())?;
         }
         write_txn.commit()?;
@@ -369,11 +376,14 @@ impl RedbStorage {
         let write_txn = self.db.begin_write()?;
         {
             let mut meta = write_txn.open_table(META)?;
-            let current = meta.get(key)?.map(|v| {
-                let mut bytes = [0u8; 8];
-                bytes.copy_from_slice(v.value());
-                u64::from_le_bytes(bytes)
-            }).unwrap_or(0);
+            let current = meta
+                .get(key)?
+                .map(|v| {
+                    let mut bytes = [0u8; 8];
+                    bytes.copy_from_slice(v.value());
+                    u64::from_le_bytes(bytes)
+                })
+                .unwrap_or(0);
             meta.insert(key, current.saturating_sub(1).to_le_bytes().as_slice())?;
         }
         write_txn.commit()?;
@@ -389,15 +399,12 @@ impl RedbStorage {
             u64::from_le_bytes(bytes)
         }))
     }
-
-
 }
 
 impl Storage for RedbStorage {
     fn put_node(&self, node: &Node) -> Result<()> {
         // Validate node
-        node.validate()
-            .map_err(|e| CortexError::Validation(e))?;
+        node.validate().map_err(|e| CortexError::Validation(e))?;
 
         let write_txn = self.db.begin_write()?;
 
@@ -405,8 +412,12 @@ impl Storage for RedbStorage {
         let node_id_bytes = Self::uuid_to_bytes(&node.id);
         let old_node = {
             let nodes_table = write_txn.open_table(NODES)?;
-            let old_bytes = nodes_table.get(&node_id_bytes)?.map(|guard| guard.value().to_vec());
-            old_bytes.map(|bytes| Self::deserialize_node(&bytes)).transpose()?
+            let old_bytes = nodes_table
+                .get(&node_id_bytes)?
+                .map(|guard| guard.value().to_vec());
+            old_bytes
+                .map(|bytes| Self::deserialize_node(&bytes))
+                .transpose()?
         };
 
         // Serialize and store node
@@ -457,9 +468,7 @@ impl Storage for RedbStorage {
     }
 
     fn delete_node(&self, id: NodeId) -> Result<()> {
-        let mut node = self
-            .get_node(id)?
-            .ok_or(CortexError::NodeNotFound(id))?;
+        let mut node = self.get_node(id)?.ok_or(CortexError::NodeNotFound(id))?;
 
         node.deleted = true;
         node.updated_at = Utc::now();
@@ -631,8 +640,7 @@ impl Storage for RedbStorage {
 
     fn put_edge(&self, edge: &Edge) -> Result<()> {
         // Validate edge
-        edge.validate()
-            .map_err(|e| CortexError::Validation(e))?;
+        edge.validate().map_err(|e| CortexError::Validation(e))?;
 
         let from_bytes = Self::uuid_to_bytes(&edge.from);
         let to_bytes = Self::uuid_to_bytes(&edge.to);
@@ -645,10 +653,12 @@ impl Storage for RedbStorage {
         {
             let nodes_table = write_txn.open_table(NODES)?;
 
-            let from_data = nodes_table.get(&from_bytes)?
-                .ok_or_else(|| CortexError::InvalidEdge {
-                    reason: format!("Source node {} does not exist", edge.from),
-                })?;
+            let from_data =
+                nodes_table
+                    .get(&from_bytes)?
+                    .ok_or_else(|| CortexError::InvalidEdge {
+                        reason: format!("Source node {} does not exist", edge.from),
+                    })?;
             let from_node: Node = Self::deserialize_node(from_data.value())?;
             if from_node.deleted {
                 return Err(CortexError::InvalidEdge {
@@ -656,7 +666,8 @@ impl Storage for RedbStorage {
                 });
             }
 
-            let to_data = nodes_table.get(&to_bytes)?
+            let to_data = nodes_table
+                .get(&to_bytes)?
                 .ok_or_else(|| CortexError::InvalidEdge {
                     reason: format!("Target node {} does not exist", edge.to),
                 })?;
@@ -745,9 +756,7 @@ impl Storage for RedbStorage {
     }
 
     fn delete_edge(&self, id: EdgeId) -> Result<()> {
-        let edge = self
-            .get_edge(id)?
-            .ok_or(CortexError::EdgeNotFound(id))?;
+        let edge = self.get_edge(id)?.ok_or(CortexError::EdgeNotFound(id))?;
 
         let write_txn = self.db.begin_write()?;
 
@@ -824,17 +833,13 @@ impl Storage for RedbStorage {
 
     fn edges_between(&self, from: NodeId, to: NodeId) -> Result<Vec<Edge>> {
         let edges_from_node = self.edges_from(from)?;
-        Ok(edges_from_node
-            .into_iter()
-            .filter(|e| e.to == to)
-            .collect())
+        Ok(edges_from_node.into_iter().filter(|e| e.to == to).collect())
     }
 
     fn put_nodes_batch(&self, nodes: &[Node]) -> Result<()> {
         // Validate all nodes first
         for node in nodes {
-            node.validate()
-                .map_err(|e| CortexError::Validation(e))?;
+            node.validate().map_err(|e| CortexError::Validation(e))?;
         }
 
         let write_txn = self.db.begin_write()?;
@@ -844,8 +849,12 @@ impl Storage for RedbStorage {
             let node_id_bytes = Self::uuid_to_bytes(&node.id);
             let old_node = {
                 let nodes_table = write_txn.open_table(NODES)?;
-                let old_bytes = nodes_table.get(&node_id_bytes)?.map(|guard| guard.value().to_vec());
-                old_bytes.map(|bytes| Self::deserialize_node(&bytes)).transpose()?
+                let old_bytes = nodes_table
+                    .get(&node_id_bytes)?
+                    .map(|guard| guard.value().to_vec());
+                old_bytes
+                    .map(|bytes| Self::deserialize_node(&bytes))
+                    .transpose()?
             };
 
             // Serialize and store
@@ -867,8 +876,7 @@ impl Storage for RedbStorage {
     fn put_edges_batch(&self, edges: &[Edge]) -> Result<()> {
         // Validate all edges first
         for edge in edges {
-            edge.validate()
-                .map_err(|e| CortexError::Validation(e))?;
+            edge.validate().map_err(|e| CortexError::Validation(e))?;
         }
 
         let write_txn = self.db.begin_write()?;
@@ -916,19 +924,27 @@ impl Storage for RedbStorage {
 
     fn stats(&self) -> Result<StorageStats> {
         // Read O(1) counters from META for total counts
-        let node_count = self.read_meta_counter(STATS_NODE_COUNT_KEY)?.unwrap_or_else(|| {
-            // Legacy fallback: count from table scan
-            self.db.begin_read().ok()
-                .and_then(|txn| txn.open_table(NODES).ok())
-                .and_then(|t| t.iter().ok().map(|it| it.count() as u64))
-                .unwrap_or(0)
-        });
-        let edge_count = self.read_meta_counter(STATS_EDGE_COUNT_KEY)?.unwrap_or_else(|| {
-            self.db.begin_read().ok()
-                .and_then(|txn| txn.open_table(EDGES).ok())
-                .and_then(|t| t.iter().ok().map(|it| it.count() as u64))
-                .unwrap_or(0)
-        });
+        let node_count = self
+            .read_meta_counter(STATS_NODE_COUNT_KEY)?
+            .unwrap_or_else(|| {
+                // Legacy fallback: count from table scan
+                self.db
+                    .begin_read()
+                    .ok()
+                    .and_then(|txn| txn.open_table(NODES).ok())
+                    .and_then(|t| t.iter().ok().map(|it| it.count() as u64))
+                    .unwrap_or(0)
+            });
+        let edge_count = self
+            .read_meta_counter(STATS_EDGE_COUNT_KEY)?
+            .unwrap_or_else(|| {
+                self.db
+                    .begin_read()
+                    .ok()
+                    .and_then(|txn| txn.open_table(EDGES).ok())
+                    .and_then(|t| t.iter().ok().map(|it| it.count() as u64))
+                    .unwrap_or(0)
+            });
 
         // Still scan for per-kind/per-relation breakdowns and timestamps
         let read_txn = self.db.begin_read()?;
@@ -960,9 +976,7 @@ impl Storage for RedbStorage {
             *edge_counts_by_relation.entry(edge.relation).or_insert(0) += 1;
         }
 
-        let db_size_bytes = std::fs::metadata(&self.path)
-            .map(|m| m.len())
-            .unwrap_or(0);
+        let db_size_bytes = std::fs::metadata(&self.path).map(|m| m.len()).unwrap_or(0);
 
         Ok(StorageStats {
             node_count,
@@ -976,9 +990,8 @@ impl Storage for RedbStorage {
     }
 
     fn snapshot(&self, path: &Path) -> Result<()> {
-        std::fs::copy(&self.path, path).map_err(|e| {
-            CortexError::Validation(format!("Failed to create snapshot: {}", e))
-        })?;
+        std::fs::copy(&self.path, path)
+            .map_err(|e| CortexError::Validation(format!("Failed to create snapshot: {}", e)))?;
         Ok(())
     }
 }
@@ -1141,7 +1154,10 @@ mod tests {
         assert_eq!(results[0].kind, NodeKind::new("fact").unwrap());
 
         // Filter by multiple kinds
-        let filter = NodeFilter::new().with_kinds(vec![NodeKind::new("fact").unwrap(), NodeKind::new("decision").unwrap()]);
+        let filter = NodeFilter::new().with_kinds(vec![
+            NodeKind::new("fact").unwrap(),
+            NodeKind::new("decision").unwrap(),
+        ]);
         let results = storage.list_nodes(filter).unwrap();
         assert_eq!(results.len(), 2);
     }
@@ -1209,7 +1225,12 @@ mod tests {
         let (storage, _temp) = create_test_storage();
 
         let nodes: Vec<Node> = (0..10)
-            .map(|i| create_test_node(NodeKind::new("observation").unwrap(), &format!("Node {}", i)))
+            .map(|i| {
+                create_test_node(
+                    NodeKind::new("observation").unwrap(),
+                    &format!("Node {}", i),
+                )
+            })
             .collect();
 
         storage.put_nodes_batch(&nodes).unwrap();
@@ -1242,7 +1263,12 @@ mod tests {
         let stats = storage.stats().unwrap();
         assert_eq!(stats.node_count, 2);
         assert_eq!(stats.edge_count, 1);
-        assert_eq!(stats.node_counts_by_kind.get(&NodeKind::new("fact").unwrap()), Some(&1));
+        assert_eq!(
+            stats
+                .node_counts_by_kind
+                .get(&NodeKind::new("fact").unwrap()),
+            Some(&1)
+        );
     }
 }
 
@@ -1260,8 +1286,17 @@ mod optimization_tests {
     }
 
     fn make_node(kind: NodeKind, title: &str) -> Node {
-        Node::new(kind, title.to_string(), "body".to_string(),
-            Source { agent: "test".to_string(), session: None, channel: None }, 0.5)
+        Node::new(
+            kind,
+            title.to_string(),
+            "body".to_string(),
+            Source {
+                agent: "test".to_string(),
+                session: None,
+                channel: None,
+            },
+            0.5,
+        )
     }
 
     #[test]
@@ -1269,17 +1304,34 @@ mod optimization_tests {
         let (storage, _temp) = create_test_storage();
 
         for i in 0..50 {
-            storage.put_node(&make_node(NodeKind::new("fact").unwrap(), &format!("F{}", i))).unwrap();
+            storage
+                .put_node(&make_node(
+                    NodeKind::new("fact").unwrap(),
+                    &format!("F{}", i),
+                ))
+                .unwrap();
         }
         for i in 0..30 {
-            storage.put_node(&make_node(NodeKind::new("decision").unwrap(), &format!("D{}", i))).unwrap();
+            storage
+                .put_node(&make_node(
+                    NodeKind::new("decision").unwrap(),
+                    &format!("D{}", i),
+                ))
+                .unwrap();
         }
 
         // Kind-only filter should use index fast path
-        let count = storage.count_nodes(NodeFilter::new().with_kinds(vec![NodeKind::new("fact").unwrap()])).unwrap();
+        let count = storage
+            .count_nodes(NodeFilter::new().with_kinds(vec![NodeKind::new("fact").unwrap()]))
+            .unwrap();
         assert_eq!(count, 50);
 
-        let count = storage.count_nodes(NodeFilter::new().with_kinds(vec![NodeKind::new("fact").unwrap(), NodeKind::new("decision").unwrap()])).unwrap();
+        let count = storage
+            .count_nodes(NodeFilter::new().with_kinds(vec![
+                NodeKind::new("fact").unwrap(),
+                NodeKind::new("decision").unwrap(),
+            ]))
+            .unwrap();
         assert_eq!(count, 80);
 
         let count = storage.count_nodes(NodeFilter::new()).unwrap();
@@ -1295,18 +1347,39 @@ mod optimization_tests {
         storage.put_node(&n1).unwrap();
         storage.put_node(&n2).unwrap();
 
-        let e1 = Edge::new(n1.id, n2.id, Relation::new("related_to").unwrap(), 0.8,
-            EdgeProvenance::Manual { created_by: "test".to_string() });
+        let e1 = Edge::new(
+            n1.id,
+            n2.id,
+            Relation::new("related_to").unwrap(),
+            0.8,
+            EdgeProvenance::Manual {
+                created_by: "test".to_string(),
+            },
+        );
         storage.put_edge(&e1).unwrap();
 
         // Same from/to/relation should fail
-        let e2 = Edge::new(n1.id, n2.id, Relation::new("related_to").unwrap(), 0.5,
-            EdgeProvenance::Manual { created_by: "test".to_string() });
+        let e2 = Edge::new(
+            n1.id,
+            n2.id,
+            Relation::new("related_to").unwrap(),
+            0.5,
+            EdgeProvenance::Manual {
+                created_by: "test".to_string(),
+            },
+        );
         assert!(storage.put_edge(&e2).is_err());
 
         // Different relation should succeed
-        let e3 = Edge::new(n1.id, n2.id, Relation::new("led_to").unwrap(), 0.5,
-            EdgeProvenance::Manual { created_by: "test".to_string() });
+        let e3 = Edge::new(
+            n1.id,
+            n2.id,
+            Relation::new("led_to").unwrap(),
+            0.5,
+            EdgeProvenance::Manual {
+                created_by: "test".to_string(),
+            },
+        );
         assert!(storage.put_edge(&e3).is_ok());
     }
 
@@ -1320,8 +1393,15 @@ mod optimization_tests {
         storage.put_node(&n2).unwrap();
         storage.delete_node(n2.id).unwrap();
 
-        let edge = Edge::new(n1.id, n2.id, Relation::new("related_to").unwrap(), 0.8,
-            EdgeProvenance::Manual { created_by: "test".to_string() });
+        let edge = Edge::new(
+            n1.id,
+            n2.id,
+            Relation::new("related_to").unwrap(),
+            0.8,
+            EdgeProvenance::Manual {
+                created_by: "test".to_string(),
+            },
+        );
         assert!(storage.put_edge(&edge).is_err());
     }
 
@@ -1334,8 +1414,15 @@ mod optimization_tests {
         storage.put_node(&n1).unwrap();
         storage.put_node(&n2).unwrap();
 
-        let mut edge = Edge::new(n1.id, n2.id, Relation::new("related_to").unwrap(), 0.8,
-            EdgeProvenance::Manual { created_by: "test".to_string() });
+        let mut edge = Edge::new(
+            n1.id,
+            n2.id,
+            Relation::new("related_to").unwrap(),
+            0.8,
+            EdgeProvenance::Manual {
+                created_by: "test".to_string(),
+            },
+        );
         storage.put_edge(&edge).unwrap();
 
         // Update same edge (same ID) should succeed
@@ -1373,7 +1460,9 @@ mod optimization_tests {
         storage.put_node(&node).unwrap();
 
         // Find by tag
-        let results = storage.list_nodes(NodeFilter::new().with_tags(vec!["alpha".to_string()])).unwrap();
+        let results = storage
+            .list_nodes(NodeFilter::new().with_tags(vec!["alpha".to_string()]))
+            .unwrap();
         assert_eq!(results.len(), 1);
 
         // Update tags — remove alpha, add gamma
@@ -1381,11 +1470,15 @@ mod optimization_tests {
         storage.put_node(&node).unwrap();
 
         // Alpha should no longer match
-        let results = storage.list_nodes(NodeFilter::new().with_tags(vec!["alpha".to_string()])).unwrap();
+        let results = storage
+            .list_nodes(NodeFilter::new().with_tags(vec!["alpha".to_string()]))
+            .unwrap();
         assert_eq!(results.len(), 0);
 
         // Gamma should match
-        let results = storage.list_nodes(NodeFilter::new().with_tags(vec!["gamma".to_string()])).unwrap();
+        let results = storage
+            .list_nodes(NodeFilter::new().with_tags(vec!["gamma".to_string()]))
+            .unwrap();
         assert_eq!(results.len(), 1);
     }
 
@@ -1396,17 +1489,23 @@ mod optimization_tests {
         let mut node = make_node(NodeKind::new("fact").unwrap(), "Agent test");
         storage.put_node(&node).unwrap();
 
-        let results = storage.list_nodes(NodeFilter::new().with_source_agent("test".to_string())).unwrap();
+        let results = storage
+            .list_nodes(NodeFilter::new().with_source_agent("test".to_string()))
+            .unwrap();
         assert_eq!(results.len(), 1);
 
         // Change agent
         node.source.agent = "kai".to_string();
         storage.put_node(&node).unwrap();
 
-        let results = storage.list_nodes(NodeFilter::new().with_source_agent("test".to_string())).unwrap();
+        let results = storage
+            .list_nodes(NodeFilter::new().with_source_agent("test".to_string()))
+            .unwrap();
         assert_eq!(results.len(), 0);
 
-        let results = storage.list_nodes(NodeFilter::new().with_source_agent("kai".to_string())).unwrap();
+        let results = storage
+            .list_nodes(NodeFilter::new().with_source_agent("kai".to_string()))
+            .unwrap();
         assert_eq!(results.len(), 1);
     }
 
@@ -1423,7 +1522,9 @@ mod optimization_tests {
         let results = storage.list_nodes(NodeFilter::new()).unwrap();
         assert_eq!(results.len(), 1);
 
-        let results = storage.list_nodes(NodeFilter::new().include_deleted()).unwrap();
+        let results = storage
+            .list_nodes(NodeFilter::new().include_deleted())
+            .unwrap();
         assert_eq!(results.len(), 2);
     }
 
@@ -1439,7 +1540,9 @@ mod optimization_tests {
         storage.put_node(&low).unwrap();
         storage.put_node(&high).unwrap();
 
-        let results = storage.list_nodes(NodeFilter::new().with_min_importance(0.5)).unwrap();
+        let results = storage
+            .list_nodes(NodeFilter::new().with_min_importance(0.5))
+            .unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].data.title, "High importance");
     }
@@ -1449,13 +1552,20 @@ mod optimization_tests {
         let (storage, _temp) = create_test_storage();
 
         for i in 0..20 {
-            storage.put_node(&make_node(NodeKind::new("fact").unwrap(), &format!("Page {}", i))).unwrap();
+            storage
+                .put_node(&make_node(
+                    NodeKind::new("fact").unwrap(),
+                    &format!("Page {}", i),
+                ))
+                .unwrap();
         }
 
         let page1 = storage.list_nodes(NodeFilter::new().with_limit(5)).unwrap();
         assert_eq!(page1.len(), 5);
 
-        let page2 = storage.list_nodes(NodeFilter::new().with_limit(5).with_offset(5)).unwrap();
+        let page2 = storage
+            .list_nodes(NodeFilter::new().with_limit(5).with_offset(5))
+            .unwrap();
         assert_eq!(page2.len(), 5);
 
         // Pages shouldn't overlap
@@ -1470,7 +1580,12 @@ mod optimization_tests {
 
         // Insert some nodes
         for i in 0..100 {
-            storage.put_node(&make_node(NodeKind::new("fact").unwrap(), &format!("N{}", i))).unwrap();
+            storage
+                .put_node(&make_node(
+                    NodeKind::new("fact").unwrap(),
+                    &format!("N{}", i),
+                ))
+                .unwrap();
         }
 
         // Stats should work (iterates all nodes)

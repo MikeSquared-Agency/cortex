@@ -82,9 +82,9 @@ impl HybridQuery {
 #[derive(Debug, Clone)]
 pub struct HybridResult {
     pub node: Node,
-    pub vector_score: f32,         // Raw cosine similarity
-    pub graph_score: f32,          // Proximity to anchors (0.0 - 1.0)
-    pub combined_score: f32,       // Weighted blend
+    pub vector_score: f32,                     // Raw cosine similarity
+    pub graph_score: f32,                      // Proximity to anchors (0.0 - 1.0)
+    pub combined_score: f32,                   // Weighted blend
     pub nearest_anchor: Option<(NodeId, u32)>, // Closest anchor and depth
 }
 
@@ -157,8 +157,8 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> HybridSear
                     .get(&vr.node_id)
                     .and_then(|(_, anchor, depth)| anchor.map(|a| (a, *depth)));
 
-                let combined_score = (query.vector_weight * vr.score)
-                    + ((1.0 - query.vector_weight) * graph_score);
+                let combined_score =
+                    (query.vector_weight * vr.score) + ((1.0 - query.vector_weight) * graph_score);
 
                 hybrid_results.push(HybridResult {
                     node,
@@ -286,7 +286,12 @@ mod tests {
         let storage_arc = Arc::new(storage);
         let graph_engine = GraphEngineImpl::new(storage_arc.clone());
 
-        let hybrid = HybridSearch::new(storage_arc.clone(), embedding_service, vector_index, graph_engine);
+        let hybrid = HybridSearch::new(
+            storage_arc.clone(),
+            embedding_service,
+            vector_index,
+            graph_engine,
+        );
 
         let query = HybridQuery::new("Rust language".to_string()).with_limit(5);
 
@@ -373,7 +378,12 @@ mod tests {
         let storage_arc = Arc::new(storage);
         let graph_engine = GraphEngineImpl::new(storage_arc.clone());
 
-        let hybrid = HybridSearch::new(storage_arc.clone(), embedding_service, vector_index, graph_engine);
+        let hybrid = HybridSearch::new(
+            storage_arc.clone(),
+            embedding_service,
+            vector_index,
+            graph_engine,
+        );
 
         let query = HybridQuery::new("Rust properties".to_string())
             .with_anchors(vec![anchor_node.id])

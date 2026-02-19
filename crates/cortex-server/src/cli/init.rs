@@ -1,9 +1,8 @@
-use anyhow::Result;
 use crate::config::{
-    AutoLinkerTomlConfig, BriefingTomlConfig, CortexConfig, EmbeddingConfig,
-    IngestConfig, ObservabilityConfig, RetentionConfig, SchemaConfig,
-    SecurityConfig, ServerConfig,
+    AutoLinkerTomlConfig, BriefingTomlConfig, CortexConfig, EmbeddingConfig, IngestConfig,
+    ObservabilityConfig, RetentionConfig, SchemaConfig, SecurityConfig, ServerConfig,
 };
+use anyhow::Result;
 
 pub async fn run() -> Result<()> {
     use inquire::{Confirm, Select, Text};

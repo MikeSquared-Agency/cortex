@@ -84,7 +84,8 @@ fn main() {
         Node::new(
             NodeKind::new("pattern").unwrap(),
             "Good tech choices boost morale".into(),
-            "Pattern: When teams use technology they believe in, morale and velocity increase".into(),
+            "Pattern: When teams use technology they believe in, morale and velocity increase"
+                .into(),
             Source {
                 agent: "kai".into(),
                 session: None,
@@ -158,8 +159,11 @@ fn main() {
     if stats.edge_count > 0 {
         println!("Sample edges created:");
         // Collect edges by iterating over all nodes' outgoing edges
-        let all_nodes = storage.list_nodes(cortex_core::storage::NodeFilter::new()).unwrap();
-        let all_edges: Vec<_> = all_nodes.iter()
+        let all_nodes = storage
+            .list_nodes(cortex_core::storage::NodeFilter::new())
+            .unwrap();
+        let all_edges: Vec<_> = all_nodes
+            .iter()
             .flat_map(|n| storage.edges_from(n.id).unwrap_or_default())
             .collect();
 
@@ -182,7 +186,8 @@ fn main() {
                     EdgeProvenance::Manual { created_by } => format!("Manual by {}", created_by),
                     EdgeProvenance::AutoSimilarity { score } =>
                         format!("Auto-similarity ({:.2})", score),
-                    EdgeProvenance::AutoStructural { rule } => format!("Auto-structural ({})", rule),
+                    EdgeProvenance::AutoStructural { rule } =>
+                        format!("Auto-structural ({})", rule),
                     EdgeProvenance::AutoContradiction { reason } =>
                         format!("Auto-contradiction ({})", reason),
                     EdgeProvenance::AutoDedup { similarity } =>

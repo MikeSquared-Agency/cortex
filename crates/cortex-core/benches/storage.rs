@@ -1,9 +1,9 @@
-use criterion::{criterion_group, criterion_main, Criterion, BatchSize};
+use cortex_core::graph::*;
+use cortex_core::storage::NodeFilter;
 use cortex_core::storage::RedbStorage;
 use cortex_core::storage::Storage;
 use cortex_core::types::*;
-use cortex_core::graph::*;
-use cortex_core::storage::NodeFilter;
+use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use std::sync::Arc;
 use tempfile::TempDir;
 use uuid::Uuid;
@@ -51,7 +51,10 @@ fn bench_node_lookup_by_id(c: &mut Criterion) {
 
     // Add 1000 other nodes
     for i in 0..1000 {
-        let n = create_test_node(NodeKind::new("observation").unwrap(), &format!("Node {}", i));
+        let n = create_test_node(
+            NodeKind::new("observation").unwrap(),
+            &format!("Node {}", i),
+        );
         storage.put_node(&n).unwrap();
     }
 
@@ -70,7 +73,12 @@ fn bench_batch_insert_1k(c: &mut Criterion) {
                 let db_path = temp_dir.path().join("bench.redb");
                 let storage = RedbStorage::open(&db_path).unwrap();
                 let nodes: Vec<Node> = (0..1000)
-                    .map(|i| create_test_node(NodeKind::new("observation").unwrap(), &format!("Node {}", i)))
+                    .map(|i| {
+                        create_test_node(
+                            NodeKind::new("observation").unwrap(),
+                            &format!("Node {}", i),
+                        )
+                    })
                     .collect();
                 (storage, nodes, temp_dir)
             },
@@ -88,7 +96,13 @@ fn bench_filter_by_kind(c: &mut Criterion) {
     let storage = RedbStorage::open(&db_path).unwrap();
 
     // Insert 5000 nodes across different kinds
-    let kinds = [NodeKind::new("fact").unwrap(), NodeKind::new("decision").unwrap(), NodeKind::new("event").unwrap(), NodeKind::new("pattern").unwrap(), NodeKind::new("observation").unwrap()];
+    let kinds = [
+        NodeKind::new("fact").unwrap(),
+        NodeKind::new("decision").unwrap(),
+        NodeKind::new("event").unwrap(),
+        NodeKind::new("pattern").unwrap(),
+        NodeKind::new("observation").unwrap(),
+    ];
     for i in 0..5000 {
         let kind = kinds[i % kinds.len()];
         let n = create_test_node(kind, &format!("Node {}", i));
@@ -116,15 +130,32 @@ fn bench_bfs_traversal(c: &mut Criterion) {
     for i in 0..10 {
         let child = create_test_node(NodeKind::new("fact").unwrap(), &format!("Child {}", i));
         storage.put_node(&child).unwrap();
-        let edge = Edge::new(root_id, child.id, Relation::new("led_to").unwrap(), 0.8,
-            EdgeProvenance::Manual { created_by: "bench".to_string() });
+        let edge = Edge::new(
+            root_id,
+            child.id,
+            Relation::new("led_to").unwrap(),
+            0.8,
+            EdgeProvenance::Manual {
+                created_by: "bench".to_string(),
+            },
+        );
         storage.put_edge(&edge).unwrap();
 
         for j in 0..10 {
-            let grandchild = create_test_node(NodeKind::new("observation").unwrap(), &format!("GC {}-{}", i, j));
+            let grandchild = create_test_node(
+                NodeKind::new("observation").unwrap(),
+                &format!("GC {}-{}", i, j),
+            );
             storage.put_node(&grandchild).unwrap();
-            let edge2 = Edge::new(child.id, grandchild.id, Relation::new("led_to").unwrap(), 0.7,
-                EdgeProvenance::Manual { created_by: "bench".to_string() });
+            let edge2 = Edge::new(
+                child.id,
+                grandchild.id,
+                Relation::new("led_to").unwrap(),
+                0.7,
+                EdgeProvenance::Manual {
+                    created_by: "bench".to_string(),
+                },
+            );
             storage.put_edge(&edge2).unwrap();
         }
     }
@@ -133,14 +164,16 @@ fn bench_bfs_traversal(c: &mut Criterion) {
 
     c.bench_function("BFS 3-hop traversal (111 nodes, fanout 10)", |b| {
         b.iter(|| {
-            engine.traverse(TraversalRequest {
-                start: vec![root_id],
-                max_depth: Some(3),
-                direction: TraversalDirection::Outgoing,
-                strategy: TraversalStrategy::Bfs,
-                include_start: true,
-                ..Default::default()
-            }).unwrap();
+            engine
+                .traverse(TraversalRequest {
+                    start: vec![root_id],
+                    max_depth: Some(3),
+                    direction: TraversalDirection::Outgoing,
+                    strategy: TraversalStrategy::Bfs,
+                    include_start: true,
+                    ..Default::default()
+                })
+                .unwrap();
         });
     });
 }
@@ -158,8 +191,15 @@ fn bench_shortest_path(c: &mut Criterion) {
         nodes.push(n);
     }
     for i in 0..25 {
-        let edge = Edge::new(nodes[i].id, nodes[i+1].id, Relation::new("led_to").unwrap(), 0.9,
-            EdgeProvenance::Manual { created_by: "bench".to_string() });
+        let edge = Edge::new(
+            nodes[i].id,
+            nodes[i + 1].id,
+            Relation::new("led_to").unwrap(),
+            0.9,
+            EdgeProvenance::Manual {
+                created_by: "bench".to_string(),
+            },
+        );
         storage.put_edge(&edge).unwrap();
     }
 
@@ -169,12 +209,14 @@ fn bench_shortest_path(c: &mut Criterion) {
 
     c.bench_function("shortest path (26-node chain)", |b| {
         b.iter(|| {
-            engine.find_paths(PathRequest {
-                from: start,
-                to: end,
-                max_paths: 1,
-                ..Default::default()
-            }).unwrap();
+            engine
+                .find_paths(PathRequest {
+                    from: start,
+                    to: end,
+                    max_paths: 1,
+                    ..Default::default()
+                })
+                .unwrap();
         });
     });
 }

@@ -1,6 +1,6 @@
 #![allow(dead_code)]
-mod service;
 mod conversions;
+mod service;
 
 pub use service::CortexServiceImpl;
 

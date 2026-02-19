@@ -1,7 +1,7 @@
 pub mod cache;
 pub mod engine;
-pub mod renderer;
 pub mod ingest;
+pub mod renderer;
 
 pub use engine::{BriefingConfig, BriefingEngine};
 

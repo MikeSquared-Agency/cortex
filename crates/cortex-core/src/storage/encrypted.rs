@@ -79,9 +79,9 @@ pub fn decrypt_file(path: &std::path::Path, key: &[u8; 32]) -> anyhow::Result<()
     let nonce = Nonce::from_slice(nonce_bytes);
     let cipher = Aes256Gcm::new_from_slice(key).expect("key is always 32 bytes");
 
-    let plaintext = cipher
-        .decrypt(nonce, ciphertext)
-        .map_err(|_| anyhow::anyhow!("Decryption failed — wrong key or corrupt/unencrypted data"))?;
+    let plaintext = cipher.decrypt(nonce, ciphertext).map_err(|_| {
+        anyhow::anyhow!("Decryption failed — wrong key or corrupt/unencrypted data")
+    })?;
 
     std::fs::write(path, plaintext)
         .map_err(|e| anyhow::anyhow!("Failed to write decrypted file: {}", e))?;

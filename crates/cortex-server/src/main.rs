@@ -124,7 +124,9 @@ async fn main() -> anyhow::Result<()> {
 
         Commands::Mcp(args) => {
             // MCP uses library mode — redirect tracing to stderr so stdout stays clean
-            let data_dir = args.data_dir.or_else(|| Some(config.server.data_dir.clone()));
+            let data_dir = args
+                .data_dir
+                .or_else(|| Some(config.server.data_dir.clone()));
             let server = args.server;
             mcp::run(mcp::McpArgs { data_dir, server }).await?;
         }

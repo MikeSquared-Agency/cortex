@@ -66,19 +66,19 @@ impl SimilarityConfig {
     pub fn validate(&self) -> crate::error::Result<()> {
         if self.auto_link_threshold >= self.dedup_threshold {
             return Err(crate::error::CortexError::Validation(
-                "auto_link_threshold must be less than dedup_threshold".to_string()
+                "auto_link_threshold must be less than dedup_threshold".to_string(),
             ));
         }
 
         if self.contradiction_threshold >= self.dedup_threshold {
             return Err(crate::error::CortexError::Validation(
-                "contradiction_threshold must be less than dedup_threshold".to_string()
+                "contradiction_threshold must be less than dedup_threshold".to_string(),
             ));
         }
 
         if self.auto_link_k == 0 {
             return Err(crate::error::CortexError::Validation(
-                "auto_link_k must be greater than 0".to_string()
+                "auto_link_k must be greater than 0".to_string(),
             ));
         }
 

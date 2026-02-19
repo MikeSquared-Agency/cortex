@@ -84,8 +84,8 @@ impl<S: Storage, V: VectorIndex, G: GraphEngine> DedupScanner<S, V, G> {
 
             // Find similar nodes
             let vector_index = self.vector_index.read().unwrap();
-            let similar = vector_index
-                .search_threshold(embedding, self.config.dedup_threshold, None)?;
+            let similar =
+                vector_index.search_threshold(embedding, self.config.dedup_threshold, None)?;
             drop(vector_index);
 
             for result in similar {
@@ -283,7 +283,10 @@ impl<S: Storage, V: VectorIndex, G: GraphEngine> DedupScanner<S, V, G> {
         // Merge metadata maps
         for (key, value) in &retire_node.data.metadata {
             if !updated_keep.data.metadata.contains_key(key) {
-                updated_keep.data.metadata.insert(key.clone(), value.clone());
+                updated_keep
+                    .data
+                    .metadata
+                    .insert(key.clone(), value.clone());
             }
         }
 

@@ -6,7 +6,7 @@
 use cortex_core::storage::{RedbStorage, Storage};
 use cortex_core::types::*;
 use cortex_core::vector::{
-    EmbeddingService, FastEmbedService, HnswIndex, VectorIndex, embedding_input,
+    embedding_input, EmbeddingService, FastEmbedService, HnswIndex, VectorIndex,
 };
 use tempfile::TempDir;
 

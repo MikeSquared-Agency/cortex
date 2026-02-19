@@ -1,8 +1,7 @@
 use crate::error::Result;
 use crate::graph::{
-    cache::AdjacencyCache,
-    paths, traversal, PathRequest, PathResult, Subgraph, TraversalBudget, TraversalDirection,
-    TraversalRequest, TraversalStrategy,
+    cache::AdjacencyCache, paths, traversal, PathRequest, PathResult, Subgraph, TraversalBudget,
+    TraversalDirection, TraversalRequest, TraversalStrategy,
 };
 use crate::storage::{NodeFilter, Storage};
 use crate::types::{Edge, Node, NodeId, Relation};
@@ -73,7 +72,11 @@ impl<S: Storage> GraphEngineImpl<S> {
     /// Create a new graph engine with custom budget
     pub fn with_budget(storage: Arc<S>, budget: TraversalBudget) -> Self {
         let cache = AdjacencyCache::new();
-        Self { storage, budget, cache }
+        Self {
+            storage,
+            budget,
+            cache,
+        }
     }
 
     /// Ensure the adjacency cache is valid, rebuilding if necessary
@@ -416,7 +419,11 @@ impl<S: Storage> GraphEngineImpl<S> {
             edges.extend(self.cached_edges_to(node)?);
 
             for edge in edges {
-                let neighbor = if edge.from == node { edge.to } else { edge.from };
+                let neighbor = if edge.from == node {
+                    edge.to
+                } else {
+                    edge.from
+                };
 
                 if !visited.contains(&neighbor) {
                     visited.insert(neighbor);

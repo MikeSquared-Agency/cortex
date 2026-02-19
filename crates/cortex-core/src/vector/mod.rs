@@ -1,12 +1,12 @@
-mod embedding;
-mod index;
-mod hybrid;
 mod config;
+mod embedding;
+mod hybrid;
+mod index;
 
-pub use embedding::{EmbeddingService, FastEmbedService, embedding_input};
-pub use index::{VectorIndex, HnswIndex, RwLockVectorIndex, SimilarityResult, VectorFilter};
-pub use hybrid::{HybridQuery, HybridResult, HybridSearch};
 pub use config::SimilarityConfig;
+pub use embedding::{embedding_input, EmbeddingService, FastEmbedService};
+pub use hybrid::{HybridQuery, HybridResult, HybridSearch};
+pub use index::{HnswIndex, RwLockVectorIndex, SimilarityResult, VectorFilter, VectorIndex};
 
 #[cfg(test)]
 mod tests;

@@ -1,7 +1,7 @@
+use crate::cli::{grpc_connect, ExportArgs};
 use anyhow::Result;
 use cortex_proto::*;
 use std::io::Write;
-use crate::cli::{ExportArgs, grpc_connect};
 
 pub async fn run(args: ExportArgs, server: &str) -> Result<()> {
     let mut client = grpc_connect(server).await?;
@@ -40,9 +40,9 @@ pub async fn run(args: ExportArgs, server: &str) -> Result<()> {
     }
 
     let output = match args.format.as_str() {
-        "json"    => format_json(nodes, &all_edges)?,
-        "jsonl"   => format_jsonl(nodes)?,
-        "dot"     => format_dot(nodes, &all_edges),
+        "json" => format_json(nodes, &all_edges)?,
+        "jsonl" => format_jsonl(nodes)?,
+        "dot" => format_dot(nodes, &all_edges),
         "graphml" => format_graphml(nodes, &all_edges),
         other => anyhow::bail!("Unknown export format: {}", other),
     };
@@ -88,7 +88,9 @@ fn format_dot(nodes: &[NodeResponse], edges: &[EdgeResponse]) -> String {
     for edge in edges {
         out.push_str(&format!(
             "  \"{}\" -> \"{}\" [label=\"{}\"];\n",
-            &edge.from_id[..8], &edge.to_id[..8], edge.relation
+            &edge.from_id[..8],
+            &edge.to_id[..8],
+            edge.relation
         ));
     }
     out.push_str("}\n");
@@ -150,7 +152,7 @@ fn edge_to_json(e: &EdgeResponse) -> serde_json::Value {
 
 fn xml_escape(s: &str) -> String {
     s.replace('&', "&amp;")
-     .replace('<', "&lt;")
-     .replace('>', "&gt;")
-     .replace('"', "&quot;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }

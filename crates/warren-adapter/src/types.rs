@@ -191,7 +191,10 @@ impl WarrenEvent {
                 channel,
             } => Node::new(
                 observation,
-                format!("Interaction: {}", content.chars().take(50).collect::<String>()),
+                format!(
+                    "Interaction: {}",
+                    content.chars().take(50).collect::<String>()
+                ),
                 content.clone(),
                 Source {
                     agent: agent_id.clone(),
@@ -239,7 +242,10 @@ impl WarrenEvent {
                 agent_id,
             } => Node::new(
                 decision,
-                format!("Refinement: {}", content.chars().take(50).collect::<String>()),
+                format!(
+                    "Refinement: {}",
+                    content.chars().take(50).collect::<String>()
+                ),
                 content.clone(),
                 Source {
                     agent: agent_id.clone(),
@@ -257,7 +263,11 @@ pub fn parse_subject(subject: &async_nats::Subject) -> Option<&str> {
     let s = subject.as_str();
     if s.starts_with("warren.") {
         let rest = &s[7..];
-        if rest.is_empty() { None } else { Some(rest) }
+        if rest.is_empty() {
+            None
+        } else {
+            Some(rest)
+        }
     } else {
         None
     }
@@ -273,8 +283,14 @@ mod tests {
 
     #[test]
     fn test_parse_subject_strips_warren_prefix() {
-        assert_eq!(parse_subject(&make_subject("warren.stage.advanced")), Some("stage.advanced"));
-        assert_eq!(parse_subject(&make_subject("warren.gate.approved")), Some("gate.approved"));
+        assert_eq!(
+            parse_subject(&make_subject("warren.stage.advanced")),
+            Some("stage.advanced")
+        );
+        assert_eq!(
+            parse_subject(&make_subject("warren.gate.approved")),
+            Some("gate.approved")
+        );
     }
 
     #[test]

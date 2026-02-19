@@ -23,7 +23,12 @@ use std::path::PathBuf;
 #[command(version, about = "Embedded graph memory for AI agents")]
 pub struct Cli {
     /// Path to cortex.toml
-    #[arg(long, global = true, env = "CORTEX_CONFIG", default_value = "cortex.toml")]
+    #[arg(
+        long,
+        global = true,
+        env = "CORTEX_CONFIG",
+        default_value = "cortex.toml"
+    )]
     pub config: PathBuf,
 
     /// Path to data directory (overrides config file)
@@ -31,7 +36,12 @@ pub struct Cli {
     pub data_dir: Option<PathBuf>,
 
     /// Cortex server address for client commands
-    #[arg(long, global = true, env = "CORTEX_ADDR", default_value = "http://localhost:9090")]
+    #[arg(
+        long,
+        global = true,
+        env = "CORTEX_ADDR",
+        default_value = "http://localhost:9090"
+    )]
     pub server: String,
 
     #[command(subcommand)]
@@ -327,7 +337,13 @@ use tonic::transport::Channel;
 pub async fn grpc_connect(server: &str) -> anyhow::Result<CortexServiceClient<Channel>> {
     CortexServiceClient::connect(server.to_string())
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to connect to Cortex server at {}: {}\nIs `cortex serve` running?", server, e))
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to connect to Cortex server at {}: {}\nIs `cortex serve` running?",
+                server,
+                e
+            )
+        })
 }
 
 // --- Table printing helpers ---
@@ -341,7 +357,10 @@ pub fn print_node_table(nodes: &[cortex_proto::NodeResponse]) {
     println!("{}", "─".repeat(80));
     for n in nodes {
         let title = truncate(&n.title, 40);
-        println!("{:<36}  {:<12}  {:<6.2}  {}", n.id, n.kind, n.importance, title);
+        println!(
+            "{:<36}  {:<12}  {:<6.2}  {}",
+            n.id, n.kind, n.importance, title
+        );
     }
 }
 
@@ -350,10 +369,16 @@ pub fn print_edge_table(edges: &[cortex_proto::EdgeResponse]) {
         println!("(no edges)");
         return;
     }
-    println!("{:<36}  {:<36}  {:<20}  {:<5}", "FROM", "TO", "RELATION", "WEIGHT");
+    println!(
+        "{:<36}  {:<36}  {:<20}  {:<5}",
+        "FROM", "TO", "RELATION", "WEIGHT"
+    );
     println!("{}", "─".repeat(100));
     for e in edges {
-        println!("{:<36}  {:<36}  {:<20}  {:<5.2}", e.from_id, e.to_id, e.relation, e.weight);
+        println!(
+            "{:<36}  {:<36}  {:<20}  {:<5.2}",
+            e.from_id, e.to_id, e.relation, e.weight
+        );
     }
 }
 

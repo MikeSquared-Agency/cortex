@@ -1,7 +1,7 @@
+use crate::cli::ConfigCommands;
+use crate::config::CortexConfig;
 use anyhow::Result;
 use std::path::Path;
-use crate::config::CortexConfig;
-use crate::cli::ConfigCommands;
 
 pub async fn run(cmd: ConfigCommands, config_path: &Path) -> Result<()> {
     match cmd {

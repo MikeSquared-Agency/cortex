@@ -9,13 +9,13 @@
  *     "cortex": {
  *       "command": "node",
  *       "args": ["/path/to/cortex-mcp-bridge.js"],
- *       "env": { "CORTEX_URL": "https://cortex.darlington.dev" }
+ *       "env": { "CORTEX_URL": "http://localhost:19091" }
  *     }
  *   }
  * }
  */
 
-const BASE = process.env.CORTEX_URL || "https://cortex.darlington.dev";
+const BASE = process.env.CORTEX_URL || "http://localhost:19091";
 const readline = require("readline");
 
 const TOOLS = [

@@ -414,10 +414,7 @@ fn tool_search(cortex: &Cortex, args: &Value) -> Result<String> {
     let query = args["query"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("query is required"))?;
-    let limit = args
-        .get("limit")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(10) as usize;
+    let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
     let kind_filter = args.get("kind").and_then(|v| v.as_str()).map(String::from);
 
     // Fetch extra results when kind-filtering so we hit the requested limit
@@ -454,14 +451,8 @@ fn tool_recall(cortex: &Cortex, args: &Value) -> Result<String> {
     let query = args["query"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("query is required"))?;
-    let limit = args
-        .get("limit")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(10) as usize;
-    let _alpha = args
-        .get("alpha")
-        .and_then(|v| v.as_f64())
-        .unwrap_or(0.7) as f32;
+    let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
+    let _alpha = args.get("alpha").and_then(|v| v.as_f64()).unwrap_or(0.7) as f32;
 
     // Phase 1: vector search
     let seeds = cortex.search(query, limit).unwrap_or_default();
@@ -580,10 +571,7 @@ fn tool_traverse(cortex: &Cortex, args: &Value) -> Result<String> {
     let node_id_str = args["node_id"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("node_id is required"))?;
-    let depth = args
-        .get("depth")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(2) as u32;
+    let depth = args.get("depth").and_then(|v| v.as_u64()).unwrap_or(2) as u32;
     let _direction = args
         .get("direction")
         .and_then(|v| v.as_str())
@@ -809,7 +797,9 @@ async fn run_remote(server_addr: &str) -> Result<()> {
 
     while let Some(line) = reader.next_line().await? {
         let line = line.trim().to_string();
-        if line.is_empty() { continue; }
+        if line.is_empty() {
+            continue;
+        }
 
         if let Some(response) = dispatch_remote(&http, &base_url, &line).await {
             let bytes = serde_json::to_vec(&response)?;
@@ -831,13 +821,11 @@ async fn dispatch_remote(http: &reqwest::Client, base_url: &str, line: &str) -> 
     let method = req.get("method")?.as_str()?;
 
     let result = match method {
-        "initialize" => {
-            Ok(json!({
-                "protocolVersion": "2024-11-05",
-                "capabilities": { "tools": {}, "resources": {} },
-                "serverInfo": { "name": "cortex", "version": "0.1.0" }
-            }))
-        }
+        "initialize" => Ok(json!({
+            "protocolVersion": "2024-11-05",
+            "capabilities": { "tools": {}, "resources": {} },
+            "serverInfo": { "name": "cortex", "version": "0.1.0" }
+        })),
         "notifications/initialized" => return None,
         "tools/list" => {
             // Reuse the same tool list
@@ -849,11 +837,10 @@ async fn dispatch_remote(http: &reqwest::Client, base_url: &str, line: &str) -> 
             let args = params.get("arguments").cloned().unwrap_or(json!({}));
             remote_tool_call(http, base_url, name, &args).await
         }
-        "resources/list" => {
-            Ok(resources_list())
-        }
+        "resources/list" => Ok(resources_list()),
         "resources/read" => {
-            let uri = req.get("params")
+            let uri = req
+                .get("params")
                 .and_then(|p| p.get("uri"))
                 .and_then(|u| u.as_str())
                 .unwrap_or("");
@@ -966,10 +953,16 @@ fn resources_list() -> Value {
     })
 }
 
-async fn remote_tool_call(http: &reqwest::Client, base_url: &str, name: &str, args: &Value) -> Result<Value> {
+async fn remote_tool_call(
+    http: &reqwest::Client,
+    base_url: &str,
+    name: &str,
+    args: &Value,
+) -> Result<Value> {
     match name {
         "cortex_store" => {
-            let resp: Value = http.post(format!("{}/nodes", base_url))
+            let resp: Value = http
+                .post(format!("{}/nodes", base_url))
                 .json(&json!({
                     "kind": args.get("kind").and_then(|v| v.as_str()).unwrap_or("fact"),
                     "title": args.get("title").and_then(|v| v.as_str()).unwrap_or(""),
@@ -978,7 +971,10 @@ async fn remote_tool_call(http: &reqwest::Client, base_url: &str, name: &str, ar
                     "importance": args.get("importance"),
                     "source_agent": "mcp",
                 }))
-                .send().await?.json().await?;
+                .send()
+                .await?
+                .json()
+                .await?;
             let data = &resp["data"];
             let title = data["title"].as_str().unwrap_or("");
             let id = data["id"].as_str().unwrap_or("");
@@ -989,8 +985,17 @@ async fn remote_tool_call(http: &reqwest::Client, base_url: &str, name: &str, ar
         "cortex_search" => {
             let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
             let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(10);
-            let resp: Value = http.get(format!("{}/search?q={}&limit={}", base_url, urlencoding::encode(query), limit))
-                .send().await?.json().await?;
+            let resp: Value = http
+                .get(format!(
+                    "{}/search?q={}&limit={}",
+                    base_url,
+                    urlencoding::encode(query),
+                    limit
+                ))
+                .send()
+                .await?
+                .json()
+                .await?;
             Ok(json!({
                 "content": [{ "type": "text", "text": serde_json::to_string_pretty(&resp["data"])? }]
             }))
@@ -998,18 +1003,44 @@ async fn remote_tool_call(http: &reqwest::Client, base_url: &str, name: &str, ar
         "cortex_recall" => {
             let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
             let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(10);
-            let resp: Value = http.get(format!("{}/search/hybrid?q={}&limit={}", base_url, urlencoding::encode(query), limit))
-                .send().await?.json().await?;
+            let resp: Value = http
+                .get(format!(
+                    "{}/search/hybrid?q={}&limit={}",
+                    base_url,
+                    urlencoding::encode(query),
+                    limit
+                ))
+                .send()
+                .await?
+                .json()
+                .await?;
             Ok(json!({
                 "content": [{ "type": "text", "text": serde_json::to_string_pretty(&resp["data"])? }]
             }))
         }
         "cortex_briefing" => {
-            let agent_id = args.get("agent_id").and_then(|v| v.as_str()).unwrap_or("default");
-            let compact = args.get("compact").and_then(|v| v.as_bool()).unwrap_or(false);
-            let resp: Value = http.get(format!("{}/briefing/{}?compact={}", base_url, urlencoding::encode(agent_id), compact))
-                .send().await?.json().await?;
-            let rendered = resp["data"]["rendered"].as_str().unwrap_or("No briefing available");
+            let agent_id = args
+                .get("agent_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("default");
+            let compact = args
+                .get("compact")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let resp: Value = http
+                .get(format!(
+                    "{}/briefing/{}?compact={}",
+                    base_url,
+                    urlencoding::encode(agent_id),
+                    compact
+                ))
+                .send()
+                .await?
+                .json()
+                .await?;
+            let rendered = resp["data"]["rendered"]
+                .as_str()
+                .unwrap_or("No briefing available");
             Ok(json!({
                 "content": [{ "type": "text", "text": rendered }]
             }))
@@ -1017,9 +1048,19 @@ async fn remote_tool_call(http: &reqwest::Client, base_url: &str, name: &str, ar
         "cortex_traverse" => {
             let node_id = args.get("node_id").and_then(|v| v.as_str()).unwrap_or("");
             let depth = args.get("depth").and_then(|v| v.as_u64()).unwrap_or(2);
-            let direction = args.get("direction").and_then(|v| v.as_str()).unwrap_or("both");
-            let resp: Value = http.get(format!("{}/nodes/{}/neighbors?depth={}&direction={}", base_url, node_id, depth, direction))
-                .send().await?.json().await?;
+            let direction = args
+                .get("direction")
+                .and_then(|v| v.as_str())
+                .unwrap_or("both");
+            let resp: Value = http
+                .get(format!(
+                    "{}/nodes/{}/neighbors?depth={}&direction={}",
+                    base_url, node_id, depth, direction
+                ))
+                .send()
+                .await?
+                .json()
+                .await?;
             Ok(json!({
                 "content": [{ "type": "text", "text": serde_json::to_string_pretty(&resp["data"])? }]
             }))
@@ -1027,10 +1068,17 @@ async fn remote_tool_call(http: &reqwest::Client, base_url: &str, name: &str, ar
         "cortex_relate" => {
             let from_id = args.get("from_id").and_then(|v| v.as_str()).unwrap_or("");
             let to_id = args.get("to_id").and_then(|v| v.as_str()).unwrap_or("");
-            let relation = args.get("relation").and_then(|v| v.as_str()).unwrap_or("relates-to");
-            let resp: Value = http.post(format!("{}/edges", base_url))
+            let relation = args
+                .get("relation")
+                .and_then(|v| v.as_str())
+                .unwrap_or("relates-to");
+            let resp: Value = http
+                .post(format!("{}/edges", base_url))
                 .json(&json!({ "from_id": from_id, "to_id": to_id, "relation": relation }))
-                .send().await?.json().await?;
+                .send()
+                .await?
+                .json()
+                .await?;
             let id = resp["data"]["id"].as_str().unwrap_or("");
             Ok(json!({
                 "content": [{ "type": "text", "text": format!("Related: {} -> [{}] -> {} (edge: {})", from_id, relation, to_id, id) }]
@@ -1042,14 +1090,22 @@ async fn remote_tool_call(http: &reqwest::Client, base_url: &str, name: &str, ar
 
 async fn remote_resource_read(http: &reqwest::Client, base_url: &str, uri: &str) -> Result<Value> {
     if uri == "cortex://stats" {
-        let resp: Value = http.get(format!("{}/stats", base_url))
-            .send().await?.json().await?;
+        let resp: Value = http
+            .get(format!("{}/stats", base_url))
+            .send()
+            .await?
+            .json()
+            .await?;
         Ok(json!({
             "contents": [{ "uri": uri, "mimeType": "application/json", "text": serde_json::to_string_pretty(&resp["data"])? }]
         }))
     } else if let Some(id) = uri.strip_prefix("cortex://node/") {
-        let resp: Value = http.get(format!("{}/nodes/{}", base_url, id))
-            .send().await?.json().await?;
+        let resp: Value = http
+            .get(format!("{}/nodes/{}", base_url, id))
+            .send()
+            .await?
+            .json()
+            .await?;
         Ok(json!({
             "contents": [{ "uri": uri, "mimeType": "application/json", "text": serde_json::to_string_pretty(&resp["data"])? }]
         }))
@@ -1057,7 +1113,6 @@ async fn remote_resource_read(http: &reqwest::Client, base_url: &str, uri: &str)
         Err(anyhow::anyhow!("Unknown resource: {}", uri))
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -1084,10 +1139,7 @@ mod tests {
         let msg = r#"{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}"#;
         let resp = dispatch(&cortex, msg).unwrap();
         let tools = resp["result"]["tools"].as_array().unwrap();
-        let names: Vec<&str> = tools
-            .iter()
-            .map(|t| t["name"].as_str().unwrap())
-            .collect();
+        let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
         assert!(names.contains(&"cortex_store"));
         assert!(names.contains(&"cortex_search"));
         assert!(names.contains(&"cortex_recall"));

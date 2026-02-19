@@ -128,9 +128,7 @@ impl<S: Storage> TemporalQueries for TemporalQueriesImpl<S> {
         to: DateTime<Utc>,
         kind_filter: Option<Vec<NodeKind>>,
     ) -> Result<Vec<Node>> {
-        let mut filter = NodeFilter::new()
-            .created_after(from)
-            .created_before(to);
+        let mut filter = NodeFilter::new().created_after(from).created_before(to);
 
         if let Some(kinds) = kind_filter {
             filter = filter.with_kinds(kinds);

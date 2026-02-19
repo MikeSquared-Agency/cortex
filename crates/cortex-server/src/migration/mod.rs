@@ -22,9 +22,8 @@ pub fn migrate_v1_to_v2(storage: &mut RedbStorage) -> anyhow::Result<()> {
     let backup_path = db_path.with_extension("redb.v1.bak");
 
     // Backup before touching anything
-    std::fs::copy(&db_path, &backup_path).map_err(|e| {
-        anyhow::anyhow!("Failed to backup database to {:?}: {}", backup_path, e)
-    })?;
+    std::fs::copy(&db_path, &backup_path)
+        .map_err(|e| anyhow::anyhow!("Failed to backup database to {:?}: {}", backup_path, e))?;
     tracing::info!("Database backed up to {:?}", backup_path);
 
     // Attempt to read all nodes — success means DB is already v2 format
@@ -39,10 +38,7 @@ pub fn migrate_v1_to_v2(storage: &mut RedbStorage) -> anyhow::Result<()> {
             )
         })?;
 
-    tracing::info!(
-        "Migration v1 → v2 complete: {} nodes verified",
-        nodes.len()
-    );
+    tracing::info!("Migration v1 → v2 complete: {} nodes verified", nodes.len());
 
     Ok(())
 }

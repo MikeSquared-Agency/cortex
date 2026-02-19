@@ -413,9 +413,30 @@ fn test_find_cycles() {
     storage.put_node(&b).unwrap();
     storage.put_node(&c).unwrap();
 
-    storage.put_edge(&create_test_edge(a.id, b.id, Relation::new("related_to").unwrap(), 1.0)).unwrap();
-    storage.put_edge(&create_test_edge(b.id, c.id, Relation::new("related_to").unwrap(), 1.0)).unwrap();
-    storage.put_edge(&create_test_edge(c.id, a.id, Relation::new("related_to").unwrap(), 1.0)).unwrap();
+    storage
+        .put_edge(&create_test_edge(
+            a.id,
+            b.id,
+            Relation::new("related_to").unwrap(),
+            1.0,
+        ))
+        .unwrap();
+    storage
+        .put_edge(&create_test_edge(
+            b.id,
+            c.id,
+            Relation::new("related_to").unwrap(),
+            1.0,
+        ))
+        .unwrap();
+    storage
+        .put_edge(&create_test_edge(
+            c.id,
+            a.id,
+            Relation::new("related_to").unwrap(),
+            1.0,
+        ))
+        .unwrap();
 
     let engine = GraphEngineImpl::new(storage.clone());
 
@@ -440,10 +461,24 @@ fn test_components() {
     storage.put_node(&d).unwrap();
 
     // Component 1: A - B
-    storage.put_edge(&create_test_edge(a.id, b.id, Relation::new("related_to").unwrap(), 1.0)).unwrap();
+    storage
+        .put_edge(&create_test_edge(
+            a.id,
+            b.id,
+            Relation::new("related_to").unwrap(),
+            1.0,
+        ))
+        .unwrap();
 
     // Component 2: C - D
-    storage.put_edge(&create_test_edge(c.id, d.id, Relation::new("related_to").unwrap(), 1.0)).unwrap();
+    storage
+        .put_edge(&create_test_edge(
+            c.id,
+            d.id,
+            Relation::new("related_to").unwrap(),
+            1.0,
+        ))
+        .unwrap();
 
     let engine = GraphEngineImpl::new(storage.clone());
 
@@ -460,10 +495,16 @@ fn test_subgraph_merge() {
     let id1 = Uuid::now_v7();
     let id2 = Uuid::now_v7();
 
-    sg1.nodes.insert(id1, create_test_node(NodeKind::new("fact").unwrap(), "Node 1"));
+    sg1.nodes.insert(
+        id1,
+        create_test_node(NodeKind::new("fact").unwrap(), "Node 1"),
+    );
     sg1.depths.insert(id1, 0);
 
-    sg2.nodes.insert(id2, create_test_node(NodeKind::new("fact").unwrap(), "Node 2"));
+    sg2.nodes.insert(
+        id2,
+        create_test_node(NodeKind::new("fact").unwrap(), "Node 2"),
+    );
     sg2.depths.insert(id2, 1);
 
     sg1.merge(sg2);
@@ -479,14 +520,16 @@ fn test_empty_graph_traversal() {
     let (storage, _temp) = create_test_storage();
     let engine = GraphEngineImpl::new(storage.clone());
 
-    let result = engine.traverse(TraversalRequest {
-        start: vec![Uuid::now_v7()], // non-existent node
-        max_depth: Some(3),
-        direction: TraversalDirection::Outgoing,
-        strategy: TraversalStrategy::Bfs,
-        include_start: true,
-        ..Default::default()
-    }).unwrap();
+    let result = engine
+        .traverse(TraversalRequest {
+            start: vec![Uuid::now_v7()], // non-existent node
+            max_depth: Some(3),
+            direction: TraversalDirection::Outgoing,
+            strategy: TraversalStrategy::Bfs,
+            include_start: true,
+            ..Default::default()
+        })
+        .unwrap();
 
     assert!(result.nodes.is_empty());
 }
@@ -499,14 +542,16 @@ fn test_single_node_no_edges() {
 
     let engine = GraphEngineImpl::new(storage.clone());
 
-    let result = engine.traverse(TraversalRequest {
-        start: vec![node.id],
-        max_depth: Some(3),
-        direction: TraversalDirection::Both,
-        strategy: TraversalStrategy::Bfs,
-        include_start: true,
-        ..Default::default()
-    }).unwrap();
+    let result = engine
+        .traverse(TraversalRequest {
+            start: vec![node.id],
+            max_depth: Some(3),
+            direction: TraversalDirection::Both,
+            strategy: TraversalStrategy::Bfs,
+            include_start: true,
+            ..Default::default()
+        })
+        .unwrap();
 
     assert_eq!(result.nodes.len(), 1);
     assert!(result.edges.is_empty());
@@ -519,14 +564,16 @@ fn test_depth_zero_returns_only_start() {
 
     let engine = GraphEngineImpl::new(storage.clone());
 
-    let result = engine.traverse(TraversalRequest {
-        start: vec![a.id],
-        max_depth: Some(0),
-        direction: TraversalDirection::Outgoing,
-        strategy: TraversalStrategy::Bfs,
-        include_start: true,
-        ..Default::default()
-    }).unwrap();
+    let result = engine
+        .traverse(TraversalRequest {
+            start: vec![a.id],
+            max_depth: Some(0),
+            direction: TraversalDirection::Outgoing,
+            strategy: TraversalStrategy::Bfs,
+            include_start: true,
+            ..Default::default()
+        })
+        .unwrap();
 
     assert_eq!(result.nodes.len(), 1);
     assert!(result.nodes.contains_key(&a.id));
@@ -539,14 +586,16 @@ fn test_multiple_start_nodes() {
 
     let engine = GraphEngineImpl::new(storage.clone());
 
-    let result = engine.traverse(TraversalRequest {
-        start: vec![a.id, c.id],
-        max_depth: Some(1),
-        direction: TraversalDirection::Both,
-        strategy: TraversalStrategy::Bfs,
-        include_start: true,
-        ..Default::default()
-    }).unwrap();
+    let result = engine
+        .traverse(TraversalRequest {
+            start: vec![a.id, c.id],
+            max_depth: Some(1),
+            direction: TraversalDirection::Both,
+            strategy: TraversalStrategy::Bfs,
+            include_start: true,
+            ..Default::default()
+        })
+        .unwrap();
 
     // Should include both starts and their neighbors
     assert!(result.nodes.contains_key(&a.id));
@@ -561,21 +610,29 @@ fn test_edge_post_pass_correctness() {
 
     let engine = GraphEngineImpl::new(storage.clone());
 
-    let result = engine.traverse(TraversalRequest {
-        start: vec![a.id],
-        max_depth: Some(1),
-        direction: TraversalDirection::Outgoing,
-        strategy: TraversalStrategy::Bfs,
-        include_start: true,
-        ..Default::default()
-    }).unwrap();
+    let result = engine
+        .traverse(TraversalRequest {
+            start: vec![a.id],
+            max_depth: Some(1),
+            direction: TraversalDirection::Outgoing,
+            strategy: TraversalStrategy::Bfs,
+            include_start: true,
+            ..Default::default()
+        })
+        .unwrap();
 
     // Every edge in the result should have both endpoints in the node set
     for edge in &result.edges {
-        assert!(result.nodes.contains_key(&edge.from),
-            "Edge from {} not in result nodes", edge.from);
-        assert!(result.nodes.contains_key(&edge.to),
-            "Edge to {} not in result nodes", edge.to);
+        assert!(
+            result.nodes.contains_key(&edge.from),
+            "Edge from {} not in result nodes",
+            edge.from
+        );
+        assert!(
+            result.nodes.contains_key(&edge.to),
+            "Edge to {} not in result nodes",
+            edge.to
+        );
     }
 }
 
@@ -589,19 +646,35 @@ fn test_bidirectional_traversal_no_duplicates() {
     storage.put_node(&b).unwrap();
 
     // Edge in both directions
-    storage.put_edge(&create_test_edge(a.id, b.id, Relation::new("related_to").unwrap(), 1.0)).unwrap();
-    storage.put_edge(&create_test_edge(b.id, a.id, Relation::new("related_to").unwrap(), 1.0)).unwrap();
+    storage
+        .put_edge(&create_test_edge(
+            a.id,
+            b.id,
+            Relation::new("related_to").unwrap(),
+            1.0,
+        ))
+        .unwrap();
+    storage
+        .put_edge(&create_test_edge(
+            b.id,
+            a.id,
+            Relation::new("related_to").unwrap(),
+            1.0,
+        ))
+        .unwrap();
 
     let engine = GraphEngineImpl::new(storage.clone());
 
-    let result = engine.traverse(TraversalRequest {
-        start: vec![a.id],
-        max_depth: Some(3),
-        direction: TraversalDirection::Both,
-        strategy: TraversalStrategy::Bfs,
-        include_start: true,
-        ..Default::default()
-    }).unwrap();
+    let result = engine
+        .traverse(TraversalRequest {
+            start: vec![a.id],
+            max_depth: Some(3),
+            direction: TraversalDirection::Both,
+            strategy: TraversalStrategy::Bfs,
+            include_start: true,
+            ..Default::default()
+        })
+        .unwrap();
 
     // Should not visit nodes more than once
     assert_eq!(result.nodes.len(), 2);
@@ -626,23 +699,53 @@ fn test_weighted_traversal_prefers_heavy_edges() {
     storage.put_node(&heavy_child).unwrap();
     storage.put_node(&light_child).unwrap();
 
-    storage.put_edge(&create_test_edge(root.id, heavy.id, Relation::new("led_to").unwrap(), 0.99)).unwrap();
-    storage.put_edge(&create_test_edge(root.id, light.id, Relation::new("led_to").unwrap(), 0.01)).unwrap();
-    storage.put_edge(&create_test_edge(heavy.id, heavy_child.id, Relation::new("led_to").unwrap(), 0.99)).unwrap();
-    storage.put_edge(&create_test_edge(light.id, light_child.id, Relation::new("led_to").unwrap(), 0.01)).unwrap();
+    storage
+        .put_edge(&create_test_edge(
+            root.id,
+            heavy.id,
+            Relation::new("led_to").unwrap(),
+            0.99,
+        ))
+        .unwrap();
+    storage
+        .put_edge(&create_test_edge(
+            root.id,
+            light.id,
+            Relation::new("led_to").unwrap(),
+            0.01,
+        ))
+        .unwrap();
+    storage
+        .put_edge(&create_test_edge(
+            heavy.id,
+            heavy_child.id,
+            Relation::new("led_to").unwrap(),
+            0.99,
+        ))
+        .unwrap();
+    storage
+        .put_edge(&create_test_edge(
+            light.id,
+            light_child.id,
+            Relation::new("led_to").unwrap(),
+            0.01,
+        ))
+        .unwrap();
 
     let engine = GraphEngineImpl::new(storage.clone());
 
     // Limit to 3: root + 2 others. Weighted should explore heavy branch first.
-    let result = engine.traverse(TraversalRequest {
-        start: vec![root.id],
-        max_depth: Some(2),
-        direction: TraversalDirection::Outgoing,
-        strategy: TraversalStrategy::Weighted,
-        limit: Some(3),
-        include_start: true,
-        ..Default::default()
-    }).unwrap();
+    let result = engine
+        .traverse(TraversalRequest {
+            start: vec![root.id],
+            max_depth: Some(2),
+            direction: TraversalDirection::Outgoing,
+            strategy: TraversalStrategy::Weighted,
+            limit: Some(3),
+            include_start: true,
+            ..Default::default()
+        })
+        .unwrap();
 
     assert_eq!(result.nodes.len(), 3);
     assert!(result.nodes.contains_key(&root.id));
@@ -663,21 +766,44 @@ fn test_path_with_relation_filter() {
     storage.put_node(&c).unwrap();
 
     // Direct path A->C via LedTo
-    storage.put_edge(&create_test_edge(a.id, c.id, Relation::new("led_to").unwrap(), 1.0)).unwrap();
+    storage
+        .put_edge(&create_test_edge(
+            a.id,
+            c.id,
+            Relation::new("led_to").unwrap(),
+            1.0,
+        ))
+        .unwrap();
     // Indirect path A->B->C via RelatedTo
-    storage.put_edge(&create_test_edge(a.id, b.id, Relation::new("related_to").unwrap(), 1.0)).unwrap();
-    storage.put_edge(&create_test_edge(b.id, c.id, Relation::new("related_to").unwrap(), 1.0)).unwrap();
+    storage
+        .put_edge(&create_test_edge(
+            a.id,
+            b.id,
+            Relation::new("related_to").unwrap(),
+            1.0,
+        ))
+        .unwrap();
+    storage
+        .put_edge(&create_test_edge(
+            b.id,
+            c.id,
+            Relation::new("related_to").unwrap(),
+            1.0,
+        ))
+        .unwrap();
 
     let engine = GraphEngineImpl::new(storage.clone());
 
     // Only follow RelatedTo — should find A->B->C, not A->C
-    let result = engine.find_paths(PathRequest {
-        from: a.id,
-        to: c.id,
-        relation_filter: Some(vec![Relation::new("related_to").unwrap()]),
-        max_paths: 1,
-        ..Default::default()
-    }).unwrap();
+    let result = engine
+        .find_paths(PathRequest {
+            from: a.id,
+            to: c.id,
+            relation_filter: Some(vec![Relation::new("related_to").unwrap()]),
+            max_paths: 1,
+            ..Default::default()
+        })
+        .unwrap();
 
     assert_eq!(result.paths.len(), 1);
     assert_eq!(result.paths[0].length, 2); // A->B->C = 2 edges

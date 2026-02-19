@@ -1,6 +1,6 @@
 use crate::error::{CortexError, Result};
 use crate::types::{Embedding, Node};
-use fastembed::{InitOptions, TextEmbedding as FastEmbedModel, EmbeddingModel};
+use fastembed::{EmbeddingModel, InitOptions, TextEmbedding as FastEmbedModel};
 
 /// Service for generating text embeddings
 pub trait EmbeddingService: Send + Sync {
@@ -34,8 +34,9 @@ impl FastEmbedService {
     pub fn with_model(model: EmbeddingModel) -> Result<Self> {
         let init_options = InitOptions::new(model.clone());
 
-        let fastembed_model = FastEmbedModel::try_new(init_options)
-            .map_err(|e| CortexError::Validation(format!("Failed to initialize FastEmbed: {}", e)))?;
+        let fastembed_model = FastEmbedModel::try_new(init_options).map_err(|e| {
+            CortexError::Validation(format!("Failed to initialize FastEmbed: {}", e))
+        })?;
 
         let model_name = format!("{:?}", model);
         // Determine dimension from model
@@ -58,7 +59,8 @@ impl FastEmbedService {
 
 impl EmbeddingService for FastEmbedService {
     fn embed(&self, text: &str) -> Result<Embedding> {
-        let embeddings = self.model
+        let embeddings = self
+            .model
             .embed(vec![text.to_string()], None)
             .map_err(|e| CortexError::Validation(format!("Embedding failed: {}", e)))?;
 
@@ -69,7 +71,8 @@ impl EmbeddingService for FastEmbedService {
     }
 
     fn embed_batch(&self, texts: &[String]) -> Result<Vec<Embedding>> {
-        let embeddings = self.model
+        let embeddings = self
+            .model
             .embed(texts.to_vec(), None)
             .map_err(|e| CortexError::Validation(format!("Batch embedding failed: {}", e)))?;
 
@@ -192,7 +195,11 @@ mod tests {
         let emb2 = service.embed(text2).unwrap();
 
         let similarity = cosine_similarity(&emb1, &emb2);
-        assert!(similarity > 0.7, "Similar texts should have high similarity: {}", similarity);
+        assert!(
+            similarity > 0.7,
+            "Similar texts should have high similarity: {}",
+            similarity
+        );
     }
 
     fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {

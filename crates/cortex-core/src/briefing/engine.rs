@@ -1,6 +1,6 @@
-use super::{Briefing, BriefingSection};
 use super::cache::BriefingCache;
 use super::renderer::{BriefingRenderer, CompactRenderer, MarkdownRenderer};
+use super::{Briefing, BriefingSection};
 use crate::error::Result;
 use crate::graph::{GraphEngine, TraversalDirection, TraversalRequest};
 use crate::storage::{NodeFilter, Storage};
@@ -147,19 +147,26 @@ where
             // No agent node — fall back to global queries by kind
             let global_patterns = self.generate_global_by_kind("pattern", "Patterns", &seen_ids)?;
             if !global_patterns.nodes.is_empty() {
-                for n in &global_patterns.nodes { seen_ids.insert(n.id); }
+                for n in &global_patterns.nodes {
+                    seen_ids.insert(n.id);
+                }
                 sections.push(global_patterns);
             }
 
             let global_goals = self.generate_global_by_kind("goal", "Goals", &seen_ids)?;
             if !global_goals.nodes.is_empty() {
-                for n in &global_goals.nodes { seen_ids.insert(n.id); }
+                for n in &global_goals.nodes {
+                    seen_ids.insert(n.id);
+                }
                 sections.push(global_goals);
             }
 
-            let global_decisions = self.generate_global_by_kind("decision", "Key Decisions", &seen_ids)?;
+            let global_decisions =
+                self.generate_global_by_kind("decision", "Key Decisions", &seen_ids)?;
             if !global_decisions.nodes.is_empty() {
-                for n in &global_decisions.nodes { seen_ids.insert(n.id); }
+                for n in &global_decisions.nodes {
+                    seen_ids.insert(n.id);
+                }
                 sections.push(global_decisions);
             }
         }
@@ -301,7 +308,11 @@ where
         )?;
 
         for node in &all_agents {
-            if node.data.title.to_lowercase().contains(&agent_id.to_lowercase())
+            if node
+                .data
+                .title
+                .to_lowercase()
+                .contains(&agent_id.to_lowercase())
                 || node.source.agent == agent_id
             {
                 return Ok(Some(node.id));
@@ -325,9 +336,11 @@ where
             }
 
             // Preferences/Facts connected via AppliesTo (either direction)
-            let neighbors =
-                self.graph
-                    .neighbors(aid, TraversalDirection::Both, Some(vec![Relation::new("applies_to").unwrap()]))?;
+            let neighbors = self.graph.neighbors(
+                aid,
+                TraversalDirection::Both,
+                Some(vec![Relation::new("applies_to").unwrap()]),
+            )?;
 
             let pref_nodes: Vec<Node> = neighbors
                 .into_iter()
@@ -349,7 +362,10 @@ where
             let fallback = self.storage.list_nodes(
                 NodeFilter::new()
                     .with_source_agent(agent_id.to_string())
-                    .with_kinds(vec![NodeKind::new("agent").unwrap(), NodeKind::new("preference").unwrap()])
+                    .with_kinds(vec![
+                        NodeKind::new("agent").unwrap(),
+                        NodeKind::new("preference").unwrap(),
+                    ])
                     .with_min_importance(self.config.min_importance)
                     .with_limit(self.config.max_items_per_section * 2),
             )?;
@@ -417,8 +433,11 @@ where
         // so the vector component searches for genuinely relevant content.
         let query_text: String = {
             let mut by_importance = recent.clone();
-            by_importance
-                .sort_by(|a, b| b.importance.partial_cmp(&a.importance).unwrap_or(std::cmp::Ordering::Equal));
+            by_importance.sort_by(|a, b| {
+                b.importance
+                    .partial_cmp(&a.importance)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
             by_importance
                 .iter()
                 .take(3)
@@ -475,7 +494,10 @@ where
             start: vec![agent_node_id],
             max_depth: Some(2),
             direction: TraversalDirection::Both,
-            relation_filter: Some(vec![Relation::new("applies_to").unwrap(), Relation::new("instance_of").unwrap()]),
+            relation_filter: Some(vec![
+                Relation::new("applies_to").unwrap(),
+                Relation::new("instance_of").unwrap(),
+            ]),
             kind_filter: Some(vec![NodeKind::new("pattern").unwrap()]),
             ..Default::default()
         })?;
@@ -550,9 +572,7 @@ where
             .nodes
             .into_values()
             .filter(|n| {
-                n.id != agent_node_id
-                    && !seen.contains(&n.id)
-                    && contradicting_ids.contains(&n.id)
+                n.id != agent_node_id && !seen.contains(&n.id) && contradicting_ids.contains(&n.id)
             })
             .collect();
 
@@ -597,10 +617,7 @@ where
             )?;
         }
 
-        let candidates: Vec<Node> = raw
-            .into_iter()
-            .filter(|n| !seen.contains(&n.id))
-            .collect();
+        let candidates: Vec<Node> = raw.into_iter().filter(|n| !seen.contains(&n.id)).collect();
 
         let mut nodes = self.rank(candidates);
         nodes.truncate(self.config.max_items_per_section);
@@ -639,7 +656,6 @@ where
             nodes,
         })
     }
-
 }
 #[cfg(test)]
 mod tests {
@@ -787,7 +803,11 @@ mod tests {
         storage.put_node(&agent).unwrap();
         storage.put_node(&pref).unwrap();
         storage
-            .put_edge(&manual_edge(pref.id, agent.id, Relation::new("applies_to").unwrap()))
+            .put_edge(&manual_edge(
+                pref.id,
+                agent.id,
+                Relation::new("applies_to").unwrap(),
+            ))
             .unwrap();
 
         let (engine, _) = make_engine(storage);
@@ -800,7 +820,10 @@ mod tests {
             .expect("identity section missing");
 
         assert!(
-            section.nodes.iter().any(|n| n.kind == NodeKind::new("preference").unwrap()),
+            section
+                .nodes
+                .iter()
+                .any(|n| n.kind == NodeKind::new("preference").unwrap()),
             "Preference node not found in identity section"
         );
     }
@@ -828,11 +851,19 @@ mod tests {
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
         let agent = make_node(NodeKind::new("agent").unwrap(), "kai", "kai");
-        let pattern = make_node(NodeKind::new("pattern").unwrap(), "Recurring pattern", "kai");
+        let pattern = make_node(
+            NodeKind::new("pattern").unwrap(),
+            "Recurring pattern",
+            "kai",
+        );
         storage.put_node(&agent).unwrap();
         storage.put_node(&pattern).unwrap();
         storage
-            .put_edge(&manual_edge(pattern.id, agent.id, Relation::new("applies_to").unwrap()))
+            .put_edge(&manual_edge(
+                pattern.id,
+                agent.id,
+                Relation::new("applies_to").unwrap(),
+            ))
             .unwrap();
 
         let (engine, _) = make_engine(storage);
@@ -848,7 +879,10 @@ mod tests {
             !section.nodes.is_empty(),
             "Patterns section should not be empty"
         );
-        assert!(section.nodes.iter().any(|n| n.kind == NodeKind::new("pattern").unwrap()));
+        assert!(section
+            .nodes
+            .iter()
+            .any(|n| n.kind == NodeKind::new("pattern").unwrap()));
     }
 
     // Test 4: contradictions surface in unresolved section
@@ -866,10 +900,18 @@ mod tests {
 
         // Agent knows about fact1; fact1 contradicts fact2
         storage
-            .put_edge(&manual_edge(agent.id, fact1.id, Relation::new("informed_by").unwrap()))
+            .put_edge(&manual_edge(
+                agent.id,
+                fact1.id,
+                Relation::new("informed_by").unwrap(),
+            ))
             .unwrap();
         storage
-            .put_edge(&manual_edge(fact1.id, fact2.id, Relation::new("contradicts").unwrap()))
+            .put_edge(&manual_edge(
+                fact1.id,
+                fact2.id,
+                Relation::new("contradicts").unwrap(),
+            ))
             .unwrap();
 
         let (engine, _) = make_engine(storage);
@@ -897,10 +939,18 @@ mod tests {
         storage.put_node(&agent).unwrap();
 
         for i in 0..20 {
-            let pref = make_node(NodeKind::new("preference").unwrap(), &format!("Pref {}", i), "kai");
+            let pref = make_node(
+                NodeKind::new("preference").unwrap(),
+                &format!("Pref {}", i),
+                "kai",
+            );
             storage.put_node(&pref).unwrap();
             storage
-                .put_edge(&manual_edge(pref.id, agent.id, Relation::new("applies_to").unwrap()))
+                .put_edge(&manual_edge(
+                    pref.id,
+                    agent.id,
+                    Relation::new("applies_to").unwrap(),
+                ))
                 .unwrap();
         }
 
@@ -910,8 +960,7 @@ mod tests {
         };
         let graph = Arc::new(GraphEngineImpl::new(storage.clone()));
         let gv = Arc::new(AtomicU64::new(0));
-        let engine =
-            BriefingEngine::new(storage, graph, MockVectorIndex, MockEmbedder, gv, config);
+        let engine = BriefingEngine::new(storage, graph, MockVectorIndex, MockEmbedder, gv, config);
 
         let briefing = engine.generate("kai").unwrap();
 
@@ -935,10 +984,18 @@ mod tests {
         storage.put_node(&agent).unwrap();
 
         for i in 0..30 {
-            let pref = make_node(NodeKind::new("preference").unwrap(), &format!("Pref {}", i), "kai");
+            let pref = make_node(
+                NodeKind::new("preference").unwrap(),
+                &format!("Pref {}", i),
+                "kai",
+            );
             storage.put_node(&pref).unwrap();
             storage
-                .put_edge(&manual_edge(pref.id, agent.id, Relation::new("applies_to").unwrap()))
+                .put_edge(&manual_edge(
+                    pref.id,
+                    agent.id,
+                    Relation::new("applies_to").unwrap(),
+                ))
                 .unwrap();
         }
 
@@ -949,17 +1006,12 @@ mod tests {
         };
         let graph = Arc::new(GraphEngineImpl::new(storage.clone()));
         let gv = Arc::new(AtomicU64::new(0));
-        let engine =
-            BriefingEngine::new(storage, graph, MockVectorIndex, MockEmbedder, gv, config);
+        let engine = BriefingEngine::new(storage, graph, MockVectorIndex, MockEmbedder, gv, config);
 
         let briefing = engine.generate("kai").unwrap();
 
         let total: usize = briefing.sections.iter().map(|s| s.nodes.len()).sum();
-        assert!(
-            total <= 10,
-            "Total {} exceeds max_total_items 10",
-            total
-        );
+        assert!(total <= 10, "Total {} exceeds max_total_items 10", total);
     }
 
     // Test 7: renderer truncates at max_chars
@@ -974,7 +1026,11 @@ mod tests {
             nodes_consulted: 1,
             sections: vec![BriefingSection {
                 title: "Test".to_string(),
-                nodes: vec![make_node(NodeKind::new("fact").unwrap(), "A fact with a rather long title", "test")],
+                nodes: vec![make_node(
+                    NodeKind::new("fact").unwrap(),
+                    "A fact with a rather long title",
+                    "test",
+                )],
             }],
             cached: false,
         };
@@ -1057,7 +1113,11 @@ mod tests {
             nodes_consulted: 1,
             sections: vec![BriefingSection {
                 title: "Identity & Preferences".to_string(),
-                nodes: vec![make_node(NodeKind::new("agent").unwrap(), "Kai Agent", "kai")],
+                nodes: vec![make_node(
+                    NodeKind::new("agent").unwrap(),
+                    "Kai Agent",
+                    "kai",
+                )],
             }],
             cached: false,
         };
@@ -1085,7 +1145,13 @@ mod tests {
             sections: vec![BriefingSection {
                 title: "Section".to_string(),
                 nodes: (0..5)
-                    .map(|i| make_node(NodeKind::new("fact").unwrap(), &format!("Long fact title number {}", i), "kai"))
+                    .map(|i| {
+                        make_node(
+                            NodeKind::new("fact").unwrap(),
+                            &format!("Long fact title number {}", i),
+                            "kai",
+                        )
+                    })
                     .collect(),
             }],
             cached: false,
@@ -1110,7 +1176,11 @@ mod tests {
         storage.put_node(&agent).unwrap();
         storage.put_node(&goal).unwrap();
         storage
-            .put_edge(&manual_edge(agent.id, goal.id, Relation::new("informed_by").unwrap()))
+            .put_edge(&manual_edge(
+                agent.id,
+                goal.id,
+                Relation::new("informed_by").unwrap(),
+            ))
             .unwrap();
 
         let (engine, _) = make_engine(storage);
@@ -1122,7 +1192,10 @@ mod tests {
             .find(|s| s.title == "Goals")
             .expect("Goals section missing");
 
-        assert!(section.nodes.iter().any(|n| n.kind == NodeKind::new("goal").unwrap()));
+        assert!(section
+            .nodes
+            .iter()
+            .any(|n| n.kind == NodeKind::new("goal").unwrap()));
     }
 
     // Test 14: recent events section populates (or events appear in Active Context)
@@ -1143,7 +1216,9 @@ mod tests {
 
         let all_nodes: Vec<&Node> = briefing.sections.iter().flat_map(|s| &s.nodes).collect();
         assert!(
-            all_nodes.iter().any(|n| n.kind == NodeKind::new("event").unwrap()),
+            all_nodes
+                .iter()
+                .any(|n| n.kind == NodeKind::new("event").unwrap()),
             "Event node should appear in some section of the briefing"
         );
     }
@@ -1161,14 +1236,17 @@ mod tests {
 
         // Create 5 Events — Active Context will claim 2, Recent Events gets the rest
         for i in 0..5 {
-            let ev = make_node(NodeKind::new("event").unwrap(), &format!("Event {}", i), "kai");
+            let ev = make_node(
+                NodeKind::new("event").unwrap(),
+                &format!("Event {}", i),
+                "kai",
+            );
             storage.put_node(&ev).unwrap();
         }
 
         let graph = Arc::new(GraphEngineImpl::new(storage.clone()));
         let gv = Arc::new(AtomicU64::new(0));
-        let engine =
-            BriefingEngine::new(storage, graph, MockVectorIndex, MockEmbedder, gv, config);
+        let engine = BriefingEngine::new(storage, graph, MockVectorIndex, MockEmbedder, gv, config);
 
         let briefing = engine.generate("kai").unwrap();
 
@@ -1198,10 +1276,18 @@ mod tests {
         storage.put_node(&good_pref).unwrap();
         storage.put_node(&bad_pref).unwrap();
         storage
-            .put_edge(&manual_edge(good_pref.id, agent.id, Relation::new("applies_to").unwrap()))
+            .put_edge(&manual_edge(
+                good_pref.id,
+                agent.id,
+                Relation::new("applies_to").unwrap(),
+            ))
             .unwrap();
         storage
-            .put_edge(&manual_edge(bad_pref.id, agent.id, Relation::new("applies_to").unwrap()))
+            .put_edge(&manual_edge(
+                bad_pref.id,
+                agent.id,
+                Relation::new("applies_to").unwrap(),
+            ))
             .unwrap();
 
         let config = BriefingConfig {
@@ -1210,8 +1296,7 @@ mod tests {
         };
         let graph = Arc::new(GraphEngineImpl::new(storage.clone()));
         let gv = Arc::new(AtomicU64::new(0));
-        let engine =
-            BriefingEngine::new(storage, graph, MockVectorIndex, MockEmbedder, gv, config);
+        let engine = BriefingEngine::new(storage, graph, MockVectorIndex, MockEmbedder, gv, config);
 
         let briefing = engine.generate("kai").unwrap();
 
@@ -1237,11 +1322,19 @@ mod tests {
 
         // Create preferences with known importance values in non-sorted order
         for (i, importance) in [(0, 0.4f32), (1, 0.9f32), (2, 0.6f32)] {
-            let mut pref = make_node(NodeKind::new("preference").unwrap(), &format!("Pref {}", i), "kai");
+            let mut pref = make_node(
+                NodeKind::new("preference").unwrap(),
+                &format!("Pref {}", i),
+                "kai",
+            );
             pref.importance = importance;
             storage.put_node(&pref).unwrap();
             storage
-                .put_edge(&manual_edge(pref.id, agent.id, Relation::new("applies_to").unwrap()))
+                .put_edge(&manual_edge(
+                    pref.id,
+                    agent.id,
+                    Relation::new("applies_to").unwrap(),
+                ))
                 .unwrap();
         }
 
@@ -1340,7 +1433,11 @@ mod tests {
         storage.put_node(&agent).unwrap();
         storage.put_node(&pref).unwrap();
         storage
-            .put_edge(&manual_edge(pref.id, agent.id, Relation::new("applies_to").unwrap()))
+            .put_edge(&manual_edge(
+                pref.id,
+                agent.id,
+                Relation::new("applies_to").unwrap(),
+            ))
             .unwrap();
 
         let initial_agent_count = storage.get_node(agent.id).unwrap().unwrap().access_count;
