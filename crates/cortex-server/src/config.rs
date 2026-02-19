@@ -10,6 +10,7 @@ use std::time::Duration;
 
 /// Top-level config, parsed from cortex.toml
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct CortexConfig {
     #[serde(default)]
     pub server: ServerConfig,
@@ -36,6 +37,7 @@ pub struct CortexConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ServerConfig {
     pub grpc_addr: String,
     pub http_addr: String,
@@ -44,6 +46,7 @@ pub struct ServerConfig {
     pub nats_enabled: bool,
     pub max_message_size: usize,
 }
+
 
 impl Default for ServerConfig {
     fn default() -> Self {
@@ -59,6 +62,7 @@ impl Default for ServerConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct SchemaConfig {
     /// Registered node kinds. Defaults to the 8 built-in kinds.
     pub node_kinds: Vec<String>,
@@ -94,6 +98,7 @@ impl Default for SchemaConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct EmbeddingConfig {
     pub model: String,
 }
@@ -107,6 +112,7 @@ impl Default for EmbeddingConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AutoLinkerTomlConfig {
     pub enabled: bool,
     pub interval_seconds: u64,
@@ -130,6 +136,7 @@ impl Default for AutoLinkerTomlConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct BriefingTomlConfig {
     pub cache_ttl_seconds: u64,
     pub max_total_items: usize,
@@ -150,6 +157,7 @@ pub struct BriefingSectionConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct IngestConfig {
     pub nats: Option<NatsIngestConfig>,
     pub webhook: Option<WebhookIngestConfig>,
@@ -158,6 +166,7 @@ pub struct IngestConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct NatsIngestConfig {
     pub url: String,
     pub subjects: Vec<String>,
@@ -173,6 +182,7 @@ impl Default for NatsIngestConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct WebhookIngestConfig {
     pub enabled: bool,
     pub port: u16,
@@ -180,16 +190,19 @@ pub struct WebhookIngestConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct FileIngestConfig {
     pub watch_dir: PathBuf,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct StdinIngestConfig {
     pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct ObservabilityConfig {
     pub prometheus: bool,
     pub prometheus_port: u16,
@@ -198,6 +211,7 @@ pub struct ObservabilityConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct SecurityConfig {
     pub encryption: bool,
     // Key comes from CORTEX_ENCRYPTION_KEY env var, never stored in config
