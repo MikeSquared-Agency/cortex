@@ -7,8 +7,8 @@ use cortex_core::graph::GraphEngineImpl;
 use cortex_core::linker::{AutoLinker, AutoLinkerConfig};
 use cortex_core::storage::{RedbStorage, Storage};
 use cortex_core::types::*;
-use cortex_core::vector::{FastEmbedService, HnswIndex, SimilarityConfig};
-use std::sync::Arc;
+use cortex_core::vector::{EmbeddingService, FastEmbedService, HnswIndex, SimilarityConfig};
+use std::sync::{Arc, RwLock};
 use tempfile::TempDir;
 
 fn main() {
@@ -115,7 +115,7 @@ fn main() {
     println!("Initializing auto-linker...");
 
     let embedding_service = Arc::new(FastEmbedService::new().unwrap());
-    let vector_index = Arc::new(HnswIndex::new(embedding_service.dimension()));
+    let vector_index = Arc::new(RwLock::new(HnswIndex::new(embedding_service.dimension())));
     let graph_engine = Arc::new(GraphEngineImpl::new(storage.clone()));
 
     let config = AutoLinkerConfig::new()
@@ -149,7 +149,7 @@ fn main() {
     println!("✓ Cycle took {:?}\n", metrics.last_cycle_duration);
 
     // Show created edges
-    let stats = storage.get_stats().unwrap();
+    let stats = storage.stats().unwrap();
     println!("Graph statistics:");
     println!("  Nodes: {}", stats.node_count);
     println!("  Edges: {}", stats.edge_count);
@@ -157,7 +157,11 @@ fn main() {
 
     if stats.edge_count > 0 {
         println!("Sample edges created:");
-        let all_edges = storage.get_all_edges().unwrap();
+        // Collect edges by iterating over all nodes' outgoing edges
+        let all_nodes = storage.list_nodes(cortex_core::storage::NodeFilter::new()).unwrap();
+        let all_edges: Vec<_> = all_nodes.iter()
+            .flat_map(|n| storage.edges_from(n.id).unwrap_or_default())
+            .collect();
 
         for (i, edge) in all_edges.iter().take(5).enumerate() {
             let from = storage.get_node(edge.from).unwrap().unwrap();
@@ -183,6 +187,7 @@ fn main() {
                         format!("Auto-contradiction ({})", reason),
                     EdgeProvenance::AutoDedup { similarity } =>
                         format!("Auto-dedup ({:.2})", similarity),
+                    EdgeProvenance::Imported { source } => format!("Imported from {}", source),
                 }
             );
         }

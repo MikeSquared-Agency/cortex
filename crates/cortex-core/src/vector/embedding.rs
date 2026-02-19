@@ -91,6 +91,21 @@ impl Default for FastEmbedService {
     }
 }
 
+impl<E: EmbeddingService> EmbeddingService for std::sync::Arc<E> {
+    fn embed(&self, text: &str) -> Result<Embedding> {
+        (**self).embed(text)
+    }
+    fn embed_batch(&self, texts: &[String]) -> Result<Vec<Embedding>> {
+        (**self).embed_batch(texts)
+    }
+    fn dimension(&self) -> usize {
+        (**self).dimension()
+    }
+    fn model_name(&self) -> &str {
+        (**self).model_name()
+    }
+}
+
 /// Generate the embedding input text for a node
 pub fn embedding_input(node: &Node) -> String {
     let kind_str = match node.kind {

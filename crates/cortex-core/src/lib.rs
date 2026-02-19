@@ -13,8 +13,9 @@ pub use graph::{
     TraversalStrategy, PathRequest, PathResult, Path, TraversalBudget,
 };
 pub use vector::{
-    EmbeddingService, FastEmbedService, VectorIndex, HnswIndex, SimilarityResult,
-    VectorFilter, HybridQuery, HybridResult, HybridSearch, SimilarityConfig, embedding_input,
+    EmbeddingService, FastEmbedService, VectorIndex, HnswIndex, RwLockVectorIndex,
+    SimilarityResult, VectorFilter, HybridQuery, HybridResult, HybridSearch,
+    SimilarityConfig, embedding_input,
 };
 pub use linker::{
     AutoLinker, AutoLinkerConfig, AutoLinkerMetrics, DecayConfig, DecayEngine,

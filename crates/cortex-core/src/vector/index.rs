@@ -98,6 +98,61 @@ pub trait VectorIndex: Send + Sync {
         Self: Sized;
 }
 
+/// Wrapper that implements VectorIndex for Arc<RwLock<V>>.
+/// Allows using a shared, mutex-guarded index (e.g. from a gRPC service)
+/// with HybridSearch without requiring Clone on the underlying index.
+pub struct RwLockVectorIndex<V: VectorIndex>(pub std::sync::Arc<std::sync::RwLock<V>>);
+
+impl<V: VectorIndex> VectorIndex for RwLockVectorIndex<V> {
+    fn insert(&mut self, id: NodeId, embedding: &Embedding) -> Result<()> {
+        self.0.write().unwrap().insert(id, embedding)
+    }
+    fn remove(&mut self, id: NodeId) -> Result<()> {
+        self.0.write().unwrap().remove(id)
+    }
+    fn search(
+        &self,
+        query: &Embedding,
+        k: usize,
+        filter: Option<&VectorFilter>,
+    ) -> Result<Vec<SimilarityResult>> {
+        self.0.read().unwrap().search(query, k, filter)
+    }
+    fn search_threshold(
+        &self,
+        query: &Embedding,
+        threshold: f32,
+        filter: Option<&VectorFilter>,
+    ) -> Result<Vec<SimilarityResult>> {
+        self.0.read().unwrap().search_threshold(query, threshold, filter)
+    }
+    fn search_batch(
+        &self,
+        queries: &[(NodeId, Embedding)],
+        k: usize,
+        filter: Option<&VectorFilter>,
+    ) -> Result<HashMap<NodeId, Vec<SimilarityResult>>> {
+        self.0.read().unwrap().search_batch(queries, k, filter)
+    }
+    fn len(&self) -> usize {
+        self.0.read().unwrap().len()
+    }
+    fn rebuild(&mut self) -> Result<()> {
+        self.0.write().unwrap().rebuild()
+    }
+    fn save(&self, path: &Path) -> Result<()> {
+        self.0.read().unwrap().save(path)
+    }
+    fn load(_path: &Path) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        Err(CortexError::Validation(
+            "load() is not supported for RwLockVectorIndex".to_string(),
+        ))
+    }
+}
+
 /// Wrapper for embeddings to implement Point trait
 #[derive(Clone, Debug)]
 struct EmbeddingPoint(Vec<f32>);

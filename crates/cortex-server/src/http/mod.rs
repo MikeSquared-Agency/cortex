@@ -1,0 +1,83 @@
+mod routes;
+mod viz;
+
+pub use routes::create_router;
+pub use viz::GRAPH_VIZ_HTML;
+
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    Json,
+};
+use serde::Serialize;
+use std::sync::Arc;
+
+/// Shared application state
+#[derive(Clone)]
+pub struct AppState {
+    pub storage: Arc<cortex_core::RedbStorage>,
+    pub graph_engine: Arc<cortex_core::GraphEngineImpl<cortex_core::RedbStorage>>,
+    pub vector_index: Arc<std::sync::RwLock<cortex_core::HnswIndex>>,
+    pub embedding_service: Arc<cortex_core::FastEmbedService>,
+    pub auto_linker: Arc<std::sync::RwLock<
+        cortex_core::AutoLinker<
+            cortex_core::RedbStorage,
+            cortex_core::FastEmbedService,
+            cortex_core::HnswIndex,
+            cortex_core::GraphEngineImpl<cortex_core::RedbStorage>,
+        >,
+    >>,
+    pub start_time: std::time::Instant,
+}
+
+/// JSON response wrapper
+#[derive(Serialize)]
+pub struct JsonResponse<T> {
+    pub success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<T>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+impl<T: Serialize> JsonResponse<T> {
+    pub fn ok(data: T) -> Self {
+        Self {
+            success: true,
+            data: Some(data),
+            error: None,
+        }
+    }
+
+    pub fn err(msg: impl Into<String>) -> JsonResponse<()> {
+        JsonResponse {
+            success: false,
+            data: None,
+            error: Some(msg.into()),
+        }
+    }
+}
+
+/// Custom error type for HTTP handlers
+pub struct AppError(anyhow::Error);
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(JsonResponse::<()>::err(self.0.to_string())),
+        )
+            .into_response()
+    }
+}
+
+impl<E> From<E> for AppError
+where
+    E: Into<anyhow::Error>,
+{
+    fn from(err: E) -> Self {
+        Self(err.into())
+    }
+}
+
+pub type AppResult<T> = Result<T, AppError>;

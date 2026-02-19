@@ -5,8 +5,54 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[[bin]]
+name = "cortex-server"
+path = "src/main.rs"
+
 [dependencies]
-# Placeholder crate for Phase 5
-# Will contain gRPC server, HTTP debug endpoint, and NATS consumer
+# Local crates
 cortex-core = { path = "../cortex-core" }
 cortex-proto = { path = "../cortex-proto" }
+
+# gRPC/HTTP
+tonic.workspace = true
+prost.workspace = true
+axum = "0.7"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+hyper = "1.5"
+
+# Async runtime
+tokio.workspace = true
+
+# NATS
+async-nats = "0.38"
+futures = "0.3"
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+
+# Logging/Tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+log.workspace = true
+
+# Error handling
+anyhow = "1.0"
+thiserror.workspace = true
+
+# Time
+chrono.workspace = true
+
+# Config
+clap = { version = "4.5", features = ["derive", "env"] }
+
+# Database (for migration)
+reqwest = { version = "0.12", features = ["json"] }
+
+# Utilities
+uuid.workspace = true
+
+[dev-dependencies]
+tempfile = "3.14"

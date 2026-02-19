@@ -251,9 +251,13 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
             let result = dedup_scanner.scan()?;
             self.metrics.add_duplicates_found(result.duplicates.len() as u64);
 
-            // Execute dedup actions
+            // Execute dedup actions; skip if edge already exists (created by similarity rule)
             for pair in result.duplicates {
-                dedup_scanner.execute_action(&pair)?;
+                match dedup_scanner.execute_action(&pair) {
+                    Ok(()) => {}
+                    Err(crate::error::CortexError::DuplicateEdge { .. }) => continue,
+                    Err(e) => return Err(e),
+                }
             }
         }
 

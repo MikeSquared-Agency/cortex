@@ -323,6 +323,46 @@ impl<S: Storage + 'static> GraphEngine for GraphEngineImpl<S> {
     }
 }
 
+/// Blanket impl: Arc<G> forwards all GraphEngine calls to G.
+/// Allows using Arc<GraphEngineImpl<S>> with HybridSearch directly.
+impl<G: GraphEngine> GraphEngine for std::sync::Arc<G> {
+    fn traverse(&self, request: TraversalRequest) -> Result<Subgraph> {
+        (**self).traverse(request)
+    }
+    fn find_paths(&self, request: PathRequest) -> Result<PathResult> {
+        (**self).find_paths(request)
+    }
+    fn neighbors(
+        &self,
+        id: NodeId,
+        direction: TraversalDirection,
+        relation_filter: Option<Vec<Relation>>,
+    ) -> Result<Vec<(Node, Edge)>> {
+        (**self).neighbors(id, direction, relation_filter)
+    }
+    fn neighborhood(&self, id: NodeId, depth: u32) -> Result<Subgraph> {
+        (**self).neighborhood(id, depth)
+    }
+    fn reachable(&self, id: NodeId, direction: TraversalDirection) -> Result<Vec<NodeId>> {
+        (**self).reachable(id, direction)
+    }
+    fn roots(&self, relation: Relation) -> Result<Vec<Node>> {
+        (**self).roots(relation)
+    }
+    fn leaves(&self, relation: Relation) -> Result<Vec<Node>> {
+        (**self).leaves(relation)
+    }
+    fn find_cycles(&self) -> Result<Vec<Vec<NodeId>>> {
+        (**self).find_cycles()
+    }
+    fn components(&self) -> Result<Vec<Vec<NodeId>>> {
+        (**self).components()
+    }
+    fn most_connected(&self, limit: usize) -> Result<Vec<(Node, usize)>> {
+        (**self).most_connected(limit)
+    }
+}
+
 impl<S: Storage> GraphEngineImpl<S> {
     /// Helper for cycle detection using DFS
     fn find_cycles_dfs(
