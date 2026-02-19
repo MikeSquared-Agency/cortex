@@ -1,0 +1,17 @@
+[package]
+name = "cortex-client"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Rust client for the Cortex graph memory engine"
+repository = "https://github.com/MikeSquared-Agency/cortex"
+
+[dependencies]
+cortex-proto = { path = "../cortex-proto" }
+tonic.workspace = true
+tokio.workspace = true
+anyhow.workspace = true
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }

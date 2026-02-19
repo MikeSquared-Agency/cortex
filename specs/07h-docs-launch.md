@@ -34,7 +34,6 @@ docs/
 │   ├── langchain.md           # LangChain integration
 │   ├── crewai.md              # CrewAI integration
 │   ├── openclaw.md            # OpenClaw integration
-│   ├── obsidian-import.md     # Import your Obsidian vault
 │   ├── multi-agent.md         # Shared memory for agent teams
 │   ├── production.md          # Running in production
 │   └── migration.md           # Migrating from other memory solutions
@@ -51,7 +50,6 @@ docs/
 │   ├── CONTRIBUTING.md        # How to contribute
 │   ├── development.md         # Dev setup, running tests
 │   ├── architecture.md        # Internal architecture for contributors
-│   └── plugins.md             # Writing plugins
 └── blog/
     └── why-we-built-cortex.md # Launch blog post
 ```
@@ -834,7 +832,7 @@ print(cx.briefing("my-agent"))
 ## What's Next
 
 Cortex is open source, MIT licensed, and ready for production.
-The graph visualiser, WASM plugins, and cloud offering are coming.
+The graph visualiser and cloud offering are coming. Import adapters (Obsidian, Notion) and a WASM plugin system are planned — see GitHub issues.
 
 **Try it:** `pip install cortex-memory`  
 **Docs:** https://docs.cortex.dev  

@@ -5,6 +5,7 @@ members = [
     "crates/cortex-proto",
     "crates/cortex-server",
     "crates/warren-adapter",
+    "crates/cortex-client",
 ]
 
 [workspace.package]
