@@ -762,6 +762,7 @@ dependencies = [
  "axum",
  "chrono",
  "clap",
+ "cortex-client",
  "cortex-core",
  "cortex-proto",
  "csv",

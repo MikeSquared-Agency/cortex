@@ -20,6 +20,7 @@ default = ["warren"]
 [dependencies]
 # Local crates
 cortex-core = { path = "../cortex-core" }
+cortex-client = { path = "../cortex-client" }
 cortex-proto = { path = "../cortex-proto" }
 warren-adapter = { path = "../warren-adapter", optional = true }
 

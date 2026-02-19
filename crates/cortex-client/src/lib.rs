@@ -28,9 +28,10 @@
 //! }
 //! ```
 use cortex_proto::cortex::v1::{
-    cortex_service_client::CortexServiceClient, BriefingRequest, CreateNodeRequest,
-    GetNodeRequest, HybridResultEntry, HybridSearchRequest, NodeResponse, SearchResponse,
-    SimilaritySearchRequest, SubgraphResponse, TraverseRequest,
+    cortex_service_client::CortexServiceClient, BriefingRequest, CreateEdgeRequest,
+    CreateNodeRequest, EdgeResponse, GetNodeRequest, HybridResultEntry, HybridSearchRequest,
+    NodeResponse, SearchResponse, SimilaritySearchRequest, StatsRequest, StatsResponse,
+    SubgraphResponse, TraverseRequest,
 };
 use tonic::transport::Channel;
 
@@ -143,4 +144,34 @@ impl CortexClient {
             .await?;
         Ok(resp.into_inner())
     }
+
+    /// Create an edge between two nodes. Returns the edge ID.
+    pub async fn create_edge(
+        &mut self,
+        from_id: &str,
+        to_id: &str,
+        relation: &str,
+    ) -> anyhow::Result<String> {
+        let resp = self
+            .inner
+            .create_edge(CreateEdgeRequest {
+                from_id: from_id.into(),
+                to_id: to_id.into(),
+                relation: relation.into(),
+                weight: 1.0,
+                ..Default::default()
+            })
+            .await?;
+        Ok(resp.into_inner().id)
+    }
+
+    /// Get graph statistics.
+    pub async fn stats(&mut self) -> anyhow::Result<StatsResponse> {
+        let resp = self
+            .inner
+            .stats(StatsRequest {})
+            .await?;
+        Ok(resp.into_inner())
+    }
+
 }
