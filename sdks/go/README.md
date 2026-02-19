@@ -5,7 +5,7 @@ Go client SDK for the [Cortex](https://github.com/MikeSquared-Agency/cortex) gra
 ## Installation
 
 ```bash
-go get github.com/MikeSquared-Agency/cortex-go
+go get github.com/MikeSquared-Agency/cortex/sdks/go
 ```
 
 ## Quick start
@@ -14,7 +14,7 @@ go get github.com/MikeSquared-Agency/cortex-go
 package main
 
 import (
-    cortex "github.com/MikeSquared-Agency/cortex-go"
+    cortex "github.com/MikeSquared-Agency/cortex/sdks/go"
     "context"
     "fmt"
 )

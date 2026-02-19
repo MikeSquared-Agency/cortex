@@ -25,7 +25,7 @@ mkdir -p "$OUT_DIR"
 echo "Generating from: $PROTO_FILE"
 echo "Output dir:      $OUT_DIR"
 
-GO_PKG="github.com/MikeSquared-Agency/cortex-go/proto"
+GO_PKG="github.com/MikeSquared-Agency/cortex/sdks/go/proto"
 
 protoc \
     -I"$PROTO_DIR" \

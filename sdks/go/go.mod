@@ -1,4 +1,4 @@
-module github.com/MikeSquared-Agency/cortex-go
+module github.com/MikeSquared-Agency/cortex/sdks/go
 
 go 1.21
 

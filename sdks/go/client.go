@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	pb "github.com/MikeSquared-Agency/cortex-go/proto"
+	pb "github.com/MikeSquared-Agency/cortex/sdks/go/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
