@@ -38,4 +38,3 @@ env_logger.workspace = true
 [[bench]]
 name = "storage"
 harness = false
-openssl = { workspace = true }

@@ -78,7 +78,3 @@ criterion = "0.5"
 
 
 
-# Force vendored OpenSSL for cross-compilation
-[workspace.dependencies.openssl]
-version = "0.10"
-features = ["vendored"]
