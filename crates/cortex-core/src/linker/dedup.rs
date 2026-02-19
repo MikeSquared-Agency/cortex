@@ -195,7 +195,7 @@ impl<S: Storage, V: VectorIndex, G: GraphEngine> DedupScanner<S, V, G> {
                 let edge = Edge::new(
                     *newer,
                     *older,
-                    Relation::Supersedes,
+                    Relation::new("supersedes").unwrap(),
                     0.95,
                     EdgeProvenance::AutoDedup {
                         similarity: pair.similarity,
@@ -208,7 +208,7 @@ impl<S: Storage, V: VectorIndex, G: GraphEngine> DedupScanner<S, V, G> {
                 let edge = Edge::new(
                     pair.node_a,
                     pair.node_b,
-                    Relation::RelatedTo,
+                    Relation::new("related_to").unwrap(),
                     pair.similarity,
                     EdgeProvenance::AutoDedup {
                         similarity: pair.similarity,
@@ -262,7 +262,7 @@ impl<S: Storage, V: VectorIndex, G: GraphEngine> DedupScanner<S, V, G> {
         let supersedes_edge = Edge::new(
             keep,
             retire,
-            Relation::Supersedes,
+            Relation::new("supersedes").unwrap(),
             0.95,
             EdgeProvenance::AutoDedup { similarity: 1.0 },
         );
@@ -321,7 +321,7 @@ mod tests {
 
         // Create near-duplicate nodes
         let node1 = Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Rust is fast".into(),
             "Rust is a fast systems programming language".into(),
             Source {
@@ -333,7 +333,7 @@ mod tests {
         );
 
         let node2 = Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Rust is fast".into(),
             "Rust is a fast systems language".into(),
             Source {
@@ -390,7 +390,7 @@ mod tests {
         let storage = Arc::new(RedbStorage::open(&db_path).unwrap());
 
         let node1 = Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Node 1".into(),
             "Body 1".into(),
             Source {
@@ -402,7 +402,7 @@ mod tests {
         );
 
         let mut node2 = Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Node 2".into(),
             "Body 2".into(),
             Source {
@@ -422,7 +422,7 @@ mod tests {
         let edge = Edge::new(
             node2.id,
             node1.id,
-            Relation::RelatedTo,
+            Relation::new("related_to").unwrap(),
             0.7,
             EdgeProvenance::Manual {
                 created_by: "test".into(),

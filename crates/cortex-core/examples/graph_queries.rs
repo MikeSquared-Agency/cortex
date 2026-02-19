@@ -18,7 +18,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create nodes representing a real decision-making scenario
     let problem = Node::new(
-        NodeKind::Observation,
+        NodeKind::new("observation").unwrap(),
         "High latency in API responses".to_string(),
         "Users reporting slow response times, particularly during peak hours. \
          Average latency increased from 50ms to 300ms over the past week."
@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let analysis = Node::new(
-        NodeKind::Fact,
+        NodeKind::new("fact").unwrap(),
         "Database queries not using indexes".to_string(),
         "Investigation revealed that recent schema changes removed critical indexes \
          on the users table, causing full table scans."
@@ -46,7 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let decision = Node::new(
-        NodeKind::Decision,
+        NodeKind::new("decision").unwrap(),
         "Add composite index on users table".to_string(),
         "Decision to add composite index on (created_at, status) columns. \
          Expected to reduce query time from 280ms to <20ms."
@@ -60,7 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let outcome = Node::new(
-        NodeKind::Observation,
+        NodeKind::new("observation").unwrap(),
         "Latency reduced to baseline".to_string(),
         "After index deployment, average latency dropped to 45ms. \
          P95 latency improved from 450ms to 65ms."
@@ -74,7 +74,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let pattern = Node::new(
-        NodeKind::Pattern,
+        NodeKind::new("pattern").unwrap(),
         "Schema changes require index review".to_string(),
         "Pattern identified: schema migrations that modify table structure should \
          always include an index impact analysis before deployment."
@@ -88,7 +88,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let goal = Node::new(
-        NodeKind::Goal,
+        NodeKind::new("goal").unwrap(),
         "Maintain API latency under 100ms".to_string(),
         "Ongoing goal to keep P95 API latency under 100ms for all endpoints."
             .to_string(),
@@ -110,7 +110,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Edge::new(
             problem.id,
             analysis.id,
-            Relation::LedTo,
+            Relation::new("led_to").unwrap(),
             0.9,
             EdgeProvenance::Manual {
                 created_by: "kai".to_string(),
@@ -119,7 +119,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Edge::new(
             analysis.id,
             decision.id,
-            Relation::InformedBy,
+            Relation::new("informed_by").unwrap(),
             0.95,
             EdgeProvenance::Manual {
                 created_by: "kai".to_string(),
@@ -128,7 +128,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Edge::new(
             decision.id,
             outcome.id,
-            Relation::LedTo,
+            Relation::new("led_to").unwrap(),
             0.85,
             EdgeProvenance::Manual {
                 created_by: "kai".to_string(),
@@ -137,7 +137,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Edge::new(
             outcome.id,
             pattern.id,
-            Relation::LedTo,
+            Relation::new("led_to").unwrap(),
             0.8,
             EdgeProvenance::Manual {
                 created_by: "kai".to_string(),
@@ -146,7 +146,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Edge::new(
             pattern.id,
             goal.id,
-            Relation::AppliesTo,
+            Relation::new("applies_to").unwrap(),
             0.7,
             EdgeProvenance::Manual {
                 created_by: "kai".to_string(),
@@ -155,7 +155,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Edge::new(
             decision.id,
             goal.id,
-            Relation::DependsOn,
+            Relation::new("depends_on").unwrap(),
             0.6,
             EdgeProvenance::AutoStructural {
                 rule: "decision-goal-link".to_string(),
@@ -219,7 +219,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         start: vec![problem.id],
         max_depth: Some(3),
         direction: TraversalDirection::Outgoing,
-        kind_filter: Some(vec![NodeKind::Decision, NodeKind::Fact]),
+        kind_filter: Some(vec![NodeKind::new("decision").unwrap(), NodeKind::new("fact").unwrap()]),
         include_start: false,
         ..Default::default()
     })?;
@@ -239,7 +239,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         start: vec![problem.id],
         max_depth: Some(5),
         direction: TraversalDirection::Outgoing,
-        relation_filter: Some(vec![Relation::LedTo]),
+        relation_filter: Some(vec![Relation::new("led_to").unwrap()]),
         include_start: true,
         ..Default::default()
     })?;
@@ -271,13 +271,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 8. Roots and Leaves
     println!("8. Roots and Leaves:");
-    let roots = engine.roots(Relation::LedTo)?;
+    let roots = engine.roots(Relation::new("led_to").unwrap())?;
     println!("   ✓ Root causes (no incoming LedTo):");
     for node in &roots {
         println!("     - {}", node.data.title);
     }
 
-    let leaves = engine.leaves(Relation::LedTo)?;
+    let leaves = engine.leaves(Relation::new("led_to").unwrap())?;
     println!("   ✓ Terminal outcomes (no outgoing LedTo):");
     for node in &leaves {
         println!("     - {}", node.data.title);

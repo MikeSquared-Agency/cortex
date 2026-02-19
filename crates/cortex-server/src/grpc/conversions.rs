@@ -54,34 +54,26 @@ pub fn timestamp_to_datetime(ts: Timestamp) -> chrono::DateTime<chrono::Utc> {
         .unwrap_or_else(|| chrono::Utc::now())
 }
 
-/// Parse NodeKind from string
+/// Parse NodeKind from string. Accepts any valid NodeKind format (lowercase, alphanumeric, hyphens).
 pub fn parse_node_kind(s: &str) -> Result<NodeKind> {
-    match s.to_lowercase().as_str() {
-        "fact" => Ok(NodeKind::Fact),
-        "decision" => Ok(NodeKind::Decision),
-        "event" => Ok(NodeKind::Event),
-        "observation" => Ok(NodeKind::Observation),
-        "pattern" => Ok(NodeKind::Pattern),
-        "agent" => Ok(NodeKind::Agent),
-        "goal" => Ok(NodeKind::Goal),
-        "preference" => Ok(NodeKind::Preference),
-        _ => Err(CortexError::Validation(format!("Invalid NodeKind: {}", s))),
-    }
+    NodeKind::new(s.to_lowercase().as_str())
 }
 
-/// Parse Relation from string
+/// Parse Relation from string. Normalises known aliases to canonical underscore form.
 pub fn parse_relation(s: &str) -> Result<Relation> {
-    match s.to_lowercase().as_str() {
-        "informedby" | "informed_by" => Ok(Relation::InformedBy),
-        "ledto" | "led_to" => Ok(Relation::LedTo),
-        "dependson" | "depends_on" => Ok(Relation::DependsOn),
-        "contradicts" => Ok(Relation::Contradicts),
-        "supersedes" => Ok(Relation::Supersedes),
-        "appliesto" | "applies_to" => Ok(Relation::AppliesTo),
-        "relatedto" | "related_to" => Ok(Relation::RelatedTo),
-        "instanceof" | "instance_of" => Ok(Relation::InstanceOf),
-        _ => Err(CortexError::Validation(format!("Invalid Relation: {}", s))),
-    }
+    let lower = s.to_lowercase();
+    let canonical = match lower.as_str() {
+        "informedby" | "informed_by" => "informed_by",
+        "ledto" | "led_to" => "led_to",
+        "dependson" | "depends_on" => "depends_on",
+        "contradicts" => "contradicts",
+        "supersedes" => "supersedes",
+        "appliesto" | "applies_to" => "applies_to",
+        "relatedto" | "related_to" => "related_to",
+        "instanceof" | "instance_of" => "instance_of",
+        other => other,
+    };
+    Relation::new(canonical)
 }
 
 /// Parse TraversalDirection from string
@@ -142,49 +134,62 @@ mod tests {
 
     #[test]
     fn test_parse_node_kind_all_variants() {
-        // Case-insensitive matching
-        assert_eq!(parse_node_kind("fact").unwrap(), NodeKind::Fact);
-        assert_eq!(parse_node_kind("Fact").unwrap(), NodeKind::Fact);
-        assert_eq!(parse_node_kind("FACT").unwrap(), NodeKind::Fact);
-        assert_eq!(parse_node_kind("decision").unwrap(), NodeKind::Decision);
-        assert_eq!(parse_node_kind("event").unwrap(), NodeKind::Event);
-        assert_eq!(parse_node_kind("observation").unwrap(), NodeKind::Observation);
-        assert_eq!(parse_node_kind("pattern").unwrap(), NodeKind::Pattern);
-        assert_eq!(parse_node_kind("agent").unwrap(), NodeKind::Agent);
-        assert_eq!(parse_node_kind("goal").unwrap(), NodeKind::Goal);
-        assert_eq!(parse_node_kind("preference").unwrap(), NodeKind::Preference);
+        // Case-insensitive — uppercase/mixed is lowercased before validation
+        assert_eq!(parse_node_kind("fact").unwrap(), NodeKind::new("fact").unwrap());
+        assert_eq!(parse_node_kind("Fact").unwrap(), NodeKind::new("fact").unwrap());
+        assert_eq!(parse_node_kind("FACT").unwrap(), NodeKind::new("fact").unwrap());
+        assert_eq!(parse_node_kind("decision").unwrap(), NodeKind::new("decision").unwrap());
+        assert_eq!(parse_node_kind("event").unwrap(), NodeKind::new("event").unwrap());
+        assert_eq!(parse_node_kind("observation").unwrap(), NodeKind::new("observation").unwrap());
+        assert_eq!(parse_node_kind("pattern").unwrap(), NodeKind::new("pattern").unwrap());
+        assert_eq!(parse_node_kind("agent").unwrap(), NodeKind::new("agent").unwrap());
+        assert_eq!(parse_node_kind("goal").unwrap(), NodeKind::new("goal").unwrap());
+        assert_eq!(parse_node_kind("preference").unwrap(), NodeKind::new("preference").unwrap());
+    }
+
+    #[test]
+    fn test_parse_node_kind_custom_kinds_accepted() {
+        // Custom kinds with valid format should now be accepted
+        assert!(parse_node_kind("custom-kind").is_ok());
+        assert!(parse_node_kind("conversation").is_ok());
+        assert!(parse_node_kind("document").is_ok());
     }
 
     #[test]
     fn test_parse_node_kind_invalid() {
-        assert!(parse_node_kind("unknown").is_err());
+        // Only empty string is invalid
         assert!(parse_node_kind("").is_err());
-        assert!(parse_node_kind("facts").is_err());
     }
 
     #[test]
     fn test_parse_relation_all_variants() {
-        assert_eq!(parse_relation("informedby").unwrap(), Relation::InformedBy);
-        assert_eq!(parse_relation("informed_by").unwrap(), Relation::InformedBy);
-        assert_eq!(parse_relation("ledto").unwrap(), Relation::LedTo);
-        assert_eq!(parse_relation("led_to").unwrap(), Relation::LedTo);
-        assert_eq!(parse_relation("dependson").unwrap(), Relation::DependsOn);
-        assert_eq!(parse_relation("depends_on").unwrap(), Relation::DependsOn);
-        assert_eq!(parse_relation("contradicts").unwrap(), Relation::Contradicts);
-        assert_eq!(parse_relation("supersedes").unwrap(), Relation::Supersedes);
-        assert_eq!(parse_relation("appliesto").unwrap(), Relation::AppliesTo);
-        assert_eq!(parse_relation("applies_to").unwrap(), Relation::AppliesTo);
-        assert_eq!(parse_relation("relatedto").unwrap(), Relation::RelatedTo);
-        assert_eq!(parse_relation("related_to").unwrap(), Relation::RelatedTo);
-        assert_eq!(parse_relation("instanceof").unwrap(), Relation::InstanceOf);
-        assert_eq!(parse_relation("instance_of").unwrap(), Relation::InstanceOf);
+        assert_eq!(parse_relation("informedby").unwrap(), Relation::new("informed_by").unwrap());
+        assert_eq!(parse_relation("informed_by").unwrap(), Relation::new("informed_by").unwrap());
+        assert_eq!(parse_relation("ledto").unwrap(), Relation::new("led_to").unwrap());
+        assert_eq!(parse_relation("led_to").unwrap(), Relation::new("led_to").unwrap());
+        assert_eq!(parse_relation("dependson").unwrap(), Relation::new("depends_on").unwrap());
+        assert_eq!(parse_relation("depends_on").unwrap(), Relation::new("depends_on").unwrap());
+        assert_eq!(parse_relation("contradicts").unwrap(), Relation::new("contradicts").unwrap());
+        assert_eq!(parse_relation("supersedes").unwrap(), Relation::new("supersedes").unwrap());
+        assert_eq!(parse_relation("appliesto").unwrap(), Relation::new("applies_to").unwrap());
+        assert_eq!(parse_relation("applies_to").unwrap(), Relation::new("applies_to").unwrap());
+        assert_eq!(parse_relation("relatedto").unwrap(), Relation::new("related_to").unwrap());
+        assert_eq!(parse_relation("related_to").unwrap(), Relation::new("related_to").unwrap());
+        assert_eq!(parse_relation("instanceof").unwrap(), Relation::new("instance_of").unwrap());
+        assert_eq!(parse_relation("instance_of").unwrap(), Relation::new("instance_of").unwrap());
+    }
+
+    #[test]
+    fn test_parse_relation_custom_accepted() {
+        // Custom relations with valid format are now accepted
+        assert!(parse_relation("mentions").is_ok());
+        assert!(parse_relation("part_of").is_ok());
     }
 
     #[test]
     fn test_parse_relation_invalid() {
-        assert!(parse_relation("unknown").is_err());
+        // Only empty string is invalid
         assert!(parse_relation("").is_err());
-        assert!(parse_relation("supports").is_err());
     }
 
     #[test]
@@ -217,7 +222,6 @@ mod tests {
     #[test]
     fn test_datetime_timestamp_roundtrip() {
         let now = chrono::Utc::now();
-        // Truncate to second precision (proto Timestamp is seconds + nanos)
         let ts = datetime_to_timestamp(now);
         let restored = timestamp_to_datetime(ts);
         let diff_ms = (now - restored).num_milliseconds().abs();
@@ -227,7 +231,7 @@ mod tests {
     #[test]
     fn test_node_to_response_basic_fields() {
         let node = Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Test Title".to_string(),
             "Test Body".to_string(),
             make_source("test-agent"),
@@ -247,7 +251,7 @@ mod tests {
     #[test]
     fn test_node_to_response_with_embedding() {
         let mut node = Node::new(
-            NodeKind::Decision,
+            NodeKind::new("decision").unwrap(),
             "Decision".to_string(),
             "Body".to_string(),
             make_source("agent"),
@@ -260,8 +264,9 @@ mod tests {
 
     #[test]
     fn test_node_to_response_kind_string() {
-        let node = Node::new(NodeKind::Pattern, "P".to_string(), "".to_string(), make_source("a"), 0.5);
+        let node = Node::new(NodeKind::new("pattern").unwrap(), "P".to_string(), "".to_string(), make_source("a"), 0.5);
         let response = node_to_response(&node, 0);
+        // Debug impl produces PascalCase: "pattern" → "Pattern"
         assert_eq!(response.kind, "Pattern");
     }
 
@@ -270,9 +275,8 @@ mod tests {
         use uuid::Uuid;
         let from = Uuid::now_v7();
         let to = Uuid::now_v7();
-        // Edge::new doesn't validate nodes exist (that's put_edge's job)
         let edge = Edge::new(
-            from, to, Relation::RelatedTo, 0.7,
+            from, to, Relation::new("related_to").unwrap(), 0.7,
             EdgeProvenance::AutoSimilarity { score: 0.85 },
         );
         let response = edge_to_response(&edge);
@@ -280,6 +284,7 @@ mod tests {
         assert_eq!(response.id, edge.id.to_string());
         assert_eq!(response.from_id, from.to_string());
         assert_eq!(response.to_id, to.to_string());
+        // Debug impl: "related_to" → "RelatedTo"
         assert_eq!(response.relation, "RelatedTo");
         assert!((response.weight - 0.7).abs() < f32::EPSILON);
     }
@@ -289,11 +294,11 @@ mod tests {
         use std::collections::HashMap;
 
         let mut by_kind = HashMap::new();
-        by_kind.insert(NodeKind::Fact, 10u64);
-        by_kind.insert(NodeKind::Decision, 5u64);
+        by_kind.insert(NodeKind::new("fact").unwrap(), 10u64);
+        by_kind.insert(NodeKind::new("decision").unwrap(), 5u64);
 
         let mut by_relation = HashMap::new();
-        by_relation.insert(Relation::RelatedTo, 20u64);
+        by_relation.insert(Relation::new("related_to").unwrap(), 20u64);
 
         let stats = StorageStats {
             node_count: 15,
@@ -305,12 +310,11 @@ mod tests {
             newest_node: None,
         };
 
-        // db_size parameter overrides stats.db_size_bytes
         let response = stats_to_response(stats, 2048);
         assert_eq!(response.node_count, 15);
         assert_eq!(response.edge_count, 20);
         assert_eq!(response.db_size_bytes, 2048);
-        // NodeKind is formatted as Debug string ("Fact", not "fact")
+        // Debug impl produces PascalCase
         assert!(response.nodes_by_kind.contains_key("Fact"));
         assert!(response.nodes_by_kind.contains_key("Decision"));
         assert!(response.edges_by_relation.contains_key("RelatedTo"));
@@ -321,13 +325,14 @@ mod tests {
         let kinds = vec!["fact".to_string(), "decision".to_string()];
         let result = parse_kind_filter(&kinds).unwrap();
         assert_eq!(result.len(), 2);
-        assert!(result.contains(&NodeKind::Fact));
-        assert!(result.contains(&NodeKind::Decision));
+        assert!(result.contains(&NodeKind::new("fact").unwrap()));
+        assert!(result.contains(&NodeKind::new("decision").unwrap()));
     }
 
     #[test]
     fn test_parse_kind_filter_invalid_fails() {
-        let kinds = vec!["fact".to_string(), "invalid".to_string()];
+        // Empty string is invalid
+        let kinds = vec!["fact".to_string(), "".to_string()];
         assert!(parse_kind_filter(&kinds).is_err());
     }
 }

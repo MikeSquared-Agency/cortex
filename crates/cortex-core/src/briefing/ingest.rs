@@ -180,36 +180,36 @@ pub fn classify_chunk(text: &str) -> NodeKind {
         || lower.contains("chose")
         || lower.contains("will use")
     {
-        NodeKind::Decision
+        NodeKind::new("decision").unwrap()
     } else if lower.contains("goal")
         || lower.contains("target")
         || lower.contains("aim")
         || lower.contains("objective")
     {
-        NodeKind::Goal
+        NodeKind::new("goal").unwrap()
     } else if lower.contains("prefer")
         || lower.contains("always")
         || lower.contains("never")
         || lower.contains("style")
     {
-        NodeKind::Preference
+        NodeKind::new("preference").unwrap()
     } else if lower.contains("pattern")
         || lower.contains("recurring")
         || lower.contains("tendency")
     {
-        NodeKind::Pattern
+        NodeKind::new("pattern").unwrap()
     } else if lower.contains("happened")
         || lower.contains("event")
         || lower.contains("occurred")
     {
-        NodeKind::Event
+        NodeKind::new("event").unwrap()
     } else if lower.contains("observed")
         || lower.contains("noticed")
         || lower.contains("note")
     {
-        NodeKind::Observation
+        NodeKind::new("observation").unwrap()
     } else {
-        NodeKind::Fact
+        NodeKind::new("fact").unwrap()
     }
 }
 
@@ -312,54 +312,54 @@ mod tests {
 
     #[test]
     fn test_classify_chunk_decision() {
-        assert_eq!(classify_chunk("We decided to use Rust"), NodeKind::Decision);
-        assert_eq!(classify_chunk("The decision was final"), NodeKind::Decision);
-        assert_eq!(classify_chunk("We chose Tokio"), NodeKind::Decision);
-        assert_eq!(classify_chunk("We will use async/await"), NodeKind::Decision);
+        assert_eq!(classify_chunk("We decided to use Rust"), NodeKind::new("decision").unwrap());
+        assert_eq!(classify_chunk("The decision was final"), NodeKind::new("decision").unwrap());
+        assert_eq!(classify_chunk("We chose Tokio"), NodeKind::new("decision").unwrap());
+        assert_eq!(classify_chunk("We will use async/await"), NodeKind::new("decision").unwrap());
     }
 
     #[test]
     fn test_classify_chunk_goal() {
-        assert_eq!(classify_chunk("Our goal is to ship v1"), NodeKind::Goal);
-        assert_eq!(classify_chunk("Target: 100ms latency"), NodeKind::Goal);
-        assert_eq!(classify_chunk("The aim of this project"), NodeKind::Goal);
-        assert_eq!(classify_chunk("Objective: reduce cost"), NodeKind::Goal);
+        assert_eq!(classify_chunk("Our goal is to ship v1"), NodeKind::new("goal").unwrap());
+        assert_eq!(classify_chunk("Target: 100ms latency"), NodeKind::new("goal").unwrap());
+        assert_eq!(classify_chunk("The aim of this project"), NodeKind::new("goal").unwrap());
+        assert_eq!(classify_chunk("Objective: reduce cost"), NodeKind::new("goal").unwrap());
     }
 
     #[test]
     fn test_classify_chunk_preference() {
-        assert_eq!(classify_chunk("I prefer async code"), NodeKind::Preference);
-        assert_eq!(classify_chunk("Always use rustfmt"), NodeKind::Preference);
-        assert_eq!(classify_chunk("Never commit secrets"), NodeKind::Preference);
-        assert_eq!(classify_chunk("Coding style: idiomatic"), NodeKind::Preference);
+        assert_eq!(classify_chunk("I prefer async code"), NodeKind::new("preference").unwrap());
+        assert_eq!(classify_chunk("Always use rustfmt"), NodeKind::new("preference").unwrap());
+        assert_eq!(classify_chunk("Never commit secrets"), NodeKind::new("preference").unwrap());
+        assert_eq!(classify_chunk("Coding style: idiomatic"), NodeKind::new("preference").unwrap());
     }
 
     #[test]
     fn test_classify_chunk_pattern() {
-        assert_eq!(classify_chunk("A recurring issue in PRs"), NodeKind::Pattern);
-        assert_eq!(classify_chunk("There is a pattern here"), NodeKind::Pattern);
-        assert_eq!(classify_chunk("A tendency to over-engineer"), NodeKind::Pattern);
+        assert_eq!(classify_chunk("A recurring issue in PRs"), NodeKind::new("pattern").unwrap());
+        assert_eq!(classify_chunk("There is a pattern here"), NodeKind::new("pattern").unwrap());
+        assert_eq!(classify_chunk("A tendency to over-engineer"), NodeKind::new("pattern").unwrap());
     }
 
     #[test]
     fn test_classify_chunk_event() {
-        assert_eq!(classify_chunk("It happened last Tuesday"), NodeKind::Event);
-        assert_eq!(classify_chunk("An event occurred at 3pm"), NodeKind::Event);
+        assert_eq!(classify_chunk("It happened last Tuesday"), NodeKind::new("event").unwrap());
+        assert_eq!(classify_chunk("An event occurred at 3pm"), NodeKind::new("event").unwrap());
     }
 
     #[test]
     fn test_classify_chunk_observation() {
-        assert_eq!(classify_chunk("I observed slow queries"), NodeKind::Observation);
-        assert_eq!(classify_chunk("Noticed higher latency"), NodeKind::Observation);
-        assert_eq!(classify_chunk("Note: cache hit rate dropped"), NodeKind::Observation);
+        assert_eq!(classify_chunk("I observed slow queries"), NodeKind::new("observation").unwrap());
+        assert_eq!(classify_chunk("Noticed higher latency"), NodeKind::new("observation").unwrap());
+        assert_eq!(classify_chunk("Note: cache hit rate dropped"), NodeKind::new("observation").unwrap());
     }
 
     #[test]
     fn test_classify_chunk_default_fact() {
         // No keywords → Fact
-        assert_eq!(classify_chunk("Rust 1.78 was released"), NodeKind::Fact);
-        assert_eq!(classify_chunk("The server listens on port 8080"), NodeKind::Fact);
-        assert_eq!(classify_chunk(""), NodeKind::Fact);
+        assert_eq!(classify_chunk("Rust 1.78 was released"), NodeKind::new("fact").unwrap());
+        assert_eq!(classify_chunk("The server listens on port 8080"), NodeKind::new("fact").unwrap());
+        assert_eq!(classify_chunk(""), NodeKind::new("fact").unwrap());
     }
 
     // --- chunk_markdown tests ---

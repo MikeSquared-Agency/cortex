@@ -595,12 +595,12 @@ mod additional_tests {
         let id2 = NodeId::now_v7();
 
         index.insert(id1, &vec![1.0, 0.0, 0.0]).unwrap();
-        index.set_metadata(id1, NodeKind::Fact, "test".into());
+        index.set_metadata(id1, NodeKind::new("fact").unwrap(), "test".into());
         index.insert(id2, &vec![0.9, 0.1, 0.0]).unwrap();
-        index.set_metadata(id2, NodeKind::Decision, "test".into());
+        index.set_metadata(id2, NodeKind::new("decision").unwrap(), "test".into());
         index.rebuild().unwrap();
 
-        let filter = VectorFilter::new().with_kinds(vec![NodeKind::Decision]);
+        let filter = VectorFilter::new().with_kinds(vec![NodeKind::new("decision").unwrap()]);
         let results = index.search(&vec![1.0, 0.0, 0.0], 5, Some(&filter)).unwrap();
 
         assert_eq!(results.len(), 1);

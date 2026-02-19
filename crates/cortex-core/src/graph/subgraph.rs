@@ -178,7 +178,7 @@ mod tests {
 
     fn create_test_node(id: NodeId, title: &str) -> Node {
         let mut node = Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             title.to_string(),
             "Test".to_string(),
             Source {
@@ -196,7 +196,7 @@ mod tests {
         Edge::new(
             from,
             to,
-            Relation::RelatedTo,
+            Relation::new("related_to").unwrap(),
             1.0,
             EdgeProvenance::Manual {
                 created_by: "test".to_string(),

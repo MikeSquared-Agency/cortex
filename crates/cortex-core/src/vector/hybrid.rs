@@ -242,7 +242,7 @@ mod tests {
 
         // Create test nodes
         let node1 = Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Rust programming language".to_string(),
             "Rust is a systems programming language".to_string(),
             Source {
@@ -254,7 +254,7 @@ mod tests {
         );
 
         let node2 = Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Python programming language".to_string(),
             "Python is a high-level programming language".to_string(),
             Source {
@@ -307,7 +307,7 @@ mod tests {
 
         // Create connected nodes
         let anchor_node = Node::new(
-            NodeKind::Decision,
+            NodeKind::new("decision").unwrap(),
             "Use Rust for backend".to_string(),
             "Decision to use Rust".to_string(),
             Source {
@@ -319,7 +319,7 @@ mod tests {
         );
 
         let connected_node = Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Rust is fast and safe".to_string(),
             "Rust provides memory safety without garbage collection".to_string(),
             Source {
@@ -331,7 +331,7 @@ mod tests {
         );
 
         let unconnected_node = Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Rust has great tooling".to_string(),
             "Cargo is Rust's package manager".to_string(),
             Source {
@@ -350,7 +350,7 @@ mod tests {
         let edge = Edge::new(
             anchor_node.id,
             connected_node.id,
-            Relation::InformedBy,
+            Relation::new("informed_by").unwrap(),
             0.9,
             EdgeProvenance::Manual {
                 created_by: "test".to_string(),

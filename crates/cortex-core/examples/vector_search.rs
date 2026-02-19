@@ -19,28 +19,28 @@ fn main() {
     // Create some knowledge nodes
     let nodes = vec![
         Node::new(
-            NodeKind::Decision,
+            NodeKind::new("decision").unwrap(),
             "Use Rust for Cortex".into(),
             "Chose Rust over Go for the graph engine due to CPU-bound workload".into(),
             Source { agent: "kai".into(), session: None, channel: None },
             0.8,
         ),
         Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "redb is an embedded database".into(),
             "redb is a pure Rust ACID key-value store with MVCC".into(),
             Source { agent: "kai".into(), session: None, channel: None },
             0.7,
         ),
         Node::new(
-            NodeKind::Pattern,
+            NodeKind::new("pattern").unwrap(),
             "Workers without integration instructions miss wiring".into(),
             "Briefings must explicitly say 'wire it in' or workers add functions without connecting them".into(),
             Source { agent: "kai".into(), session: None, channel: None },
             0.9,
         ),
         Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Pasta cooking time".into(),
             "Al dente pasta takes 8-10 minutes in boiling salted water".into(),
             Source { agent: "test".into(), session: None, channel: None },

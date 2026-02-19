@@ -34,19 +34,19 @@ mod integration_tests {
 
         // Create test nodes
         let rust_node = create_test_node(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Rust programming",
             "Rust is a systems programming language focused on safety and performance",
         );
 
         let python_node = create_test_node(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Python programming",
             "Python is a high-level interpreted programming language",
         );
 
         let cooking_node = create_test_node(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Cooking pasta",
             "Pasta should be cooked in boiling salted water",
         );
@@ -63,7 +63,7 @@ mod integration_tests {
             let input_text = embedding_input(node);
             let embedding = embedding_service.embed(&input_text).unwrap();
             vector_index
-                .set_metadata(node.id, node.kind, node.source.agent.clone());
+                .set_metadata(node.id, node.kind.clone(), node.source.agent.clone());
             vector_index.insert(node.id, &embedding).unwrap();
         }
 
@@ -96,7 +96,7 @@ mod integration_tests {
         let storage = RedbStorage::open(&db_path).unwrap();
 
         let node = create_test_node(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Test node",
             "This is a test node for persistence",
         );

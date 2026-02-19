@@ -254,7 +254,7 @@ where
         // Primary: Agent node whose source_agent matches
         let nodes = self.storage.list_nodes(
             NodeFilter::new()
-                .with_kinds(vec![NodeKind::Agent])
+                .with_kinds(vec![NodeKind::new("agent").unwrap()])
                 .with_source_agent(agent_id.to_string())
                 .with_limit(1),
         )?;
@@ -266,7 +266,7 @@ where
         // Fallback: search by tag (agents should be tagged with their ID)
         let by_tag = self.storage.list_nodes(
             NodeFilter::new()
-                .with_kinds(vec![NodeKind::Agent])
+                .with_kinds(vec![NodeKind::new("agent").unwrap()])
                 .with_tags(vec![agent_id.to_lowercase()])
                 .with_limit(1),
         )?;
@@ -277,7 +277,7 @@ where
         // Last resort: scan Agent nodes for title/source match
         let all_agents = self.storage.list_nodes(
             NodeFilter::new()
-                .with_kinds(vec![NodeKind::Agent])
+                .with_kinds(vec![NodeKind::new("agent").unwrap()])
                 .with_limit(50),
         )?;
 
@@ -308,12 +308,12 @@ where
             // Preferences/Facts connected via AppliesTo (either direction)
             let neighbors =
                 self.graph
-                    .neighbors(aid, TraversalDirection::Both, Some(vec![Relation::AppliesTo]))?;
+                    .neighbors(aid, TraversalDirection::Both, Some(vec![Relation::new("applies_to").unwrap()]))?;
 
             let pref_nodes: Vec<Node> = neighbors
                 .into_iter()
                 .filter_map(|(node, _edge)| {
-                    if matches!(node.kind, NodeKind::Preference | NodeKind::Fact) {
+                    if matches!(node.kind.as_str(), "preference" | "fact") {
                         Some(node)
                     } else {
                         None
@@ -330,7 +330,7 @@ where
             let fallback = self.storage.list_nodes(
                 NodeFilter::new()
                     .with_source_agent(agent_id.to_string())
-                    .with_kinds(vec![NodeKind::Agent, NodeKind::Preference])
+                    .with_kinds(vec![NodeKind::new("agent").unwrap(), NodeKind::new("preference").unwrap()])
                     .with_min_importance(self.config.min_importance)
                     .with_limit(self.config.max_items_per_section * 2),
             )?;
@@ -436,8 +436,8 @@ where
             start: vec![agent_node_id],
             max_depth: Some(2),
             direction: TraversalDirection::Both,
-            relation_filter: Some(vec![Relation::AppliesTo, Relation::InstanceOf]),
-            kind_filter: Some(vec![NodeKind::Pattern]),
+            relation_filter: Some(vec![Relation::new("applies_to").unwrap(), Relation::new("instance_of").unwrap()]),
+            kind_filter: Some(vec![NodeKind::new("pattern").unwrap()]),
             ..Default::default()
         })?;
 
@@ -465,7 +465,7 @@ where
             start: vec![agent_node_id],
             max_depth: Some(2),
             direction: TraversalDirection::Both,
-            kind_filter: Some(vec![NodeKind::Goal]),
+            kind_filter: Some(vec![NodeKind::new("goal").unwrap()]),
             ..Default::default()
         })?;
 
@@ -503,7 +503,7 @@ where
         let contradicting_ids: HashSet<NodeId> = subgraph
             .edges
             .iter()
-            .filter(|e| e.relation == Relation::Contradicts)
+            .filter(|e| e.relation.as_str() == "contradicts")
             .flat_map(|e| [e.from, e.to])
             .collect();
 
@@ -545,7 +545,7 @@ where
             .list_nodes(
                 NodeFilter::new()
                     .with_source_agent(agent_id.to_string())
-                    .with_kinds(vec![NodeKind::Event])
+                    .with_kinds(vec![NodeKind::new("event").unwrap()])
                     .created_after(cutoff)
                     .with_limit(self.config.max_items_per_section * 2),
             )?
@@ -704,12 +704,12 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
-        let agent = make_node(NodeKind::Agent, "kai", "kai");
-        let pref = make_node(NodeKind::Preference, "Prefers async", "kai");
+        let agent = make_node(NodeKind::new("agent").unwrap(), "kai", "kai");
+        let pref = make_node(NodeKind::new("preference").unwrap(), "Prefers async", "kai");
         storage.put_node(&agent).unwrap();
         storage.put_node(&pref).unwrap();
         storage
-            .put_edge(&manual_edge(pref.id, agent.id, Relation::AppliesTo))
+            .put_edge(&manual_edge(pref.id, agent.id, Relation::new("applies_to").unwrap()))
             .unwrap();
 
         let (engine, _) = make_engine(storage);
@@ -722,7 +722,7 @@ mod tests {
             .expect("identity section missing");
 
         assert!(
-            section.nodes.iter().any(|n| n.kind == NodeKind::Preference),
+            section.nodes.iter().any(|n| n.kind == NodeKind::new("preference").unwrap()),
             "Preference node not found in identity section"
         );
     }
@@ -733,7 +733,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
-        let fact = make_node(NodeKind::Fact, "Recent fact", "kai");
+        let fact = make_node(NodeKind::new("fact").unwrap(), "Recent fact", "kai");
         storage.put_node(&fact).unwrap();
 
         let (engine, _) = make_engine(storage);
@@ -749,12 +749,12 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
-        let agent = make_node(NodeKind::Agent, "kai", "kai");
-        let pattern = make_node(NodeKind::Pattern, "Recurring pattern", "kai");
+        let agent = make_node(NodeKind::new("agent").unwrap(), "kai", "kai");
+        let pattern = make_node(NodeKind::new("pattern").unwrap(), "Recurring pattern", "kai");
         storage.put_node(&agent).unwrap();
         storage.put_node(&pattern).unwrap();
         storage
-            .put_edge(&manual_edge(pattern.id, agent.id, Relation::AppliesTo))
+            .put_edge(&manual_edge(pattern.id, agent.id, Relation::new("applies_to").unwrap()))
             .unwrap();
 
         let (engine, _) = make_engine(storage);
@@ -770,7 +770,7 @@ mod tests {
             !section.nodes.is_empty(),
             "Patterns section should not be empty"
         );
-        assert!(section.nodes.iter().any(|n| n.kind == NodeKind::Pattern));
+        assert!(section.nodes.iter().any(|n| n.kind == NodeKind::new("pattern").unwrap()));
     }
 
     // Test 4: contradictions surface in unresolved section
@@ -779,19 +779,19 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
-        let agent = make_node(NodeKind::Agent, "kai", "kai");
-        let fact1 = make_node(NodeKind::Fact, "Fact A", "kai");
-        let fact2 = make_node(NodeKind::Fact, "Fact B", "kai");
+        let agent = make_node(NodeKind::new("agent").unwrap(), "kai", "kai");
+        let fact1 = make_node(NodeKind::new("fact").unwrap(), "Fact A", "kai");
+        let fact2 = make_node(NodeKind::new("fact").unwrap(), "Fact B", "kai");
         storage.put_node(&agent).unwrap();
         storage.put_node(&fact1).unwrap();
         storage.put_node(&fact2).unwrap();
 
         // Agent knows about fact1; fact1 contradicts fact2
         storage
-            .put_edge(&manual_edge(agent.id, fact1.id, Relation::InformedBy))
+            .put_edge(&manual_edge(agent.id, fact1.id, Relation::new("informed_by").unwrap()))
             .unwrap();
         storage
-            .put_edge(&manual_edge(fact1.id, fact2.id, Relation::Contradicts))
+            .put_edge(&manual_edge(fact1.id, fact2.id, Relation::new("contradicts").unwrap()))
             .unwrap();
 
         let (engine, _) = make_engine(storage);
@@ -815,14 +815,14 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
-        let agent = make_node(NodeKind::Agent, "kai", "kai");
+        let agent = make_node(NodeKind::new("agent").unwrap(), "kai", "kai");
         storage.put_node(&agent).unwrap();
 
         for i in 0..20 {
-            let pref = make_node(NodeKind::Preference, &format!("Pref {}", i), "kai");
+            let pref = make_node(NodeKind::new("preference").unwrap(), &format!("Pref {}", i), "kai");
             storage.put_node(&pref).unwrap();
             storage
-                .put_edge(&manual_edge(pref.id, agent.id, Relation::AppliesTo))
+                .put_edge(&manual_edge(pref.id, agent.id, Relation::new("applies_to").unwrap()))
                 .unwrap();
         }
 
@@ -853,14 +853,14 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
-        let agent = make_node(NodeKind::Agent, "kai", "kai");
+        let agent = make_node(NodeKind::new("agent").unwrap(), "kai", "kai");
         storage.put_node(&agent).unwrap();
 
         for i in 0..30 {
-            let pref = make_node(NodeKind::Preference, &format!("Pref {}", i), "kai");
+            let pref = make_node(NodeKind::new("preference").unwrap(), &format!("Pref {}", i), "kai");
             storage.put_node(&pref).unwrap();
             storage
-                .put_edge(&manual_edge(pref.id, agent.id, Relation::AppliesTo))
+                .put_edge(&manual_edge(pref.id, agent.id, Relation::new("applies_to").unwrap()))
                 .unwrap();
         }
 
@@ -896,7 +896,7 @@ mod tests {
             nodes_consulted: 1,
             sections: vec![BriefingSection {
                 title: "Test".to_string(),
-                nodes: vec![make_node(NodeKind::Fact, "A fact with a rather long title", "test")],
+                nodes: vec![make_node(NodeKind::new("fact").unwrap(), "A fact with a rather long title", "test")],
             }],
             cached: false,
         };
@@ -916,7 +916,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
-        let agent = make_node(NodeKind::Agent, "kai", "kai");
+        let agent = make_node(NodeKind::new("agent").unwrap(), "kai", "kai");
         storage.put_node(&agent).unwrap();
 
         let (engine, _) = make_engine(storage);
@@ -934,7 +934,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
-        let agent = make_node(NodeKind::Agent, "kai", "kai");
+        let agent = make_node(NodeKind::new("agent").unwrap(), "kai", "kai");
         storage.put_node(&agent).unwrap();
 
         let (engine, version) = make_engine(storage);
@@ -954,7 +954,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
-        let agent = make_node(NodeKind::Agent, "kai", "kai");
+        let agent = make_node(NodeKind::new("agent").unwrap(), "kai", "kai");
         storage.put_node(&agent).unwrap();
 
         let (engine, _) = make_engine(storage.clone());
@@ -979,7 +979,7 @@ mod tests {
             nodes_consulted: 1,
             sections: vec![BriefingSection {
                 title: "Identity & Preferences".to_string(),
-                nodes: vec![make_node(NodeKind::Agent, "Kai Agent", "kai")],
+                nodes: vec![make_node(NodeKind::new("agent").unwrap(), "Kai Agent", "kai")],
             }],
             cached: false,
         };
@@ -1007,7 +1007,7 @@ mod tests {
             sections: vec![BriefingSection {
                 title: "Section".to_string(),
                 nodes: (0..5)
-                    .map(|i| make_node(NodeKind::Fact, &format!("Long fact title number {}", i), "kai"))
+                    .map(|i| make_node(NodeKind::new("fact").unwrap(), &format!("Long fact title number {}", i), "kai"))
                     .collect(),
             }],
             cached: false,
@@ -1027,12 +1027,12 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
-        let agent = make_node(NodeKind::Agent, "kai", "kai");
-        let goal = make_node(NodeKind::Goal, "Ship Cortex v1", "kai");
+        let agent = make_node(NodeKind::new("agent").unwrap(), "kai", "kai");
+        let goal = make_node(NodeKind::new("goal").unwrap(), "Ship Cortex v1", "kai");
         storage.put_node(&agent).unwrap();
         storage.put_node(&goal).unwrap();
         storage
-            .put_edge(&manual_edge(agent.id, goal.id, Relation::InformedBy))
+            .put_edge(&manual_edge(agent.id, goal.id, Relation::new("informed_by").unwrap()))
             .unwrap();
 
         let (engine, _) = make_engine(storage);
@@ -1044,7 +1044,7 @@ mod tests {
             .find(|s| s.title == "Goals")
             .expect("Goals section missing");
 
-        assert!(section.nodes.iter().any(|n| n.kind == NodeKind::Goal));
+        assert!(section.nodes.iter().any(|n| n.kind == NodeKind::new("goal").unwrap()));
     }
 
     // Test 14: recent events section populates (or events appear in Active Context)
@@ -1057,7 +1057,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
-        let event = make_node(NodeKind::Event, "Deployed to prod", "kai");
+        let event = make_node(NodeKind::new("event").unwrap(), "Deployed to prod", "kai");
         storage.put_node(&event).unwrap();
 
         let (engine, _) = make_engine(storage);
@@ -1065,7 +1065,7 @@ mod tests {
 
         let all_nodes: Vec<&Node> = briefing.sections.iter().flat_map(|s| &s.nodes).collect();
         assert!(
-            all_nodes.iter().any(|n| n.kind == NodeKind::Event),
+            all_nodes.iter().any(|n| n.kind == NodeKind::new("event").unwrap()),
             "Event node should appear in some section of the briefing"
         );
     }
@@ -1083,7 +1083,7 @@ mod tests {
 
         // Create 5 Events — Active Context will claim 2, Recent Events gets the rest
         for i in 0..5 {
-            let ev = make_node(NodeKind::Event, &format!("Event {}", i), "kai");
+            let ev = make_node(NodeKind::new("event").unwrap(), &format!("Event {}", i), "kai");
             storage.put_node(&ev).unwrap();
         }
 
@@ -1108,22 +1108,22 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
-        let agent = make_node(NodeKind::Agent, "kai", "kai");
+        let agent = make_node(NodeKind::new("agent").unwrap(), "kai", "kai");
         // High-importance pref
-        let mut good_pref = make_node(NodeKind::Preference, "Good pref", "kai");
+        let mut good_pref = make_node(NodeKind::new("preference").unwrap(), "Good pref", "kai");
         good_pref.importance = 0.9;
         // Low-importance pref — should be filtered
-        let mut bad_pref = make_node(NodeKind::Preference, "Bad pref", "kai");
+        let mut bad_pref = make_node(NodeKind::new("preference").unwrap(), "Bad pref", "kai");
         bad_pref.importance = 0.1;
 
         storage.put_node(&agent).unwrap();
         storage.put_node(&good_pref).unwrap();
         storage.put_node(&bad_pref).unwrap();
         storage
-            .put_edge(&manual_edge(good_pref.id, agent.id, Relation::AppliesTo))
+            .put_edge(&manual_edge(good_pref.id, agent.id, Relation::new("applies_to").unwrap()))
             .unwrap();
         storage
-            .put_edge(&manual_edge(bad_pref.id, agent.id, Relation::AppliesTo))
+            .put_edge(&manual_edge(bad_pref.id, agent.id, Relation::new("applies_to").unwrap()))
             .unwrap();
 
         let config = BriefingConfig {
@@ -1154,16 +1154,16 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
-        let agent = make_node(NodeKind::Agent, "kai", "kai");
+        let agent = make_node(NodeKind::new("agent").unwrap(), "kai", "kai");
         storage.put_node(&agent).unwrap();
 
         // Create preferences with known importance values in non-sorted order
         for (i, importance) in [(0, 0.4f32), (1, 0.9f32), (2, 0.6f32)] {
-            let mut pref = make_node(NodeKind::Preference, &format!("Pref {}", i), "kai");
+            let mut pref = make_node(NodeKind::new("preference").unwrap(), &format!("Pref {}", i), "kai");
             pref.importance = importance;
             storage.put_node(&pref).unwrap();
             storage
-                .put_edge(&manual_edge(pref.id, agent.id, Relation::AppliesTo))
+                .put_edge(&manual_edge(pref.id, agent.id, Relation::new("applies_to").unwrap()))
                 .unwrap();
         }
 
@@ -1181,7 +1181,7 @@ mod tests {
         let pref_importances: Vec<f32> = identity
             .nodes
             .iter()
-            .filter(|n| n.kind == NodeKind::Preference)
+            .filter(|n| n.kind == NodeKind::new("preference").unwrap())
             .map(|n| n.importance)
             .collect();
 
@@ -1201,7 +1201,7 @@ mod tests {
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
         // No Agent node — only raw facts from the agent
-        let fact = make_node(NodeKind::Fact, "Some fact", "kai");
+        let fact = make_node(NodeKind::new("fact").unwrap(), "Some fact", "kai");
         storage.put_node(&fact).unwrap();
 
         let (engine, _) = make_engine(storage);
@@ -1216,7 +1216,7 @@ mod tests {
     fn test_renderer_unicode_no_panic() {
         use super::super::renderer::MarkdownRenderer;
 
-        let mut node = make_node(NodeKind::Fact, "日本語タイトル", "test");
+        let mut node = make_node(NodeKind::new("fact").unwrap(), "日本語タイトル", "test");
         node.data.body = "これは長いボディです。".repeat(30); // > 200 chars
 
         let briefing = Briefing {
@@ -1257,12 +1257,12 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
-        let agent = make_node(NodeKind::Agent, "kai", "kai");
-        let pref = make_node(NodeKind::Preference, "A preference", "kai");
+        let agent = make_node(NodeKind::new("agent").unwrap(), "kai", "kai");
+        let pref = make_node(NodeKind::new("preference").unwrap(), "A preference", "kai");
         storage.put_node(&agent).unwrap();
         storage.put_node(&pref).unwrap();
         storage
-            .put_edge(&manual_edge(pref.id, agent.id, Relation::AppliesTo))
+            .put_edge(&manual_edge(pref.id, agent.id, Relation::new("applies_to").unwrap()))
             .unwrap();
 
         let initial_agent_count = storage.get_node(agent.id).unwrap().unwrap().access_count;

@@ -165,7 +165,7 @@ mod tests {
 
         // Create nodes and edge
         let node1 = Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Node 1".into(),
             "Body 1".into(),
             Source {
@@ -176,7 +176,7 @@ mod tests {
             0.5,
         );
         let node2 = Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Node 2".into(),
             "Body 2".into(),
             Source {
@@ -192,7 +192,7 @@ mod tests {
         let mut edge = Edge::new(
             node1.id,
             node2.id,
-            Relation::RelatedTo,
+            Relation::new("related_to").unwrap(),
             0.8,
             EdgeProvenance::AutoSimilarity { score: 0.8 },
         );
@@ -224,7 +224,7 @@ mod tests {
 
         // Create nodes and manual edge
         let node1 = Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Node 1".into(),
             "Body 1".into(),
             Source {
@@ -235,7 +235,7 @@ mod tests {
             0.5,
         );
         let node2 = Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Node 2".into(),
             "Body 2".into(),
             Source {
@@ -251,7 +251,7 @@ mod tests {
         let mut edge = Edge::new(
             node1.id,
             node2.id,
-            Relation::RelatedTo,
+            Relation::new("related_to").unwrap(),
             0.8,
             EdgeProvenance::Manual {
                 created_by: "user".into(),
@@ -281,7 +281,7 @@ mod tests {
 
         // Create nodes and edge
         let node1 = Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Node 1".into(),
             "Body 1".into(),
             Source {
@@ -292,7 +292,7 @@ mod tests {
             0.5,
         );
         let node2 = Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Node 2".into(),
             "Body 2".into(),
             Source {
@@ -308,7 +308,7 @@ mod tests {
         let mut edge = Edge::new(
             node1.id,
             node2.id,
-            Relation::RelatedTo,
+            Relation::new("related_to").unwrap(),
             0.8,
             EdgeProvenance::AutoSimilarity { score: 0.8 },
         );
@@ -347,12 +347,12 @@ mod importance_tests {
 
         // High importance node
         let high = Node::new(
-            NodeKind::Decision, "Important".into(), "Critical decision".into(),
+            NodeKind::new("decision").unwrap(), "Important".into(), "Critical decision".into(),
             Source { agent: "test".into(), session: None, channel: None }, 0.95,
         );
         // Low importance node
         let low = Node::new(
-            NodeKind::Observation, "Trivial".into(), "Minor observation".into(),
+            NodeKind::new("observation").unwrap(), "Trivial".into(), "Minor observation".into(),
             Source { agent: "test".into(), session: None, channel: None }, 0.1,
         );
         storage.put_node(&high).unwrap();
@@ -360,19 +360,19 @@ mod importance_tests {
 
         // Two edges with same initial weight, same age
         let mut edge_important = Edge::new(
-            high.id, low.id, Relation::LedTo, 0.8,
+            high.id, low.id, Relation::new("led_to").unwrap(), 0.8,
             EdgeProvenance::AutoSimilarity { score: 0.8 },
         );
         edge_important.updated_at = Utc::now() - Duration::days(30);
 
         let other_low = Node::new(
-            NodeKind::Observation, "Other low".into(), "Another minor one".into(),
+            NodeKind::new("observation").unwrap(), "Other low".into(), "Another minor one".into(),
             Source { agent: "test".into(), session: None, channel: None }, 0.1,
         );
         storage.put_node(&other_low).unwrap();
 
         let mut edge_unimportant = Edge::new(
-            low.id, other_low.id, Relation::RelatedTo, 0.8,
+            low.id, other_low.id, Relation::new("related_to").unwrap(), 0.8,
             EdgeProvenance::AutoSimilarity { score: 0.8 },
         );
         edge_unimportant.updated_at = Utc::now() - Duration::days(30);
@@ -400,18 +400,18 @@ mod importance_tests {
         let storage = Arc::new(RedbStorage::open(&db_path).unwrap());
 
         let n1 = Node::new(
-            NodeKind::Observation, "Old".into(), "body".into(),
+            NodeKind::new("observation").unwrap(), "Old".into(), "body".into(),
             Source { agent: "test".into(), session: None, channel: None }, 0.1,
         );
         let n2 = Node::new(
-            NodeKind::Observation, "Also old".into(), "body".into(),
+            NodeKind::new("observation").unwrap(), "Also old".into(), "body".into(),
             Source { agent: "test".into(), session: None, channel: None }, 0.1,
         );
         storage.put_node(&n1).unwrap();
         storage.put_node(&n2).unwrap();
 
         let mut edge = Edge::new(
-            n1.id, n2.id, Relation::RelatedTo, 0.1, // Already weak
+            n1.id, n2.id, Relation::new("related_to").unwrap(), 0.1, // Already weak
             EdgeProvenance::AutoSimilarity { score: 0.1 },
         );
         edge.updated_at = Utc::now() - Duration::days(365); // A year old

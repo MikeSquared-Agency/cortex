@@ -14,7 +14,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("2. Creating nodes...");
 
     let kai = Node::new(
-        NodeKind::Agent,
+        NodeKind::new("agent").unwrap(),
         "Kai - The Orchestrator".to_string(),
         "Kai is the primary orchestrator agent for Warren. Uses Opus 4.6 model. \
          Coordinates all other agents and manages high-level decision making."
@@ -28,7 +28,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let mut decision = Node::new(
-        NodeKind::Decision,
+        NodeKind::new("decision").unwrap(),
         "Use Rust for Cortex".to_string(),
         "Chose Rust for Cortex implementation because: (1) CPU-bound graph traversal \
          benefits from zero-cost abstractions, (2) Memory safety without GC for \
@@ -44,7 +44,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     decision.data.tags = vec!["architecture".to_string(), "tech-stack".to_string()];
 
     let fact = Node::new(
-        NodeKind::Fact,
+        NodeKind::new("fact").unwrap(),
         "Cortex uses redb for storage".to_string(),
         "redb is a pure-Rust embedded key-value store with ACID transactions, \
          MVCC, and zero-copy mmap reads. No external dependencies."
@@ -58,7 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let observation = Node::new(
-        NodeKind::Observation,
+        NodeKind::new("observation").unwrap(),
         "Graph queries dominate CPU usage".to_string(),
         "During initial profiling, graph traversal operations accounted for \
          65% of CPU time in briefing synthesis."
@@ -89,7 +89,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let edge1 = Edge::new(
         decision.id,
         observation.id,
-        Relation::InformedBy,
+        Relation::new("informed_by").unwrap(),
         0.8,
         EdgeProvenance::Manual {
             created_by: "kai".to_string(),
@@ -99,7 +99,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let edge2 = Edge::new(
         decision.id,
         fact.id,
-        Relation::LedTo,
+        Relation::new("led_to").unwrap(),
         0.9,
         EdgeProvenance::Manual {
             created_by: "kai".to_string(),
@@ -109,7 +109,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let edge3 = Edge::new(
         fact.id,
         decision.id,
-        Relation::AppliesTo,
+        Relation::new("applies_to").unwrap(),
         0.7,
         EdgeProvenance::AutoStructural {
             rule: "same-session".to_string(),
@@ -138,7 +138,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 4. Query nodes by kind
     println!("4. Querying nodes...");
 
-    let filter = NodeFilter::new().with_kinds(vec![NodeKind::Decision, NodeKind::Fact]);
+    let filter = NodeFilter::new().with_kinds(vec![NodeKind::new("decision").unwrap(), NodeKind::new("fact").unwrap()]);
     let results = storage.list_nodes(filter)?;
 
     println!("   ✓ Found {} nodes of kind Decision or Fact:", results.len());

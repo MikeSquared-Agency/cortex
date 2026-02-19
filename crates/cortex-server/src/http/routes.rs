@@ -141,17 +141,8 @@ async fn list_nodes(
     }
 
     if let Some(kind_str) = query.kind {
-        let kind = match kind_str.to_lowercase().as_str() {
-            "fact" => NodeKind::Fact,
-            "decision" => NodeKind::Decision,
-            "event" => NodeKind::Event,
-            "observation" => NodeKind::Observation,
-            "pattern" => NodeKind::Pattern,
-            "agent" => NodeKind::Agent,
-            "goal" => NodeKind::Goal,
-            "preference" => NodeKind::Preference,
-            _ => return Err(anyhow::anyhow!("Invalid NodeKind: {}", kind_str).into()),
-        };
+        let kind = NodeKind::new(&kind_str.to_lowercase())
+            .map_err(|e| anyhow::anyhow!("Invalid NodeKind: {}", e))?;
         filter = filter.with_kinds(vec![kind]);
     }
 

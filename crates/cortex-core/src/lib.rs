@@ -5,6 +5,9 @@ pub mod graph;
 pub mod vector;
 pub mod linker;
 pub mod briefing;
+pub mod kinds;
+pub mod relations;
+pub mod ingest;
 
 pub use error::{CortexError, Result};
 pub use types::*;

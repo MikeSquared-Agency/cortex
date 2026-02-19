@@ -1,4 +1,4 @@
-use crate::types::{Edge, EdgeProvenance, Node, NodeId, NodeKind, Relation};
+use crate::types::{Edge, EdgeProvenance, Node, NodeId, Relation};
 use crate::vector::SimilarityConfig;
 use chrono::{DateTime, Duration, Utc};
 use std::collections::HashSet;
@@ -45,7 +45,7 @@ impl LinkRule for SimilarityLinkRule {
             Some(ProposedEdge {
                 from: node.id,
                 to: neighbor.id,
-                relation: Relation::RelatedTo,
+                relation: Relation::new("related_to").unwrap(),
                 weight: score,
                 provenance: EdgeProvenance::AutoSimilarity { score },
             })
@@ -140,7 +140,7 @@ impl StructuralRule {
                     Some(ProposedEdge {
                         from: node.id,
                         to: other.id,
-                        relation: Relation::RelatedTo,
+                        relation: Relation::new("related_to").unwrap(),
                         weight: *weight,
                         provenance: EdgeProvenance::AutoStructural {
                             rule: "same_agent".into(),
@@ -162,7 +162,7 @@ impl StructuralRule {
                     Some(ProposedEdge {
                         from: node.id,
                         to: other.id,
-                        relation: Relation::RelatedTo,
+                        relation: Relation::new("related_to").unwrap(),
                         weight: *weight,
                         provenance: EdgeProvenance::AutoStructural {
                             rule: "temporal_proximity".into(),
@@ -189,7 +189,7 @@ impl StructuralRule {
                     Some(ProposedEdge {
                         from: node.id,
                         to: other.id,
-                        relation: Relation::RelatedTo,
+                        relation: Relation::new("related_to").unwrap(),
                         weight: clamped_weight,
                         provenance: EdgeProvenance::AutoStructural {
                             rule: "shared_tags".into(),
@@ -201,8 +201,8 @@ impl StructuralRule {
             }
 
             Self::DecisionToEvent { weight } => {
-                if node.kind == NodeKind::Decision
-                    && other.kind == NodeKind::Event
+                if node.kind.as_str() == "decision"
+                    && other.kind.as_str() == "event"
                     && node.source.session == other.source.session
                     && node.source.session.is_some()
                     && node.created_at < other.created_at
@@ -210,7 +210,7 @@ impl StructuralRule {
                     Some(ProposedEdge {
                         from: node.id,
                         to: other.id,
-                        relation: Relation::LedTo,
+                        relation: Relation::new("led_to").unwrap(),
                         weight: *weight,
                         provenance: EdgeProvenance::AutoStructural {
                             rule: "decision_to_event".into(),
@@ -225,14 +225,14 @@ impl StructuralRule {
                 min_similarity,
                 weight,
             } => {
-                if node.kind == NodeKind::Observation
-                    && other.kind == NodeKind::Pattern
+                if node.kind.as_str() == "observation"
+                    && other.kind.as_str() == "pattern"
                     && score >= *min_similarity
                 {
                     Some(ProposedEdge {
                         from: node.id,
                         to: other.id,
-                        relation: Relation::InstanceOf,
+                        relation: Relation::new("instance_of").unwrap(),
                         weight: *weight,
                         provenance: EdgeProvenance::AutoStructural {
                             rule: "observation_to_pattern".into(),
@@ -247,8 +247,8 @@ impl StructuralRule {
                 title_similarity,
                 weight,
             } => {
-                if node.kind == NodeKind::Fact
-                    && other.kind == NodeKind::Fact
+                if node.kind.as_str() == "fact"
+                    && other.kind.as_str() == "fact"
                     && node.created_at > other.created_at
                 {
                     let title_score = self.simple_similarity(&node.data.title, &other.data.title);
@@ -256,7 +256,7 @@ impl StructuralRule {
                         Some(ProposedEdge {
                             from: node.id,
                             to: other.id,
-                            relation: Relation::Supersedes,
+                            relation: Relation::new("supersedes").unwrap(),
                             weight: *weight,
                             provenance: EdgeProvenance::AutoStructural {
                                 rule: "fact_supersedes".into(),
@@ -381,7 +381,7 @@ impl ContradictionDetector {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::Source;
+    use crate::types::{NodeKind, Source};
 
     fn create_test_node(kind: NodeKind, title: &str, body: &str) -> Node {
         Node::new(
@@ -402,13 +402,13 @@ mod tests {
         let rule = SimilarityLinkRule;
         let config = SimilarityConfig::default();
 
-        let node1 = create_test_node(NodeKind::Fact, "Test 1", "Body 1");
-        let node2 = create_test_node(NodeKind::Fact, "Test 2", "Body 2");
+        let node1 = create_test_node(NodeKind::new("fact").unwrap(), "Test 1", "Body 1");
+        let node2 = create_test_node(NodeKind::new("fact").unwrap(), "Test 2", "Body 2");
 
         // Above threshold
         let result = rule.evaluate(&node1, &node2, 0.8, &config);
         assert!(result.is_some());
-        assert_eq!(result.unwrap().relation, Relation::RelatedTo);
+        assert_eq!(result.unwrap().relation, Relation::new("related_to").unwrap());
 
         // Below threshold
         let result = rule.evaluate(&node1, &node2, 0.5, &config);
@@ -419,10 +419,10 @@ mod tests {
     fn test_shared_tags_rule() {
         let rule = StructuralRule::shared_tags();
 
-        let mut node1 = create_test_node(NodeKind::Fact, "Test 1", "Body 1");
+        let mut node1 = create_test_node(NodeKind::new("fact").unwrap(), "Test 1", "Body 1");
         node1.data.tags = vec!["rust".into(), "programming".into()];
 
-        let mut node2 = create_test_node(NodeKind::Fact, "Test 2", "Body 2");
+        let mut node2 = create_test_node(NodeKind::new("fact").unwrap(), "Test 2", "Body 2");
         node2.data.tags = vec!["rust".into(), "programming".into(), "systems".into()];
 
         let result = rule.evaluate(&node1, &node2, 0.0);
@@ -438,9 +438,9 @@ mod tests {
     fn test_contradiction_detection() {
         let detector = ContradictionDetector::default();
 
-        let node1 = create_test_node(NodeKind::Fact, "System online", "The system is running");
+        let node1 = create_test_node(NodeKind::new("fact").unwrap(), "System online", "The system is running");
         let node2 =
-            create_test_node(NodeKind::Fact, "System offline", "The system is not running");
+            create_test_node(NodeKind::new("fact").unwrap(), "System offline", "The system is not running");
 
         let result = detector.check(&node1, &node2, 0.85);
         assert!(result.is_some());

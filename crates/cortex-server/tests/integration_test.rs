@@ -20,7 +20,7 @@ fn test_storage_persistence() {
     let node_id = {
         let storage = RedbStorage::open(&db_path).unwrap();
         let node = Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Persistence Test".to_string(),
             "Testing persistence across reopens".to_string(),
             make_source("test"),
@@ -46,16 +46,16 @@ fn test_graph_bfs_traversal() {
     let graph_engine = Arc::new(GraphEngineImpl::new(storage.clone()));
 
     // Create chain: A -> B -> C
-    let node_a = Node::new(NodeKind::Fact, "A".to_string(), "First".to_string(), make_source("test"), 0.5);
-    let node_b = Node::new(NodeKind::Fact, "B".to_string(), "Second".to_string(), make_source("test"), 0.5);
-    let node_c = Node::new(NodeKind::Fact, "C".to_string(), "Third".to_string(), make_source("test"), 0.5);
+    let node_a = Node::new(NodeKind::new("fact").unwrap(), "A".to_string(), "First".to_string(), make_source("test"), 0.5);
+    let node_b = Node::new(NodeKind::new("fact").unwrap(), "B".to_string(), "Second".to_string(), make_source("test"), 0.5);
+    let node_c = Node::new(NodeKind::new("fact").unwrap(), "C".to_string(), "Third".to_string(), make_source("test"), 0.5);
 
     storage.put_node(&node_a).unwrap();
     storage.put_node(&node_b).unwrap();
     storage.put_node(&node_c).unwrap();
 
-    storage.put_edge(&Edge::new(node_a.id, node_b.id, Relation::InformedBy, 1.0, make_manual("test"))).unwrap();
-    storage.put_edge(&Edge::new(node_b.id, node_c.id, Relation::InformedBy, 1.0, make_manual("test"))).unwrap();
+    storage.put_edge(&Edge::new(node_a.id, node_b.id, Relation::new("informed_by").unwrap(), 1.0, make_manual("test"))).unwrap();
+    storage.put_edge(&Edge::new(node_b.id, node_c.id, Relation::new("informed_by").unwrap(), 1.0, make_manual("test"))).unwrap();
 
     let request = TraversalRequest {
         start: vec![node_a.id],
@@ -79,16 +79,16 @@ fn test_graph_depth_limit() {
     let storage = Arc::new(RedbStorage::open(dir.path().join("test.redb")).unwrap());
     let graph_engine = Arc::new(GraphEngineImpl::new(storage.clone()));
 
-    let a = Node::new(NodeKind::Fact, "A".to_string(), "".to_string(), make_source("test"), 0.5);
-    let b = Node::new(NodeKind::Fact, "B".to_string(), "".to_string(), make_source("test"), 0.5);
-    let c = Node::new(NodeKind::Fact, "C".to_string(), "".to_string(), make_source("test"), 0.5);
+    let a = Node::new(NodeKind::new("fact").unwrap(), "A".to_string(), "".to_string(), make_source("test"), 0.5);
+    let b = Node::new(NodeKind::new("fact").unwrap(), "B".to_string(), "".to_string(), make_source("test"), 0.5);
+    let c = Node::new(NodeKind::new("fact").unwrap(), "C".to_string(), "".to_string(), make_source("test"), 0.5);
 
     storage.put_node(&a).unwrap();
     storage.put_node(&b).unwrap();
     storage.put_node(&c).unwrap();
 
-    storage.put_edge(&Edge::new(a.id, b.id, Relation::LedTo, 1.0, make_manual("test"))).unwrap();
-    storage.put_edge(&Edge::new(b.id, c.id, Relation::LedTo, 1.0, make_manual("test"))).unwrap();
+    storage.put_edge(&Edge::new(a.id, b.id, Relation::new("led_to").unwrap(), 1.0, make_manual("test"))).unwrap();
+    storage.put_edge(&Edge::new(b.id, c.id, Relation::new("led_to").unwrap(), 1.0, make_manual("test"))).unwrap();
 
     // Depth 1 should reach B but not C
     let request = TraversalRequest {
@@ -110,17 +110,17 @@ fn test_find_paths() {
     let storage = Arc::new(RedbStorage::open(dir.path().join("test.redb")).unwrap());
     let graph_engine = Arc::new(GraphEngineImpl::new(storage.clone()));
 
-    let a = Node::new(NodeKind::Fact, "A".to_string(), "".to_string(), make_source("test"), 0.5);
-    let b = Node::new(NodeKind::Fact, "B".to_string(), "".to_string(), make_source("test"), 0.5);
-    let c = Node::new(NodeKind::Fact, "C".to_string(), "".to_string(), make_source("test"), 0.5);
+    let a = Node::new(NodeKind::new("fact").unwrap(), "A".to_string(), "".to_string(), make_source("test"), 0.5);
+    let b = Node::new(NodeKind::new("fact").unwrap(), "B".to_string(), "".to_string(), make_source("test"), 0.5);
+    let c = Node::new(NodeKind::new("fact").unwrap(), "C".to_string(), "".to_string(), make_source("test"), 0.5);
 
     storage.put_node(&a).unwrap();
     storage.put_node(&b).unwrap();
     storage.put_node(&c).unwrap();
 
     // A -> B -> C
-    storage.put_edge(&Edge::new(a.id, b.id, Relation::LedTo, 1.0, make_manual("test"))).unwrap();
-    storage.put_edge(&Edge::new(b.id, c.id, Relation::LedTo, 1.0, make_manual("test"))).unwrap();
+    storage.put_edge(&Edge::new(a.id, b.id, Relation::new("led_to").unwrap(), 1.0, make_manual("test"))).unwrap();
+    storage.put_edge(&Edge::new(b.id, c.id, Relation::new("led_to").unwrap(), 1.0, make_manual("test"))).unwrap();
 
     let path_req = PathRequest { from: a.id, to: c.id, max_paths: 1, max_length: Some(10), ..Default::default() };
     let result = graph_engine.find_paths(path_req).unwrap();
@@ -137,19 +137,19 @@ fn test_graph_neighborhood() {
     let storage = Arc::new(RedbStorage::open(dir.path().join("test.redb")).unwrap());
     let graph_engine = Arc::new(GraphEngineImpl::new(storage.clone()));
 
-    let center = Node::new(NodeKind::Agent, "Center".to_string(), "".to_string(), make_source("test"), 0.5);
-    let n1 = Node::new(NodeKind::Fact, "N1".to_string(), "".to_string(), make_source("test"), 0.5);
-    let n2 = Node::new(NodeKind::Fact, "N2".to_string(), "".to_string(), make_source("test"), 0.5);
-    let far = Node::new(NodeKind::Fact, "Far".to_string(), "".to_string(), make_source("test"), 0.5);
+    let center = Node::new(NodeKind::new("agent").unwrap(), "Center".to_string(), "".to_string(), make_source("test"), 0.5);
+    let n1 = Node::new(NodeKind::new("fact").unwrap(), "N1".to_string(), "".to_string(), make_source("test"), 0.5);
+    let n2 = Node::new(NodeKind::new("fact").unwrap(), "N2".to_string(), "".to_string(), make_source("test"), 0.5);
+    let far = Node::new(NodeKind::new("fact").unwrap(), "Far".to_string(), "".to_string(), make_source("test"), 0.5);
 
     storage.put_node(&center).unwrap();
     storage.put_node(&n1).unwrap();
     storage.put_node(&n2).unwrap();
     storage.put_node(&far).unwrap();
 
-    storage.put_edge(&Edge::new(center.id, n1.id, Relation::RelatedTo, 1.0, make_manual("test"))).unwrap();
-    storage.put_edge(&Edge::new(center.id, n2.id, Relation::RelatedTo, 1.0, make_manual("test"))).unwrap();
-    storage.put_edge(&Edge::new(n1.id, far.id, Relation::RelatedTo, 1.0, make_manual("test"))).unwrap();
+    storage.put_edge(&Edge::new(center.id, n1.id, Relation::new("related_to").unwrap(), 1.0, make_manual("test"))).unwrap();
+    storage.put_edge(&Edge::new(center.id, n2.id, Relation::new("related_to").unwrap(), 1.0, make_manual("test"))).unwrap();
+    storage.put_edge(&Edge::new(n1.id, far.id, Relation::new("related_to").unwrap(), 1.0, make_manual("test"))).unwrap();
 
     // neighborhood always traverses Both directions at the given depth
     let subgraph = graph_engine.neighborhood(center.id, 1).unwrap();
@@ -171,7 +171,7 @@ fn test_vector_index_rebuild() {
 
     for i in 0..5 {
         let mut node = Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             format!("Test Node {}", i),
             format!("Body {}", i),
             make_source("test"),
@@ -208,7 +208,7 @@ fn test_similarity_search_returns_relevant_results() {
     ];
 
     for (title, body) in topics {
-        let mut node = Node::new(NodeKind::Fact, title.to_string(), body.to_string(), make_source("test"), 0.5);
+        let mut node = Node::new(NodeKind::new("fact").unwrap(), title.to_string(), body.to_string(), make_source("test"), 0.5);
         let text = embedding_input(&node);
         let emb = embedding_service.embed(&text).unwrap();
         node.embedding = Some(emb.clone());
@@ -248,14 +248,14 @@ fn test_auto_linker_creates_similarity_link() {
 
     // Two highly similar nodes about Rust memory safety
     let mut node1 = Node::new(
-        NodeKind::Fact,
+        NodeKind::new("fact").unwrap(),
         "Rust is memory-safe".to_string(),
         "Rust provides memory safety without garbage collection".to_string(),
         make_source("test"),
         0.8,
     );
     let mut node2 = Node::new(
-        NodeKind::Fact,
+        NodeKind::new("fact").unwrap(),
         "Rust ensures memory safety".to_string(),
         "Memory safety is guaranteed by Rust's ownership system".to_string(),
         make_source("test"),
@@ -310,14 +310,14 @@ fn test_edge_decay_preserves_recent_auto_edges() {
     let storage = Arc::new(RedbStorage::open(dir.path().join("test.redb")).unwrap());
     let decay_engine = DecayEngine::new(storage.clone(), DecayConfig::default());
 
-    let node1 = Node::new(NodeKind::Fact, "N1".to_string(), "".to_string(), make_source("test"), 0.5);
-    let node2 = Node::new(NodeKind::Fact, "N2".to_string(), "".to_string(), make_source("test"), 0.5);
+    let node1 = Node::new(NodeKind::new("fact").unwrap(), "N1".to_string(), "".to_string(), make_source("test"), 0.5);
+    let node2 = Node::new(NodeKind::new("fact").unwrap(), "N2".to_string(), "".to_string(), make_source("test"), 0.5);
     storage.put_node(&node1).unwrap();
     storage.put_node(&node2).unwrap();
 
     // Auto-similarity edge (subject to decay)
     let edge = Edge::new(
-        node1.id, node2.id, Relation::RelatedTo, 1.0,
+        node1.id, node2.id, Relation::new("related_to").unwrap(), 1.0,
         EdgeProvenance::AutoSimilarity { score: 0.9 },
     );
     storage.put_edge(&edge).unwrap();
@@ -338,12 +338,12 @@ fn test_edge_decay_exempts_manual_edges() {
     let storage = Arc::new(RedbStorage::open(dir.path().join("test.redb")).unwrap());
     let decay_engine = DecayEngine::new(storage.clone(), DecayConfig::default());
 
-    let n1 = Node::new(NodeKind::Fact, "N1".to_string(), "".to_string(), make_source("test"), 0.5);
-    let n2 = Node::new(NodeKind::Fact, "N2".to_string(), "".to_string(), make_source("test"), 0.5);
+    let n1 = Node::new(NodeKind::new("fact").unwrap(), "N1".to_string(), "".to_string(), make_source("test"), 0.5);
+    let n2 = Node::new(NodeKind::new("fact").unwrap(), "N2".to_string(), "".to_string(), make_source("test"), 0.5);
     storage.put_node(&n1).unwrap();
     storage.put_node(&n2).unwrap();
 
-    let manual_edge = Edge::new(n1.id, n2.id, Relation::RelatedTo, 0.01, make_manual("test"));
+    let manual_edge = Edge::new(n1.id, n2.id, Relation::new("related_to").unwrap(), 0.01, make_manual("test"));
     storage.put_edge(&manual_edge).unwrap();
 
     // Even with weight below thresholds, manual edges are exempt
@@ -365,7 +365,7 @@ fn test_hybrid_search_finds_relevant_nodes() {
     let graph_engine = Arc::new(GraphEngineImpl::new(storage.clone()));
 
     let mut node = Node::new(
-        NodeKind::Fact,
+        NodeKind::new("fact").unwrap(),
         "Machine learning algorithms".to_string(),
         "Various algorithms used in machine learning include neural networks".to_string(),
         make_source("test"),

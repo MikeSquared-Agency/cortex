@@ -3,7 +3,7 @@ use crate::storage::filters::{NodeFilter, StorageStats};
 use crate::storage::traits::Storage;
 use crate::types::{Edge, EdgeId, Node, NodeId};
 use chrono::{DateTime, Utc};
-use redb::{Database, MultimapTableDefinition, ReadableTable, TableDefinition};
+use redb::{Database, MultimapTableDefinition, ReadableMultimapTable, ReadableTable, TableDefinition};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -12,9 +12,9 @@ use std::sync::Arc;
 const NODES: TableDefinition<&[u8; 16], &[u8]> = TableDefinition::new("nodes");
 const EDGES: TableDefinition<&[u8; 16], &[u8]> = TableDefinition::new("edges");
 
-// Secondary indexes
-const NODES_BY_KIND: MultimapTableDefinition<u8, &[u8; 16]> =
-    MultimapTableDefinition::new("nodes_by_kind");
+// Secondary indexes (v2: kind stored as &str, not u8)
+const NODES_BY_KIND: MultimapTableDefinition<&str, &[u8; 16]> =
+    MultimapTableDefinition::new("nodes_by_kind_v2");
 const EDGES_BY_FROM: MultimapTableDefinition<&[u8; 16], &[u8; 16]> =
     MultimapTableDefinition::new("edges_by_from");
 const EDGES_BY_TO: MultimapTableDefinition<&[u8; 16], &[u8; 16]> =
@@ -26,6 +26,14 @@ const NODES_BY_SOURCE: MultimapTableDefinition<&str, &[u8; 16]> =
 
 // Metadata table
 const META: TableDefinition<&str, &[u8]> = TableDefinition::new("meta");
+
+/// Current schema version.
+/// v1 = original (NodeKind stored as u8 in nodes_by_kind)
+/// v2 = string-based NodeKind/Relation, nodes_by_kind_v2 table
+pub const CURRENT_SCHEMA_VERSION: u32 = 2;
+const SCHEMA_VERSION_KEY: &str = "schema_version";
+const STATS_NODE_COUNT_KEY: &str = "stats:node_count";
+const STATS_EDGE_COUNT_KEY: &str = "stats:edge_count";
 
 /// Redb-based storage implementation
 pub struct RedbStorage {
@@ -46,26 +54,75 @@ impl RedbStorage {
             })?;
         }
 
+        let is_new = !path.exists();
         let db = Database::create(&path)?;
 
-        // Initialize tables
-        let write_txn = db.begin_write()?;
-        {
-            let _ = write_txn.open_table(NODES)?;
-            let _ = write_txn.open_table(EDGES)?;
-            let _ = write_txn.open_multimap_table(NODES_BY_KIND)?;
-            let _ = write_txn.open_multimap_table(EDGES_BY_FROM)?;
-            let _ = write_txn.open_multimap_table(EDGES_BY_TO)?;
-            let _ = write_txn.open_multimap_table(NODES_BY_TAG)?;
-            let _ = write_txn.open_multimap_table(NODES_BY_SOURCE)?;
-            let _ = write_txn.open_table(META)?;
+        if is_new {
+            // New database: initialize all tables and write schema version
+            let write_txn = db.begin_write()?;
+            {
+                let _ = write_txn.open_table(NODES)?;
+                let _ = write_txn.open_table(EDGES)?;
+                let _ = write_txn.open_multimap_table(NODES_BY_KIND)?;
+                let _ = write_txn.open_multimap_table(EDGES_BY_FROM)?;
+                let _ = write_txn.open_multimap_table(EDGES_BY_TO)?;
+                let _ = write_txn.open_multimap_table(NODES_BY_TAG)?;
+                let _ = write_txn.open_multimap_table(NODES_BY_SOURCE)?;
+                let mut meta = write_txn.open_table(META)?;
+                meta.insert(SCHEMA_VERSION_KEY, CURRENT_SCHEMA_VERSION.to_string().as_bytes())?;
+            }
+            write_txn.commit()?;
+        } else {
+            // Existing database: check schema version
+            Self::check_schema_version(&db)?;
+            // Ensure tables exist
+            let write_txn = db.begin_write()?;
+            {
+                let _ = write_txn.open_table(NODES)?;
+                let _ = write_txn.open_table(EDGES)?;
+                let _ = write_txn.open_multimap_table(NODES_BY_KIND)?;
+                let _ = write_txn.open_multimap_table(EDGES_BY_FROM)?;
+                let _ = write_txn.open_multimap_table(EDGES_BY_TO)?;
+                let _ = write_txn.open_multimap_table(NODES_BY_TAG)?;
+                let _ = write_txn.open_multimap_table(NODES_BY_SOURCE)?;
+                let _ = write_txn.open_table(META)?;
+            }
+            write_txn.commit()?;
         }
-        write_txn.commit()?;
 
         Ok(Self {
             db: Arc::new(db),
             path,
         })
+    }
+
+    /// Check schema version. Returns error if migration is needed.
+    fn check_schema_version(db: &Database) -> Result<()> {
+        let read_txn = db.begin_read()?;
+        let version = {
+            let table = read_txn.open_table(META).ok();
+            table
+                .and_then(|t| {
+                    t.get(SCHEMA_VERSION_KEY).ok().flatten().and_then(|v| {
+                        std::str::from_utf8(v.value())
+                            .ok()
+                            .and_then(|s| s.parse::<u32>().ok())
+                    })
+                })
+                .unwrap_or(1) // No version entry = v1
+        };
+
+        match version.cmp(&CURRENT_SCHEMA_VERSION) {
+            std::cmp::Ordering::Equal => Ok(()),
+            std::cmp::Ordering::Less => Err(CortexError::Validation(format!(
+                "Database schema v{} is older than current v{}. Run `cortex migrate`.",
+                version, CURRENT_SCHEMA_VERSION
+            ))),
+            std::cmp::Ordering::Greater => Err(CortexError::Validation(format!(
+                "Database schema v{} is newer than this binary v{}. Upgrade Cortex.",
+                version, CURRENT_SCHEMA_VERSION
+            ))),
+        }
     }
 
     /// Get the database file path
@@ -118,10 +175,10 @@ impl RedbStorage {
 
             // Remove old kind if node existed before
             if let Some(old) = old_node {
-                kind_table.remove(old.kind.to_u8(), &node_id_bytes)?;
+                kind_table.remove(old.kind.as_str(), &node_id_bytes)?;
             }
 
-            kind_table.insert(node.kind.to_u8(), &node_id_bytes)?;
+            kind_table.insert(node.kind.as_str(), &node_id_bytes)?;
         }
 
         // Update source index
@@ -250,6 +307,47 @@ impl RedbStorage {
     }
 
 
+    fn increment_meta_counter(&self, key: &str) -> Result<()> {
+        let write_txn = self.db.begin_write()?;
+        {
+            let mut meta = write_txn.open_table(META)?;
+            let current = meta.get(key)?.map(|v| {
+                let mut bytes = [0u8; 8];
+                bytes.copy_from_slice(v.value());
+                u64::from_le_bytes(bytes)
+            }).unwrap_or(0);
+            meta.insert(key, (current + 1).to_le_bytes().as_slice())?;
+        }
+        write_txn.commit()?;
+        Ok(())
+    }
+
+    fn decrement_meta_counter(&self, key: &str) -> Result<()> {
+        let write_txn = self.db.begin_write()?;
+        {
+            let mut meta = write_txn.open_table(META)?;
+            let current = meta.get(key)?.map(|v| {
+                let mut bytes = [0u8; 8];
+                bytes.copy_from_slice(v.value());
+                u64::from_le_bytes(bytes)
+            }).unwrap_or(0);
+            meta.insert(key, current.saturating_sub(1).to_le_bytes().as_slice())?;
+        }
+        write_txn.commit()?;
+        Ok(())
+    }
+
+    fn read_meta_counter(&self, key: &str) -> Result<Option<u64>> {
+        let read_txn = self.db.begin_read()?;
+        let meta = read_txn.open_table(META)?;
+        Ok(meta.get(key)?.map(|v| {
+            let mut bytes = [0u8; 8];
+            bytes.copy_from_slice(v.value());
+            u64::from_le_bytes(bytes)
+        }))
+    }
+
+
 }
 
 impl Storage for RedbStorage {
@@ -280,6 +378,12 @@ impl Storage for RedbStorage {
         self.update_node_indexes(&write_txn, node, old_node.as_ref())?;
 
         write_txn.commit()?;
+
+        // Increment node count for new nodes
+        if old_node.is_none() {
+            self.increment_meta_counter(STATS_NODE_COUNT_KEY)?;
+        }
+
         Ok(())
     }
 
@@ -304,7 +408,10 @@ impl Storage for RedbStorage {
         node.deleted = true;
         node.updated_at = Utc::now();
 
-        self.put_node(&node)
+        // put_node won't increment (node already exists), decrement manually
+        self.put_node(&node)?;
+        self.decrement_meta_counter(STATS_NODE_COUNT_KEY)?;
+        Ok(())
     }
 
     fn list_nodes(&self, filter: NodeFilter) -> Result<Vec<Node>> {
@@ -319,7 +426,7 @@ impl Storage for RedbStorage {
 
             for kind in kinds {
                 let node_ids: Vec<NodeId> = kind_index
-                    .get(kind.to_u8())?
+                    .get(kind.as_str())?
                     .map(|result| result.map(|guard| Self::bytes_to_uuid(guard.value())))
                     .collect::<std::result::Result<Vec<_>, _>>()?;
 
@@ -329,6 +436,14 @@ impl Storage for RedbStorage {
                         let node = Self::deserialize_node(bytes.value())?;
                         if Self::node_matches_filter(&node, &filter) {
                             nodes.push(node);
+                            // Early exit when limit reached (no offset case)
+                            if filter.offset.is_none() {
+                                if let Some(limit) = filter.limit {
+                                    if nodes.len() >= limit {
+                                        break;
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -340,6 +455,14 @@ impl Storage for RedbStorage {
                 let node = Self::deserialize_node(value.value())?;
                 if Self::node_matches_filter(&node, &filter) {
                     nodes.push(node);
+                    // Early exit: if no offset, stop once limit is reached
+                    if filter.offset.is_none() {
+                        if let Some(limit) = filter.limit {
+                            if nodes.len() >= limit {
+                                break;
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -368,8 +491,7 @@ impl Storage for RedbStorage {
                 let kind_index = read_txn.open_multimap_table(NODES_BY_KIND)?;
                 let mut count = 0u64;
                 for kind in kinds {
-                    count += kind_index.get(kind.to_u8())?
-                        .count() as u64;
+                    count += kind_index.get(kind.as_str())?.count() as u64;
                 }
                 return Ok(count);
             }
@@ -383,15 +505,19 @@ impl Storage for RedbStorage {
         edge.validate()
             .map_err(|e| CortexError::Validation(e))?;
 
-        // Single read transaction for all pre-checks
-        {
-            let read_txn = self.db.begin_read()?;
-            let nodes_table = read_txn.open_table(NODES)?;
+        let from_bytes = Self::uuid_to_bytes(&edge.from);
+        let to_bytes = Self::uuid_to_bytes(&edge.to);
+        let edge_id_bytes = Self::uuid_to_bytes(&edge.id);
 
-            // Check source node exists and not deleted
-            let from_bytes = Self::uuid_to_bytes(&edge.from);
+        // Single write transaction: validate nodes, check duplicates, write — all atomic
+        let write_txn = self.db.begin_write()?;
+
+        // 1. Check source and target nodes exist and are not deleted
+        {
+            let nodes_table = write_txn.open_table(NODES)?;
+
             let from_data = nodes_table.get(&from_bytes)?
-                .ok_or(CortexError::InvalidEdge {
+                .ok_or_else(|| CortexError::InvalidEdge {
                     reason: format!("Source node {} does not exist", edge.from),
                 })?;
             let from_node: Node = Self::deserialize_node(from_data.value())?;
@@ -401,10 +527,8 @@ impl Storage for RedbStorage {
                 });
             }
 
-            // Check target node exists and not deleted
-            let to_bytes = Self::uuid_to_bytes(&edge.to);
             let to_data = nodes_table.get(&to_bytes)?
-                .ok_or(CortexError::InvalidEdge {
+                .ok_or_else(|| CortexError::InvalidEdge {
                     reason: format!("Target node {} does not exist", edge.to),
                 })?;
             let to_node: Node = Self::deserialize_node(to_data.value())?;
@@ -413,20 +537,30 @@ impl Storage for RedbStorage {
                     reason: format!("Target node {} is deleted", edge.to),
                 });
             }
+        } // nodes_table dropped
 
-            // Check for duplicate (same from, to, relation) in same transaction
-            let edges_table = read_txn.open_table(EDGES)?;
-            let from_index = read_txn.open_multimap_table(EDGES_BY_FROM)?;
-            let edge_ids: Vec<EdgeId> = from_index
+        // 2. Collect existing outgoing edge IDs from the from-index
+        // Copy the raw bytes eagerly so they outlive the table handle
+        let existing_edge_ids: Vec<EdgeId> = {
+            let from_index = write_txn.open_multimap_table(EDGES_BY_FROM)?;
+            let raw: Vec<[u8; 16]> = from_index
                 .get(&from_bytes)?
-                .map(|result| result.map(|guard| Self::bytes_to_uuid(guard.value())))
+                .map(|r| r.map(|g| *g.value()))
                 .collect::<std::result::Result<Vec<_>, _>>()?;
+            raw.into_iter().map(|b| Self::bytes_to_uuid(&b)).collect()
+        }; // from_index dropped
 
-            for edge_id in edge_ids {
-                let edge_id_bytes = Self::uuid_to_bytes(&edge_id);
-                if let Some(bytes) = edges_table.get(&edge_id_bytes)? {
+        // 3. Check for duplicates (same from + to + relation, different id)
+        {
+            let edges_table = write_txn.open_table(EDGES)?;
+            for eid in &existing_edge_ids {
+                let eid_bytes = Self::uuid_to_bytes(eid);
+                if let Some(bytes) = edges_table.get(&eid_bytes)? {
                     let existing: Edge = Self::deserialize_edge(bytes.value())?;
-                    if existing.to == edge.to && existing.relation == edge.relation && existing.id != edge.id {
+                    if existing.to == edge.to
+                        && existing.relation == edge.relation
+                        && existing.id != edge.id
+                    {
                         return Err(CortexError::DuplicateEdge {
                             from: edge.from,
                             to: edge.to,
@@ -435,22 +569,20 @@ impl Storage for RedbStorage {
                     }
                 }
             }
-        }
+        } // edges_table dropped
 
-        let write_txn = self.db.begin_write()?;
-
-        // Serialize and store edge
+        // 4. Write the edge
         let edge_bytes = Self::serialize_edge(edge)?;
         {
             let mut edges_table = write_txn.open_table(EDGES)?;
-            let edge_id_bytes = Self::uuid_to_bytes(&edge.id);
             edges_table.insert(&edge_id_bytes, edge_bytes.as_slice())?;
-        }
+        } // edges_table dropped
 
-        // Update indexes
+        // 5. Update indexes (reopens EDGES_BY_FROM and EDGES_BY_TO — safe after drop above)
         self.update_edge_indexes(&write_txn, edge)?;
 
         write_txn.commit()?;
+        self.increment_meta_counter(STATS_EDGE_COUNT_KEY)?;
         Ok(())
     }
 
@@ -485,6 +617,7 @@ impl Storage for RedbStorage {
         }
 
         write_txn.commit()?;
+        self.decrement_meta_counter(STATS_EDGE_COUNT_KEY)?;
         Ok(())
     }
 
@@ -625,26 +758,36 @@ impl Storage for RedbStorage {
     }
 
     fn stats(&self) -> Result<StorageStats> {
+        // Read O(1) counters from META for total counts
+        let node_count = self.read_meta_counter(STATS_NODE_COUNT_KEY)?.unwrap_or_else(|| {
+            // Legacy fallback: count from table scan
+            self.db.begin_read().ok()
+                .and_then(|txn| txn.open_table(NODES).ok())
+                .and_then(|t| t.iter().ok().map(|it| it.count() as u64))
+                .unwrap_or(0)
+        });
+        let edge_count = self.read_meta_counter(STATS_EDGE_COUNT_KEY)?.unwrap_or_else(|| {
+            self.db.begin_read().ok()
+                .and_then(|txn| txn.open_table(EDGES).ok())
+                .and_then(|t| t.iter().ok().map(|it| it.count() as u64))
+                .unwrap_or(0)
+        });
+
+        // Still scan for per-kind/per-relation breakdowns and timestamps
         let read_txn = self.db.begin_read()?;
         let nodes_table = read_txn.open_table(NODES)?;
         let edges_table = read_txn.open_table(EDGES)?;
 
-        let mut node_count = 0u64;
-        let mut edge_count = 0u64;
         let mut node_counts_by_kind = HashMap::new();
         let mut edge_counts_by_relation = HashMap::new();
         let mut oldest_node: Option<DateTime<Utc>> = None;
         let mut newest_node: Option<DateTime<Utc>> = None;
 
-        // Count nodes and gather stats
         for item in nodes_table.iter()? {
             let (_, value) = item?;
             let node: Node = Self::deserialize_node(value.value())?;
-
             if !node.deleted {
-                node_count += 1;
                 *node_counts_by_kind.entry(node.kind).or_insert(0) += 1;
-
                 if oldest_node.is_none() || node.created_at < oldest_node.unwrap() {
                     oldest_node = Some(node.created_at);
                 }
@@ -654,15 +797,12 @@ impl Storage for RedbStorage {
             }
         }
 
-        // Count edges
         for item in edges_table.iter()? {
             let (_, value) = item?;
             let edge: Edge = Self::deserialize_edge(value.value())?;
-            edge_count += 1;
             *edge_counts_by_relation.entry(edge.relation).or_insert(0) += 1;
         }
 
-        // Get database file size
         let db_size_bytes = std::fs::metadata(&self.path)
             .map(|m| m.len())
             .unwrap_or(0);
@@ -718,7 +858,7 @@ mod tests {
     fn test_node_crud() {
         let (storage, _temp) = create_test_storage();
 
-        let node = create_test_node(NodeKind::Fact, "Test Fact");
+        let node = create_test_node(NodeKind::new("fact").unwrap(), "Test Fact");
 
         // Create
         storage.put_node(&node).unwrap();
@@ -747,7 +887,7 @@ mod tests {
         let (storage, _temp) = create_test_storage();
 
         // Title too long
-        let mut node = create_test_node(NodeKind::Fact, &"x".repeat(300));
+        let mut node = create_test_node(NodeKind::new("fact").unwrap(), &"x".repeat(300));
         let result = storage.put_node(&node);
         assert!(result.is_err());
 
@@ -768,8 +908,8 @@ mod tests {
         let (storage, _temp) = create_test_storage();
 
         // Create two nodes
-        let node1 = create_test_node(NodeKind::Fact, "Fact 1");
-        let node2 = create_test_node(NodeKind::Decision, "Decision 1");
+        let node1 = create_test_node(NodeKind::new("fact").unwrap(), "Fact 1");
+        let node2 = create_test_node(NodeKind::new("decision").unwrap(), "Decision 1");
         storage.put_node(&node1).unwrap();
         storage.put_node(&node2).unwrap();
 
@@ -777,7 +917,7 @@ mod tests {
         let edge = Edge::new(
             node1.id,
             node2.id,
-            Relation::InformedBy,
+            Relation::new("informed_by").unwrap(),
             0.8,
             EdgeProvenance::Manual {
                 created_by: "test".to_string(),
@@ -799,14 +939,14 @@ mod tests {
     fn test_edge_validation() {
         let (storage, _temp) = create_test_storage();
 
-        let node = create_test_node(NodeKind::Fact, "Fact");
+        let node = create_test_node(NodeKind::new("fact").unwrap(), "Fact");
         storage.put_node(&node).unwrap();
 
         // Self-edge
         let edge = Edge::new(
             node.id,
             node.id,
-            Relation::RelatedTo,
+            Relation::new("related_to").unwrap(),
             0.5,
             EdgeProvenance::Manual {
                 created_by: "test".to_string(),
@@ -818,7 +958,7 @@ mod tests {
         let edge = Edge::new(
             node.id,
             Uuid::now_v7(),
-            Relation::RelatedTo,
+            Relation::new("related_to").unwrap(),
             0.5,
             EdgeProvenance::Manual {
                 created_by: "test".to_string(),
@@ -832,19 +972,19 @@ mod tests {
         let (storage, _temp) = create_test_storage();
 
         // Create nodes of different kinds
-        let fact = create_test_node(NodeKind::Fact, "Fact");
-        let decision = create_test_node(NodeKind::Decision, "Decision");
+        let fact = create_test_node(NodeKind::new("fact").unwrap(), "Fact");
+        let decision = create_test_node(NodeKind::new("decision").unwrap(), "Decision");
         storage.put_node(&fact).unwrap();
         storage.put_node(&decision).unwrap();
 
         // Filter by kind
-        let filter = NodeFilter::new().with_kinds(vec![NodeKind::Fact]);
+        let filter = NodeFilter::new().with_kinds(vec![NodeKind::new("fact").unwrap()]);
         let results = storage.list_nodes(filter).unwrap();
         assert_eq!(results.len(), 1);
-        assert_eq!(results[0].kind, NodeKind::Fact);
+        assert_eq!(results[0].kind, NodeKind::new("fact").unwrap());
 
         // Filter by multiple kinds
-        let filter = NodeFilter::new().with_kinds(vec![NodeKind::Fact, NodeKind::Decision]);
+        let filter = NodeFilter::new().with_kinds(vec![NodeKind::new("fact").unwrap(), NodeKind::new("decision").unwrap()]);
         let results = storage.list_nodes(filter).unwrap();
         assert_eq!(results.len(), 2);
     }
@@ -853,9 +993,9 @@ mod tests {
     fn test_edge_traversal() {
         let (storage, _temp) = create_test_storage();
 
-        let node1 = create_test_node(NodeKind::Fact, "Node 1");
-        let node2 = create_test_node(NodeKind::Fact, "Node 2");
-        let node3 = create_test_node(NodeKind::Fact, "Node 3");
+        let node1 = create_test_node(NodeKind::new("fact").unwrap(), "Node 1");
+        let node2 = create_test_node(NodeKind::new("fact").unwrap(), "Node 2");
+        let node3 = create_test_node(NodeKind::new("fact").unwrap(), "Node 3");
 
         storage.put_node(&node1).unwrap();
         storage.put_node(&node2).unwrap();
@@ -865,7 +1005,7 @@ mod tests {
         let edge1 = Edge::new(
             node1.id,
             node2.id,
-            Relation::RelatedTo,
+            Relation::new("related_to").unwrap(),
             1.0,
             EdgeProvenance::Manual {
                 created_by: "test".to_string(),
@@ -874,7 +1014,7 @@ mod tests {
         let edge2 = Edge::new(
             node1.id,
             node3.id,
-            Relation::LedTo,
+            Relation::new("led_to").unwrap(),
             1.0,
             EdgeProvenance::Manual {
                 created_by: "test".to_string(),
@@ -883,7 +1023,7 @@ mod tests {
         let edge3 = Edge::new(
             node3.id,
             node2.id,
-            Relation::InformedBy,
+            Relation::new("informed_by").unwrap(),
             1.0,
             EdgeProvenance::Manual {
                 created_by: "test".to_string(),
@@ -912,7 +1052,7 @@ mod tests {
         let (storage, _temp) = create_test_storage();
 
         let nodes: Vec<Node> = (0..10)
-            .map(|i| create_test_node(NodeKind::Observation, &format!("Node {}", i)))
+            .map(|i| create_test_node(NodeKind::new("observation").unwrap(), &format!("Node {}", i)))
             .collect();
 
         storage.put_nodes_batch(&nodes).unwrap();
@@ -926,15 +1066,15 @@ mod tests {
     fn test_storage_stats() {
         let (storage, _temp) = create_test_storage();
 
-        let fact = create_test_node(NodeKind::Fact, "Fact");
-        let decision = create_test_node(NodeKind::Decision, "Decision");
+        let fact = create_test_node(NodeKind::new("fact").unwrap(), "Fact");
+        let decision = create_test_node(NodeKind::new("decision").unwrap(), "Decision");
         storage.put_node(&fact).unwrap();
         storage.put_node(&decision).unwrap();
 
         let edge = Edge::new(
             fact.id,
             decision.id,
-            Relation::InformedBy,
+            Relation::new("informed_by").unwrap(),
             0.8,
             EdgeProvenance::Manual {
                 created_by: "test".to_string(),
@@ -945,7 +1085,7 @@ mod tests {
         let stats = storage.stats().unwrap();
         assert_eq!(stats.node_count, 2);
         assert_eq!(stats.edge_count, 1);
-        assert_eq!(stats.node_counts_by_kind.get(&NodeKind::Fact), Some(&1));
+        assert_eq!(stats.node_counts_by_kind.get(&NodeKind::new("fact").unwrap()), Some(&1));
     }
 }
 
@@ -972,17 +1112,17 @@ mod optimization_tests {
         let (storage, _temp) = create_test_storage();
 
         for i in 0..50 {
-            storage.put_node(&make_node(NodeKind::Fact, &format!("F{}", i))).unwrap();
+            storage.put_node(&make_node(NodeKind::new("fact").unwrap(), &format!("F{}", i))).unwrap();
         }
         for i in 0..30 {
-            storage.put_node(&make_node(NodeKind::Decision, &format!("D{}", i))).unwrap();
+            storage.put_node(&make_node(NodeKind::new("decision").unwrap(), &format!("D{}", i))).unwrap();
         }
 
         // Kind-only filter should use index fast path
-        let count = storage.count_nodes(NodeFilter::new().with_kinds(vec![NodeKind::Fact])).unwrap();
+        let count = storage.count_nodes(NodeFilter::new().with_kinds(vec![NodeKind::new("fact").unwrap()])).unwrap();
         assert_eq!(count, 50);
 
-        let count = storage.count_nodes(NodeFilter::new().with_kinds(vec![NodeKind::Fact, NodeKind::Decision])).unwrap();
+        let count = storage.count_nodes(NodeFilter::new().with_kinds(vec![NodeKind::new("fact").unwrap(), NodeKind::new("decision").unwrap()])).unwrap();
         assert_eq!(count, 80);
 
         let count = storage.count_nodes(NodeFilter::new()).unwrap();
@@ -993,22 +1133,22 @@ mod optimization_tests {
     fn test_duplicate_edge_detection() {
         let (storage, _temp) = create_test_storage();
 
-        let n1 = make_node(NodeKind::Fact, "N1");
-        let n2 = make_node(NodeKind::Fact, "N2");
+        let n1 = make_node(NodeKind::new("fact").unwrap(), "N1");
+        let n2 = make_node(NodeKind::new("fact").unwrap(), "N2");
         storage.put_node(&n1).unwrap();
         storage.put_node(&n2).unwrap();
 
-        let e1 = Edge::new(n1.id, n2.id, Relation::RelatedTo, 0.8,
+        let e1 = Edge::new(n1.id, n2.id, Relation::new("related_to").unwrap(), 0.8,
             EdgeProvenance::Manual { created_by: "test".to_string() });
         storage.put_edge(&e1).unwrap();
 
         // Same from/to/relation should fail
-        let e2 = Edge::new(n1.id, n2.id, Relation::RelatedTo, 0.5,
+        let e2 = Edge::new(n1.id, n2.id, Relation::new("related_to").unwrap(), 0.5,
             EdgeProvenance::Manual { created_by: "test".to_string() });
         assert!(storage.put_edge(&e2).is_err());
 
         // Different relation should succeed
-        let e3 = Edge::new(n1.id, n2.id, Relation::LedTo, 0.5,
+        let e3 = Edge::new(n1.id, n2.id, Relation::new("led_to").unwrap(), 0.5,
             EdgeProvenance::Manual { created_by: "test".to_string() });
         assert!(storage.put_edge(&e3).is_ok());
     }
@@ -1017,13 +1157,13 @@ mod optimization_tests {
     fn test_edge_to_deleted_node_rejected() {
         let (storage, _temp) = create_test_storage();
 
-        let n1 = make_node(NodeKind::Fact, "N1");
-        let n2 = make_node(NodeKind::Fact, "N2");
+        let n1 = make_node(NodeKind::new("fact").unwrap(), "N1");
+        let n2 = make_node(NodeKind::new("fact").unwrap(), "N2");
         storage.put_node(&n1).unwrap();
         storage.put_node(&n2).unwrap();
         storage.delete_node(n2.id).unwrap();
 
-        let edge = Edge::new(n1.id, n2.id, Relation::RelatedTo, 0.8,
+        let edge = Edge::new(n1.id, n2.id, Relation::new("related_to").unwrap(), 0.8,
             EdgeProvenance::Manual { created_by: "test".to_string() });
         assert!(storage.put_edge(&edge).is_err());
     }
@@ -1032,12 +1172,12 @@ mod optimization_tests {
     fn test_update_existing_edge() {
         let (storage, _temp) = create_test_storage();
 
-        let n1 = make_node(NodeKind::Fact, "N1");
-        let n2 = make_node(NodeKind::Fact, "N2");
+        let n1 = make_node(NodeKind::new("fact").unwrap(), "N1");
+        let n2 = make_node(NodeKind::new("fact").unwrap(), "N2");
         storage.put_node(&n1).unwrap();
         storage.put_node(&n2).unwrap();
 
-        let mut edge = Edge::new(n1.id, n2.id, Relation::RelatedTo, 0.8,
+        let mut edge = Edge::new(n1.id, n2.id, Relation::new("related_to").unwrap(), 0.8,
             EdgeProvenance::Manual { created_by: "test".to_string() });
         storage.put_edge(&edge).unwrap();
 
@@ -1053,7 +1193,7 @@ mod optimization_tests {
     fn test_snapshot_and_restore() {
         let (storage, _temp) = create_test_storage();
 
-        let node = make_node(NodeKind::Fact, "Snapshot test");
+        let node = make_node(NodeKind::new("fact").unwrap(), "Snapshot test");
         storage.put_node(&node).unwrap();
 
         // Snapshot
@@ -1071,7 +1211,7 @@ mod optimization_tests {
     fn test_tag_index_update_on_node_change() {
         let (storage, _temp) = create_test_storage();
 
-        let mut node = make_node(NodeKind::Fact, "Tagged");
+        let mut node = make_node(NodeKind::new("fact").unwrap(), "Tagged");
         node.data.tags = vec!["alpha".to_string(), "beta".to_string()];
         storage.put_node(&node).unwrap();
 
@@ -1096,7 +1236,7 @@ mod optimization_tests {
     fn test_source_index_update_on_agent_change() {
         let (storage, _temp) = create_test_storage();
 
-        let mut node = make_node(NodeKind::Fact, "Agent test");
+        let mut node = make_node(NodeKind::new("fact").unwrap(), "Agent test");
         storage.put_node(&node).unwrap();
 
         let results = storage.list_nodes(NodeFilter::new().with_source_agent("test".to_string())).unwrap();
@@ -1117,8 +1257,8 @@ mod optimization_tests {
     fn test_deleted_nodes_excluded_by_default() {
         let (storage, _temp) = create_test_storage();
 
-        let n1 = make_node(NodeKind::Fact, "Alive");
-        let n2 = make_node(NodeKind::Fact, "Dead");
+        let n1 = make_node(NodeKind::new("fact").unwrap(), "Alive");
+        let n2 = make_node(NodeKind::new("fact").unwrap(), "Dead");
         storage.put_node(&n1).unwrap();
         storage.put_node(&n2).unwrap();
         storage.delete_node(n2.id).unwrap();
@@ -1134,9 +1274,9 @@ mod optimization_tests {
     fn test_importance_filter() {
         let (storage, _temp) = create_test_storage();
 
-        let mut low = make_node(NodeKind::Fact, "Low importance");
+        let mut low = make_node(NodeKind::new("fact").unwrap(), "Low importance");
         low.importance = 0.2;
-        let mut high = make_node(NodeKind::Fact, "High importance");
+        let mut high = make_node(NodeKind::new("fact").unwrap(), "High importance");
         high.importance = 0.9;
 
         storage.put_node(&low).unwrap();
@@ -1152,7 +1292,7 @@ mod optimization_tests {
         let (storage, _temp) = create_test_storage();
 
         for i in 0..20 {
-            storage.put_node(&make_node(NodeKind::Fact, &format!("Page {}", i))).unwrap();
+            storage.put_node(&make_node(NodeKind::new("fact").unwrap(), &format!("Page {}", i))).unwrap();
         }
 
         let page1 = storage.list_nodes(NodeFilter::new().with_limit(5)).unwrap();
@@ -1173,7 +1313,7 @@ mod optimization_tests {
 
         // Insert some nodes
         for i in 0..100 {
-            storage.put_node(&make_node(NodeKind::Fact, &format!("N{}", i))).unwrap();
+            storage.put_node(&make_node(NodeKind::new("fact").unwrap(), &format!("N{}", i))).unwrap();
         }
 
         // Stats should work (iterates all nodes)

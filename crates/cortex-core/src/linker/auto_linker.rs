@@ -180,7 +180,7 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
 
                 // Filter out edges that already exist (using pre-loaded set)
                 for edge in edges {
-                    if matches!(edge.relation, Relation::Contradicts) {
+                    if edge.relation.as_str() == "contradicts" {
                         self.metrics.add_contradictions_found(1);
                     }
                     let key = (edge.to, format!("{:?}", edge.relation));
@@ -346,7 +346,7 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
             edges.push(ProposedEdge {
                 from: contradiction.node_a,
                 to: contradiction.node_b,
-                relation: Relation::Contradicts,
+                relation: Relation::new("contradicts").unwrap(),
                 weight: contradiction.similarity,
                 provenance: EdgeProvenance::AutoContradiction {
                     reason: contradiction.reason,
@@ -393,7 +393,7 @@ mod tests {
 
         // Create test nodes
         let node1 = Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Rust programming".into(),
             "Rust is a systems language".into(),
             Source {
@@ -405,7 +405,7 @@ mod tests {
         );
 
         let node2 = Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Rust safety".into(),
             "Rust provides memory safety".into(),
             Source {

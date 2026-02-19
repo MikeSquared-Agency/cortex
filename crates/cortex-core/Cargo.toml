@@ -17,6 +17,8 @@ fastembed.workspace = true
 instant-distance.workspace = true
 rayon.workspace = true
 log.workspace = true
+async-trait.workspace = true
+futures.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

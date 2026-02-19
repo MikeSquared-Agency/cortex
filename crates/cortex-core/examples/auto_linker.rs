@@ -27,7 +27,7 @@ fn main() {
 
     let nodes = vec![
         Node::new(
-            NodeKind::Decision,
+            NodeKind::new("decision").unwrap(),
             "Use Rust for backend".into(),
             "Decided to use Rust for the Cortex backend due to performance requirements".into(),
             Source {
@@ -38,7 +38,7 @@ fn main() {
             0.8,
         ),
         Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Rust is fast".into(),
             "Rust provides zero-cost abstractions and no garbage collector".into(),
             Source {
@@ -49,7 +49,7 @@ fn main() {
             0.7,
         ),
         Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Rust is safe".into(),
             "Rust guarantees memory safety without garbage collection".into(),
             Source {
@@ -60,7 +60,7 @@ fn main() {
             0.7,
         ),
         Node::new(
-            NodeKind::Event,
+            NodeKind::new("event").unwrap(),
             "Backend implementation started".into(),
             "Started implementing the Cortex backend in Rust".into(),
             Source {
@@ -71,7 +71,7 @@ fn main() {
             0.6,
         ),
         Node::new(
-            NodeKind::Observation,
+            NodeKind::new("observation").unwrap(),
             "Team velocity increased".into(),
             "Observed that team velocity increased after switching to Rust".into(),
             Source {
@@ -82,7 +82,7 @@ fn main() {
             0.5,
         ),
         Node::new(
-            NodeKind::Pattern,
+            NodeKind::new("pattern").unwrap(),
             "Good tech choices boost morale".into(),
             "Pattern: When teams use technology they believe in, morale and velocity increase".into(),
             Source {
@@ -93,7 +93,7 @@ fn main() {
             0.9,
         ),
         Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Python is slow".into(),
             "Python has a GIL and is slower for CPU-bound tasks".into(),
             Source {

@@ -32,7 +32,7 @@ fn bench_single_node_insert(c: &mut Criterion) {
                 (storage, temp_dir)
             },
             |(storage, _temp)| {
-                let node = create_test_node(NodeKind::Fact, "Bench fact");
+                let node = create_test_node(NodeKind::new("fact").unwrap(), "Bench fact");
                 storage.put_node(&node).unwrap();
             },
             BatchSize::SmallInput,
@@ -45,13 +45,13 @@ fn bench_node_lookup_by_id(c: &mut Criterion) {
     let db_path = temp_dir.path().join("bench.redb");
     let storage = RedbStorage::open(&db_path).unwrap();
 
-    let node = create_test_node(NodeKind::Fact, "Lookup target");
+    let node = create_test_node(NodeKind::new("fact").unwrap(), "Lookup target");
     storage.put_node(&node).unwrap();
     let id = node.id;
 
     // Add 1000 other nodes
     for i in 0..1000 {
-        let n = create_test_node(NodeKind::Observation, &format!("Node {}", i));
+        let n = create_test_node(NodeKind::new("observation").unwrap(), &format!("Node {}", i));
         storage.put_node(&n).unwrap();
     }
 
@@ -70,7 +70,7 @@ fn bench_batch_insert_1k(c: &mut Criterion) {
                 let db_path = temp_dir.path().join("bench.redb");
                 let storage = RedbStorage::open(&db_path).unwrap();
                 let nodes: Vec<Node> = (0..1000)
-                    .map(|i| create_test_node(NodeKind::Observation, &format!("Node {}", i)))
+                    .map(|i| create_test_node(NodeKind::new("observation").unwrap(), &format!("Node {}", i)))
                     .collect();
                 (storage, nodes, temp_dir)
             },
@@ -88,7 +88,7 @@ fn bench_filter_by_kind(c: &mut Criterion) {
     let storage = RedbStorage::open(&db_path).unwrap();
 
     // Insert 5000 nodes across different kinds
-    let kinds = [NodeKind::Fact, NodeKind::Decision, NodeKind::Event, NodeKind::Pattern, NodeKind::Observation];
+    let kinds = [NodeKind::new("fact").unwrap(), NodeKind::new("decision").unwrap(), NodeKind::new("event").unwrap(), NodeKind::new("pattern").unwrap(), NodeKind::new("observation").unwrap()];
     for i in 0..5000 {
         let kind = kinds[i % kinds.len()];
         let n = create_test_node(kind, &format!("Node {}", i));
@@ -97,7 +97,7 @@ fn bench_filter_by_kind(c: &mut Criterion) {
 
     c.bench_function("filter by kind (5k nodes)", |b| {
         b.iter(|| {
-            let filter = NodeFilter::new().with_kinds(vec![NodeKind::Fact]);
+            let filter = NodeFilter::new().with_kinds(vec![NodeKind::new("fact").unwrap()]);
             storage.list_nodes(filter).unwrap();
         });
     });
@@ -109,21 +109,21 @@ fn bench_bfs_traversal(c: &mut Criterion) {
     let storage = Arc::new(RedbStorage::open(&db_path).unwrap());
 
     // Build a tree: root -> 10 children -> 10 grandchildren each = 111 nodes
-    let root = create_test_node(NodeKind::Decision, "Root");
+    let root = create_test_node(NodeKind::new("decision").unwrap(), "Root");
     storage.put_node(&root).unwrap();
     let root_id = root.id;
 
     for i in 0..10 {
-        let child = create_test_node(NodeKind::Fact, &format!("Child {}", i));
+        let child = create_test_node(NodeKind::new("fact").unwrap(), &format!("Child {}", i));
         storage.put_node(&child).unwrap();
-        let edge = Edge::new(root_id, child.id, Relation::LedTo, 0.8,
+        let edge = Edge::new(root_id, child.id, Relation::new("led_to").unwrap(), 0.8,
             EdgeProvenance::Manual { created_by: "bench".to_string() });
         storage.put_edge(&edge).unwrap();
 
         for j in 0..10 {
-            let grandchild = create_test_node(NodeKind::Observation, &format!("GC {}-{}", i, j));
+            let grandchild = create_test_node(NodeKind::new("observation").unwrap(), &format!("GC {}-{}", i, j));
             storage.put_node(&grandchild).unwrap();
-            let edge2 = Edge::new(child.id, grandchild.id, Relation::LedTo, 0.7,
+            let edge2 = Edge::new(child.id, grandchild.id, Relation::new("led_to").unwrap(), 0.7,
                 EdgeProvenance::Manual { created_by: "bench".to_string() });
             storage.put_edge(&edge2).unwrap();
         }
@@ -153,12 +153,12 @@ fn bench_shortest_path(c: &mut Criterion) {
     // Build a chain: A -> B -> C -> ... -> Z (26 nodes)
     let mut nodes = Vec::new();
     for i in 0..26 {
-        let n = create_test_node(NodeKind::Fact, &format!("Chain {}", i));
+        let n = create_test_node(NodeKind::new("fact").unwrap(), &format!("Chain {}", i));
         storage.put_node(&n).unwrap();
         nodes.push(n);
     }
     for i in 0..25 {
-        let edge = Edge::new(nodes[i].id, nodes[i+1].id, Relation::LedTo, 0.9,
+        let edge = Edge::new(nodes[i].id, nodes[i+1].id, Relation::new("led_to").unwrap(), 0.9,
             EdgeProvenance::Manual { created_by: "bench".to_string() });
         storage.put_edge(&edge).unwrap();
     }

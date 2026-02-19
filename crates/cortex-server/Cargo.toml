@@ -9,10 +9,15 @@ license.workspace = true
 name = "cortex-server"
 path = "src/main.rs"
 
+[features]
+warren = ["warren-adapter"]
+default = ["warren"]
+
 [dependencies]
 # Local crates
 cortex-core = { path = "../cortex-core" }
 cortex-proto = { path = "../cortex-proto" }
+warren-adapter = { path = "../warren-adapter", optional = true }
 
 # gRPC/HTTP
 tonic.workspace = true
@@ -28,6 +33,7 @@ tokio.workspace = true
 # NATS
 async-nats = "0.38"
 futures = "0.3"
+async-trait = { workspace = true }
 
 # Serialization
 serde.workspace = true
@@ -47,6 +53,7 @@ chrono.workspace = true
 
 # Config
 clap = { version = "4.5", features = ["derive", "env"] }
+toml = "0.8"
 
 # Database (for migration)
 reqwest = { version = "0.12", features = ["json"] }

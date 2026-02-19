@@ -108,20 +108,19 @@ impl<E: EmbeddingService> EmbeddingService for std::sync::Arc<E> {
 
 /// Generate the embedding input text for a node
 pub fn embedding_input(node: &Node) -> String {
-    let kind_str = match node.kind {
-        crate::types::NodeKind::Agent => "Agent",
-        crate::types::NodeKind::Decision => "Decision",
-        crate::types::NodeKind::Fact => "Fact",
-        crate::types::NodeKind::Event => "Event",
-        crate::types::NodeKind::Goal => "Goal",
-        crate::types::NodeKind::Preference => "Preference",
-        crate::types::NodeKind::Pattern => "Pattern",
-        crate::types::NodeKind::Observation => "Observation",
+    // Capitalize first letter for readability: "fact" → "Fact"
+    let kind_str = node.kind.as_str();
+    let kind_display: String = {
+        let mut chars = kind_str.chars();
+        match chars.next() {
+            None => String::new(),
+            Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
+        }
     };
 
     format!(
         "{}: {}\n{}\ntags: {}",
-        kind_str,
+        kind_display,
         node.data.title,
         node.data.body,
         node.data.tags.join(", ")
@@ -136,7 +135,7 @@ mod tests {
     #[test]
     fn test_embedding_input_format() {
         let node = Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Test title".to_string(),
             "Test body content".to_string(),
             Source {

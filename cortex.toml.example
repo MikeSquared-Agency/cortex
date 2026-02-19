@@ -1,0 +1,68 @@
+# Cortex configuration file.
+# Copy to cortex.toml and edit as needed.
+# All fields are optional — missing fields use defaults.
+
+[server]
+grpc_addr = "0.0.0.0:9090"
+http_addr = "0.0.0.0:9091"
+data_dir = "./data"
+
+[schema]
+node_kinds = [
+    "agent", "decision", "fact", "event",
+    "goal", "preference", "pattern", "observation",
+    # Custom kinds:
+    # "conversation", "document", "entity", "action",
+]
+relations = [
+    "informed_by", "led_to", "applies_to", "contradicts",
+    "supersedes", "depends_on", "related_to", "instance_of",
+    # Custom relations:
+    # "mentions", "authored_by", "part_of",
+]
+
+[embedding]
+model = "BAAI/bge-small-en-v1.5"
+
+[auto_linker]
+enabled = true
+interval_seconds = 60
+similarity_threshold = 0.75
+dedup_threshold = 0.92
+decay_rate_per_day = 0.01
+max_edges_per_node = 50
+
+[briefing]
+cache_ttl_seconds = 300
+max_total_items = 50
+max_chars = 8000
+precompute_agents = ["default"]
+
+[ingest.file]
+watch_dir = "./data/ingest"
+
+# [ingest.nats]
+# url = "nats://localhost:4222"
+# subjects = ["cortex.>"]
+
+# [ingest.webhook]
+# enabled = false
+# port = 9092
+
+[observability]
+prometheus = false
+prometheus_port = 9100
+opentelemetry = false
+
+[retention]
+default_ttl_days = 0
+
+[retention.by_kind]
+# observation = 30
+# event = 90
+
+[security]
+encryption = false
+
+[access]
+mode = "open"

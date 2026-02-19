@@ -3,11 +3,13 @@ mod briefing;
 mod config;
 mod grpc;
 mod http;
-mod nats;
+mod ingest;
 mod migration;
 
-use clap::Parser;
-use config::Config;
+#[cfg(feature = "warren")]
+mod nats;
+
+use config::CortexConfig;
 use cortex_core::briefing::{BriefingConfig, BriefingEngine};
 use cortex_core::*;
 // cortex_core::* brings in a 1-arg Result alias; re-import std's 2-arg form
@@ -31,14 +33,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .init();
 
-    // Parse config
-    let config = Config::parse();
-    config.validate()?;
+    // Load config from cortex.toml (or defaults)
+    let config_path = std::path::PathBuf::from("cortex.toml");
+    let config = CortexConfig::load_or_default(&config_path);
+    config.ensure_data_dir()?;
+
+    let validation_errors = config.validate();
+    if !validation_errors.is_empty() {
+        for e in &validation_errors {
+            error!("Config error: {}", e);
+        }
+        return Err("Invalid cortex.toml configuration".into());
+    }
 
     info!("Starting Cortex server v{}", env!("CARGO_PKG_VERSION"));
-    info!("gRPC: {}", config.grpc_addr);
-    info!("HTTP: {}", config.http_addr);
-    info!("Data: {:?}", config.data_dir);
+    info!("gRPC: {}", config.server.grpc_addr);
+    info!("HTTP: {}", config.server.http_addr);
+    info!("Data: {:?}", config.server.data_dir);
 
     // Initialize storage
     info!("Opening database...");
@@ -132,16 +143,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Start briefing precomputer (warms cache for known agents)
-    let precomputer_agents: Vec<String> = std::env::var("CORTEX_BRIEFING_AGENTS")
-        .unwrap_or_else(|_| "kai,dutybound".to_string())
-        .split(',')
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect();
+    let precompute_agents = if config.briefing.precompute_agents.is_empty() {
+        std::env::var("CORTEX_BRIEFING_AGENTS")
+            .unwrap_or_else(|_| "kai,dutybound".to_string())
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+    } else {
+        config.briefing.precompute_agents.clone()
+    };
 
     let _precomputer_task = {
         let engine = briefing_engine.clone();
-        let agents = precomputer_agents.clone();
+        let agents = precompute_agents.clone();
         tokio::spawn(async move {
             briefing::BriefingPrecomputer::new(engine, agents, Duration::from_secs(60))
                 .run()
@@ -149,33 +164,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
     };
 
-    // Optionally start file ingest loop
-    let _ingest_task: Option<JoinHandle<()>> =
-        if let Ok(ingest_dir) = std::env::var("CORTEX_INGEST_DIR") {
-            let ingest_path = std::path::PathBuf::from(&ingest_dir);
-            info!("File ingest enabled, watching {:?}", ingest_path);
+    // Optionally start file ingest loop (env var or config)
+    let ingest_dir = config
+        .ingest
+        .file
+        .as_ref()
+        .map(|f| f.watch_dir.clone())
+        .or_else(|| std::env::var("CORTEX_INGEST_DIR").ok().map(Into::into));
 
-            let ingestor = cortex_core::briefing::ingest::FileIngest::new(
-                ingest_path,
-                storage.clone(),
-                embedding_service.clone(),
-                vector_index.clone(),
-                graph_version.clone(),
-            );
+    let _ingest_task: Option<JoinHandle<()>> = if let Some(ingest_path) = ingest_dir {
+        info!("File ingest enabled, watching {:?}", ingest_path);
 
-            Some(tokio::spawn(async move {
-                loop {
-                    match ingestor.scan_once() {
-                        Ok(n) if n > 0 => info!("File ingest: created {} nodes", n),
-                        Err(e) => error!("File ingest error: {}", e),
-                        _ => {}
-                    }
-                    tokio::time::sleep(Duration::from_secs(10)).await;
+        let ingestor = cortex_core::briefing::ingest::FileIngest::new(
+            ingest_path,
+            storage.clone(),
+            embedding_service.clone(),
+            vector_index.clone(),
+            graph_version.clone(),
+        );
+
+        Some(tokio::spawn(async move {
+            loop {
+                match ingestor.scan_once() {
+                    Ok(n) if n > 0 => info!("File ingest: created {} nodes", n),
+                    Err(e) => error!("File ingest error: {}", e),
+                    _ => {}
                 }
-            }))
-        } else {
-            None
-        };
+                tokio::time::sleep(Duration::from_secs(10)).await;
+            }
+        }))
+    } else {
+        None
+    };
 
     // Start gRPC server
     let grpc_task = {
@@ -189,7 +209,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             briefing_engine.clone(),
         );
 
-        let addr = config.grpc_addr;
+        let addr = config.grpc_addr();
 
         tokio::spawn(async move {
             info!("Starting gRPC server on {}", addr);
@@ -216,7 +236,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         let app = http::create_router(app_state);
-        let addr = config.http_addr;
+        let addr = config.http_addr();
 
         tokio::spawn(async move {
             info!("Starting HTTP server on {}", addr);
@@ -231,33 +251,45 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
     };
 
-    // Optionally start NATS consumer
-    let nats_task: Option<JoinHandle<()>> = if config.nats_enabled {
-        info!("Connecting to NATS at {}...", config.nats_url);
+    // Optionally start NATS consumer (Warren adapter or generic)
+    let nats_enabled = config.server.nats_enabled;
+    let nats_url = config.server.nats_url.clone();
 
-        match async_nats::connect(&config.nats_url).await {
-            Ok(client) => {
-                info!("NATS connected");
+    let nats_task: Option<JoinHandle<()>> = if nats_enabled {
+        info!("Connecting to NATS at {}...", nats_url);
 
-                let nats_ingest = nats::NatsIngest::new(
-                    client,
-                    storage.clone(),
-                    embedding_service.clone(),
-                    vector_index.clone(),
-                    graph_version.clone(),
-                );
+        #[cfg(feature = "warren")]
+        {
+            match async_nats::connect(&nats_url).await {
+                Ok(client) => {
+                    info!("NATS connected (Warren adapter)");
 
-                Some(tokio::spawn(async move {
-                    if let Err(e) = nats_ingest.start().await {
-                        error!("NATS ingest failed: {}", e);
-                    }
-                }))
+                    let nats_ingest = nats::NatsIngest::new(
+                        client,
+                        storage.clone(),
+                        embedding_service.clone(),
+                        vector_index.clone(),
+                        graph_version.clone(),
+                    );
+
+                    Some(tokio::spawn(async move {
+                        if let Err(e) = nats_ingest.start().await {
+                            error!("NATS ingest failed: {}", e);
+                        }
+                    }))
+                }
+                Err(e) => {
+                    error!("Failed to connect to NATS: {}", e);
+                    error!("Continuing without NATS consumer");
+                    None
+                }
             }
-            Err(e) => {
-                error!("Failed to connect to NATS: {}", e);
-                error!("Continuing without NATS consumer");
-                None
-            }
+        }
+
+        #[cfg(not(feature = "warren"))]
+        {
+            info!("NATS consumer not available (warren feature disabled)");
+            None
         }
     } else {
         info!("NATS consumer disabled");

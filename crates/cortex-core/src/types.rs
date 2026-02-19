@@ -1,3 +1,4 @@
+use crate::error::{CortexError, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -52,70 +53,61 @@ pub struct Node {
     pub deleted: bool,
 }
 
-/// Eight typed memory categories
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum NodeKind {
-    /// Who an agent is. Identity, personality, capabilities.
-    /// Example: "Kai is the orchestrator. Opus 4.6. King of Warren."
-    Agent,
-
-    /// A choice that was made and why.
-    /// Example: "Chose Go over Rust for Dispatch because I/O-bound workload."
-    Decision,
-
-    /// A verified piece of information.
-    /// Example: "Dispatch runs on port 8600."
-    Fact,
-
-    /// Something that happened at a specific time.
-    /// Example: "PromptForge went down at 03:00 due to DNS failure."
-    Event,
-
-    /// A desired outcome or target.
-    /// Example: "£3k/month from assets by end of 2026."
-    Goal,
-
-    /// How someone or something prefers to operate.
-    /// Example: "Mike prefers casual communication, no BS."
-    Preference,
-
-    /// A recurring observation distilled into a rule.
-    /// Example: "Workers without explicit integration instructions miss wiring."
-    Pattern,
-
-    /// A one-time observation not yet elevated to pattern.
-    /// Example: "Correction rate dropped from 47.8% to 31.6% this week."
-    Observation,
-}
+/// A node kind identifier. Lowercase alphanumeric + hyphens only.
+/// Validated on construction.
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct NodeKind(String);
 
 impl NodeKind {
-    /// Convert to u8 for storage indexing
-    pub fn to_u8(self) -> u8 {
-        match self {
-            NodeKind::Agent => 0,
-            NodeKind::Decision => 1,
-            NodeKind::Fact => 2,
-            NodeKind::Event => 3,
-            NodeKind::Goal => 4,
-            NodeKind::Preference => 5,
-            NodeKind::Pattern => 6,
-            NodeKind::Observation => 7,
+    pub fn new(kind: &str) -> Result<Self> {
+        if kind.is_empty() {
+            return Err(CortexError::Validation("NodeKind cannot be empty".into()));
         }
+        if !kind
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        {
+            return Err(CortexError::Validation(format!(
+                "NodeKind '{}' must be lowercase alphanumeric + hyphens only",
+                kind
+            )));
+        }
+        Ok(NodeKind(kind.to_string()))
     }
 
-    /// Convert from u8
-    pub fn from_u8(v: u8) -> Option<Self> {
-        match v {
-            0 => Some(NodeKind::Agent),
-            1 => Some(NodeKind::Decision),
-            2 => Some(NodeKind::Fact),
-            3 => Some(NodeKind::Event),
-            4 => Some(NodeKind::Goal),
-            5 => Some(NodeKind::Preference),
-            6 => Some(NodeKind::Pattern),
-            7 => Some(NodeKind::Observation),
-            _ => None,
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for NodeKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// Debug produces PascalCase for API compatibility: "fact" → "Fact"
+impl std::fmt::Debug for NodeKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut chars = self.0.chars();
+        match chars.next() {
+            None => write!(f, ""),
+            Some(c) => write!(f, "{}{}", c.to_uppercase(), chars.as_str()),
         }
+    }
+}
+
+impl TryFrom<&str> for NodeKind {
+    type Error = CortexError;
+    fn try_from(s: &str) -> Result<Self> {
+        NodeKind::new(s)
+    }
+}
+
+impl TryFrom<String> for NodeKind {
+    type Error = CortexError;
+    fn try_from(s: String) -> Result<Self> {
+        NodeKind::new(&s)
     }
 }
 
@@ -172,54 +164,67 @@ pub struct Edge {
     pub updated_at: DateTime<Utc>,
 }
 
-/// Relationship types between nodes
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum Relation {
-    /// A informed B. Directional. Knowledge flow.
-    /// "This decision was informed by this fact."
-    InformedBy,
+/// A relation type identifier. Lowercase alphanumeric + underscores only.
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct Relation(String);
 
-    /// A caused or resulted in B. Directional. Causality.
-    /// "This event led to this decision."
-    LedTo,
+impl Relation {
+    pub fn new(relation: &str) -> Result<Self> {
+        if relation.is_empty() {
+            return Err(CortexError::Validation("Relation cannot be empty".into()));
+        }
+        if !relation
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+        {
+            return Err(CortexError::Validation(format!(
+                "Relation '{}' must be lowercase alphanumeric + underscores only",
+                relation
+            )));
+        }
+        Ok(Relation(relation.to_string()))
+    }
 
-    /// A is relevant to B. Bidirectional in practice.
-    /// "This pattern applies to this agent."
-    AppliesTo,
-
-    /// A and B contain conflicting information.
-    /// "This fact contradicts this other fact."
-    Contradicts,
-
-    /// A replaces B. B is outdated. Directional.
-    /// "This new decision supersedes the old one."
-    Supersedes,
-
-    /// A requires B to be true/present. Directional.
-    /// "This goal depends on this fact being true."
-    DependsOn,
-
-    /// A and B are about the same topic. Bidirectional.
-    /// Typically auto-created by similarity threshold.
-    RelatedTo,
-
-    /// A is an instance/example of B. Directional.
-    /// "This event is an instance of this pattern."
-    InstanceOf,
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 impl std::fmt::Display for Relation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Relation::InformedBy => write!(f, "InformedBy"),
-            Relation::LedTo => write!(f, "LedTo"),
-            Relation::AppliesTo => write!(f, "AppliesTo"),
-            Relation::Contradicts => write!(f, "Contradicts"),
-            Relation::Supersedes => write!(f, "Supersedes"),
-            Relation::DependsOn => write!(f, "DependsOn"),
-            Relation::RelatedTo => write!(f, "RelatedTo"),
-            Relation::InstanceOf => write!(f, "InstanceOf"),
-        }
+        write!(f, "{}", self.0)
+    }
+}
+
+/// Debug produces PascalCase for API compatibility: "related_to" → "RelatedTo"
+impl std::fmt::Debug for Relation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let pascal: String = self
+            .0
+            .split('_')
+            .map(|part| {
+                let mut chars = part.chars();
+                match chars.next() {
+                    None => String::new(),
+                    Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
+                }
+            })
+            .collect();
+        write!(f, "{}", pascal)
+    }
+}
+
+impl TryFrom<&str> for Relation {
+    type Error = CortexError;
+    fn try_from(s: &str) -> Result<Self> {
+        Relation::new(s)
+    }
+}
+
+impl TryFrom<String> for Relation {
+    type Error = CortexError;
+    fn try_from(s: String) -> Result<Self> {
+        Relation::new(&s)
     }
 }
 
@@ -293,7 +298,7 @@ impl Node {
     }
 
     /// Validate the node according to the rules in the spec
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> std::result::Result<(), String> {
         // Title length check
         if self.data.title.chars().count() > 256 {
             return Err("Title exceeds 256 characters".to_string());
@@ -357,7 +362,7 @@ impl Edge {
     }
 
     /// Validate the edge according to the rules in the spec
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> std::result::Result<(), String> {
         // Self-edge check
         if self.from == self.to {
             return Err("Self-edges are not allowed".to_string());

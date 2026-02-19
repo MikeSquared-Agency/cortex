@@ -42,11 +42,11 @@ fn create_test_edge(from: NodeId, to: NodeId, relation: Relation, weight: f32) -
 /// A -> B -> C
 ///  \-> D -> E
 fn build_test_graph(storage: &RedbStorage) -> (Node, Node, Node, Node, Node) {
-    let a = create_test_node(NodeKind::Decision, "Decision A");
-    let b = create_test_node(NodeKind::Fact, "Fact B");
-    let c = create_test_node(NodeKind::Observation, "Observation C");
-    let d = create_test_node(NodeKind::Pattern, "Pattern D");
-    let e = create_test_node(NodeKind::Goal, "Goal E");
+    let a = create_test_node(NodeKind::new("decision").unwrap(), "Decision A");
+    let b = create_test_node(NodeKind::new("fact").unwrap(), "Fact B");
+    let c = create_test_node(NodeKind::new("observation").unwrap(), "Observation C");
+    let d = create_test_node(NodeKind::new("pattern").unwrap(), "Pattern D");
+    let e = create_test_node(NodeKind::new("goal").unwrap(), "Goal E");
 
     storage.put_node(&a).unwrap();
     storage.put_node(&b).unwrap();
@@ -54,10 +54,10 @@ fn build_test_graph(storage: &RedbStorage) -> (Node, Node, Node, Node, Node) {
     storage.put_node(&d).unwrap();
     storage.put_node(&e).unwrap();
 
-    let edge_ab = create_test_edge(a.id, b.id, Relation::LedTo, 0.9);
-    let edge_bc = create_test_edge(b.id, c.id, Relation::InformedBy, 0.8);
-    let edge_ad = create_test_edge(a.id, d.id, Relation::LedTo, 0.7);
-    let edge_de = create_test_edge(d.id, e.id, Relation::AppliesTo, 0.6);
+    let edge_ab = create_test_edge(a.id, b.id, Relation::new("led_to").unwrap(), 0.9);
+    let edge_bc = create_test_edge(b.id, c.id, Relation::new("informed_by").unwrap(), 0.8);
+    let edge_ad = create_test_edge(a.id, d.id, Relation::new("led_to").unwrap(), 0.7);
+    let edge_de = create_test_edge(d.id, e.id, Relation::new("applies_to").unwrap(), 0.6);
 
     storage.put_edge(&edge_ab).unwrap();
     storage.put_edge(&edge_bc).unwrap();
@@ -160,7 +160,7 @@ fn test_relation_filter() {
             start: vec![a.id],
             max_depth: Some(2),
             direction: TraversalDirection::Outgoing,
-            relation_filter: Some(vec![Relation::LedTo]),
+            relation_filter: Some(vec![Relation::new("led_to").unwrap()]),
             include_start: true,
             ..Default::default()
         })
@@ -186,7 +186,7 @@ fn test_kind_filter() {
             start: vec![a.id],
             max_depth: Some(2),
             direction: TraversalDirection::Outgoing,
-            kind_filter: Some(vec![NodeKind::Fact]),
+            kind_filter: Some(vec![NodeKind::new("fact").unwrap()]),
             include_start: true,
             ..Default::default()
         })
@@ -298,8 +298,8 @@ fn test_shortest_path() {
 #[test]
 fn test_no_path_exists() {
     let (storage, _temp) = create_test_storage();
-    let a = create_test_node(NodeKind::Fact, "A");
-    let b = create_test_node(NodeKind::Fact, "B");
+    let a = create_test_node(NodeKind::new("fact").unwrap(), "A");
+    let b = create_test_node(NodeKind::new("fact").unwrap(), "B");
 
     storage.put_node(&a).unwrap();
     storage.put_node(&b).unwrap();
@@ -378,11 +378,11 @@ fn test_roots_and_leaves() {
     let engine = GraphEngineImpl::new(storage.clone());
 
     // Roots: nodes with no incoming edges of a given relation
-    let roots = engine.roots(Relation::LedTo).unwrap();
+    let roots = engine.roots(Relation::new("led_to").unwrap()).unwrap();
     assert!(roots.iter().any(|n| n.id == a.id)); // A has no incoming LedTo
 
     // Leaves: nodes with no outgoing edges of a given relation
-    let _leaves = engine.leaves(Relation::LedTo).unwrap();
+    let _leaves = engine.leaves(Relation::new("led_to").unwrap()).unwrap();
     // B and D have LedTo edges, so leaves should not include them
     // C and E do not have outgoing LedTo edges
 }
@@ -405,17 +405,17 @@ fn test_find_cycles() {
     let (storage, _temp) = create_test_storage();
 
     // Create a cycle: A -> B -> C -> A
-    let a = create_test_node(NodeKind::Fact, "A");
-    let b = create_test_node(NodeKind::Fact, "B");
-    let c = create_test_node(NodeKind::Fact, "C");
+    let a = create_test_node(NodeKind::new("fact").unwrap(), "A");
+    let b = create_test_node(NodeKind::new("fact").unwrap(), "B");
+    let c = create_test_node(NodeKind::new("fact").unwrap(), "C");
 
     storage.put_node(&a).unwrap();
     storage.put_node(&b).unwrap();
     storage.put_node(&c).unwrap();
 
-    storage.put_edge(&create_test_edge(a.id, b.id, Relation::RelatedTo, 1.0)).unwrap();
-    storage.put_edge(&create_test_edge(b.id, c.id, Relation::RelatedTo, 1.0)).unwrap();
-    storage.put_edge(&create_test_edge(c.id, a.id, Relation::RelatedTo, 1.0)).unwrap();
+    storage.put_edge(&create_test_edge(a.id, b.id, Relation::new("related_to").unwrap(), 1.0)).unwrap();
+    storage.put_edge(&create_test_edge(b.id, c.id, Relation::new("related_to").unwrap(), 1.0)).unwrap();
+    storage.put_edge(&create_test_edge(c.id, a.id, Relation::new("related_to").unwrap(), 1.0)).unwrap();
 
     let engine = GraphEngineImpl::new(storage.clone());
 
@@ -429,10 +429,10 @@ fn test_components() {
     let (storage, _temp) = create_test_storage();
 
     // Create two disconnected components
-    let a = create_test_node(NodeKind::Fact, "A");
-    let b = create_test_node(NodeKind::Fact, "B");
-    let c = create_test_node(NodeKind::Fact, "C");
-    let d = create_test_node(NodeKind::Fact, "D");
+    let a = create_test_node(NodeKind::new("fact").unwrap(), "A");
+    let b = create_test_node(NodeKind::new("fact").unwrap(), "B");
+    let c = create_test_node(NodeKind::new("fact").unwrap(), "C");
+    let d = create_test_node(NodeKind::new("fact").unwrap(), "D");
 
     storage.put_node(&a).unwrap();
     storage.put_node(&b).unwrap();
@@ -440,10 +440,10 @@ fn test_components() {
     storage.put_node(&d).unwrap();
 
     // Component 1: A - B
-    storage.put_edge(&create_test_edge(a.id, b.id, Relation::RelatedTo, 1.0)).unwrap();
+    storage.put_edge(&create_test_edge(a.id, b.id, Relation::new("related_to").unwrap(), 1.0)).unwrap();
 
     // Component 2: C - D
-    storage.put_edge(&create_test_edge(c.id, d.id, Relation::RelatedTo, 1.0)).unwrap();
+    storage.put_edge(&create_test_edge(c.id, d.id, Relation::new("related_to").unwrap(), 1.0)).unwrap();
 
     let engine = GraphEngineImpl::new(storage.clone());
 
@@ -460,10 +460,10 @@ fn test_subgraph_merge() {
     let id1 = Uuid::now_v7();
     let id2 = Uuid::now_v7();
 
-    sg1.nodes.insert(id1, create_test_node(NodeKind::Fact, "Node 1"));
+    sg1.nodes.insert(id1, create_test_node(NodeKind::new("fact").unwrap(), "Node 1"));
     sg1.depths.insert(id1, 0);
 
-    sg2.nodes.insert(id2, create_test_node(NodeKind::Fact, "Node 2"));
+    sg2.nodes.insert(id2, create_test_node(NodeKind::new("fact").unwrap(), "Node 2"));
     sg2.depths.insert(id2, 1);
 
     sg1.merge(sg2);
@@ -494,7 +494,7 @@ fn test_empty_graph_traversal() {
 #[test]
 fn test_single_node_no_edges() {
     let (storage, _temp) = create_test_storage();
-    let node = create_test_node(NodeKind::Fact, "Lonely");
+    let node = create_test_node(NodeKind::new("fact").unwrap(), "Lonely");
     storage.put_node(&node).unwrap();
 
     let engine = GraphEngineImpl::new(storage.clone());
@@ -583,14 +583,14 @@ fn test_edge_post_pass_correctness() {
 fn test_bidirectional_traversal_no_duplicates() {
     let (storage, _temp) = create_test_storage();
 
-    let a = create_test_node(NodeKind::Fact, "A");
-    let b = create_test_node(NodeKind::Fact, "B");
+    let a = create_test_node(NodeKind::new("fact").unwrap(), "A");
+    let b = create_test_node(NodeKind::new("fact").unwrap(), "B");
     storage.put_node(&a).unwrap();
     storage.put_node(&b).unwrap();
 
     // Edge in both directions
-    storage.put_edge(&create_test_edge(a.id, b.id, Relation::RelatedTo, 1.0)).unwrap();
-    storage.put_edge(&create_test_edge(b.id, a.id, Relation::RelatedTo, 1.0)).unwrap();
+    storage.put_edge(&create_test_edge(a.id, b.id, Relation::new("related_to").unwrap(), 1.0)).unwrap();
+    storage.put_edge(&create_test_edge(b.id, a.id, Relation::new("related_to").unwrap(), 1.0)).unwrap();
 
     let engine = GraphEngineImpl::new(storage.clone());
 
@@ -615,21 +615,21 @@ fn test_weighted_traversal_prefers_heavy_edges() {
     // root -> heavy(0.99) -> heavy_child
     // root -> light(0.01) -> light_child
     // With limit=3 (root + 2), weighted should explore heavy branch first
-    let root = create_test_node(NodeKind::Decision, "Root");
-    let heavy = create_test_node(NodeKind::Fact, "Heavy path");
-    let light = create_test_node(NodeKind::Fact, "Light path");
-    let heavy_child = create_test_node(NodeKind::Observation, "Heavy child");
-    let light_child = create_test_node(NodeKind::Observation, "Light child");
+    let root = create_test_node(NodeKind::new("decision").unwrap(), "Root");
+    let heavy = create_test_node(NodeKind::new("fact").unwrap(), "Heavy path");
+    let light = create_test_node(NodeKind::new("fact").unwrap(), "Light path");
+    let heavy_child = create_test_node(NodeKind::new("observation").unwrap(), "Heavy child");
+    let light_child = create_test_node(NodeKind::new("observation").unwrap(), "Light child");
     storage.put_node(&root).unwrap();
     storage.put_node(&heavy).unwrap();
     storage.put_node(&light).unwrap();
     storage.put_node(&heavy_child).unwrap();
     storage.put_node(&light_child).unwrap();
 
-    storage.put_edge(&create_test_edge(root.id, heavy.id, Relation::LedTo, 0.99)).unwrap();
-    storage.put_edge(&create_test_edge(root.id, light.id, Relation::LedTo, 0.01)).unwrap();
-    storage.put_edge(&create_test_edge(heavy.id, heavy_child.id, Relation::LedTo, 0.99)).unwrap();
-    storage.put_edge(&create_test_edge(light.id, light_child.id, Relation::LedTo, 0.01)).unwrap();
+    storage.put_edge(&create_test_edge(root.id, heavy.id, Relation::new("led_to").unwrap(), 0.99)).unwrap();
+    storage.put_edge(&create_test_edge(root.id, light.id, Relation::new("led_to").unwrap(), 0.01)).unwrap();
+    storage.put_edge(&create_test_edge(heavy.id, heavy_child.id, Relation::new("led_to").unwrap(), 0.99)).unwrap();
+    storage.put_edge(&create_test_edge(light.id, light_child.id, Relation::new("led_to").unwrap(), 0.01)).unwrap();
 
     let engine = GraphEngineImpl::new(storage.clone());
 
@@ -655,18 +655,18 @@ fn test_weighted_traversal_prefers_heavy_edges() {
 fn test_path_with_relation_filter() {
     let (storage, _temp) = create_test_storage();
 
-    let a = create_test_node(NodeKind::Fact, "A");
-    let b = create_test_node(NodeKind::Fact, "B");
-    let c = create_test_node(NodeKind::Fact, "C");
+    let a = create_test_node(NodeKind::new("fact").unwrap(), "A");
+    let b = create_test_node(NodeKind::new("fact").unwrap(), "B");
+    let c = create_test_node(NodeKind::new("fact").unwrap(), "C");
     storage.put_node(&a).unwrap();
     storage.put_node(&b).unwrap();
     storage.put_node(&c).unwrap();
 
     // Direct path A->C via LedTo
-    storage.put_edge(&create_test_edge(a.id, c.id, Relation::LedTo, 1.0)).unwrap();
+    storage.put_edge(&create_test_edge(a.id, c.id, Relation::new("led_to").unwrap(), 1.0)).unwrap();
     // Indirect path A->B->C via RelatedTo
-    storage.put_edge(&create_test_edge(a.id, b.id, Relation::RelatedTo, 1.0)).unwrap();
-    storage.put_edge(&create_test_edge(b.id, c.id, Relation::RelatedTo, 1.0)).unwrap();
+    storage.put_edge(&create_test_edge(a.id, b.id, Relation::new("related_to").unwrap(), 1.0)).unwrap();
+    storage.put_edge(&create_test_edge(b.id, c.id, Relation::new("related_to").unwrap(), 1.0)).unwrap();
 
     let engine = GraphEngineImpl::new(storage.clone());
 
@@ -674,7 +674,7 @@ fn test_path_with_relation_filter() {
     let result = engine.find_paths(PathRequest {
         from: a.id,
         to: c.id,
-        relation_filter: Some(vec![Relation::RelatedTo]),
+        relation_filter: Some(vec![Relation::new("related_to").unwrap()]),
         max_paths: 1,
         ..Default::default()
     }).unwrap();
@@ -688,9 +688,9 @@ fn test_connected_components_isolated_nodes() {
     let (storage, _temp) = create_test_storage();
 
     // 3 isolated nodes = 3 components
-    let a = create_test_node(NodeKind::Fact, "A");
-    let b = create_test_node(NodeKind::Fact, "B");
-    let c = create_test_node(NodeKind::Fact, "C");
+    let a = create_test_node(NodeKind::new("fact").unwrap(), "A");
+    let b = create_test_node(NodeKind::new("fact").unwrap(), "B");
+    let c = create_test_node(NodeKind::new("fact").unwrap(), "C");
     storage.put_node(&a).unwrap();
     storage.put_node(&b).unwrap();
     storage.put_node(&c).unwrap();

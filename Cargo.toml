@@ -4,6 +4,7 @@ members = [
     "crates/cortex-core",
     "crates/cortex-proto",
     "crates/cortex-server",
+    "crates/warren-adapter",
 ]
 
 [workspace.package]
@@ -48,6 +49,10 @@ hyper = "1.5"
 
 # NATS
 async-nats = "0.38"
+
+# Async helpers
+async-trait = "0.1"
+futures = "0.3"
 
 # Tracing
 tracing = "0.1"

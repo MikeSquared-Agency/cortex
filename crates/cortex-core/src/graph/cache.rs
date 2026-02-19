@@ -176,7 +176,7 @@ mod tests {
 
         // Create test nodes
         let node1 = Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Node 1".to_string(),
             "Test".to_string(),
             Source {
@@ -187,7 +187,7 @@ mod tests {
             0.5,
         );
         let node2 = Node::new(
-            NodeKind::Fact,
+            NodeKind::new("fact").unwrap(),
             "Node 2".to_string(),
             "Test".to_string(),
             Source {
@@ -205,7 +205,7 @@ mod tests {
         let edge = Edge::new(
             node1.id,
             node2.id,
-            Relation::RelatedTo,
+            Relation::new("related_to").unwrap(),
             0.8,
             EdgeProvenance::Manual {
                 created_by: "test".to_string(),
@@ -224,7 +224,7 @@ mod tests {
         let outgoing = cache.get_outgoing(node1.id).unwrap();
         assert_eq!(outgoing.len(), 1);
         assert_eq!(outgoing[0].target, node2.id);
-        assert_eq!(outgoing[0].relation, Relation::RelatedTo);
+        assert_eq!(outgoing[0].relation, Relation::new("related_to").unwrap());
 
         // Check incoming edges
         let incoming = cache.get_incoming(node2.id).unwrap();

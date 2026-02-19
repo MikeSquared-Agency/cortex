@@ -1,0 +1,16 @@
+[package]
+name = "warren-adapter"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false  # Internal crate, not published to crates.io
+
+[dependencies]
+cortex-core = { path = "../cortex-core" }
+async-nats = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = "0.1"
