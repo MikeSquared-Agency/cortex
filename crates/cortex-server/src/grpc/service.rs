@@ -442,7 +442,7 @@ impl CortexService for CortexServiceImpl {
         let node_id = req.node_id.parse::<uuid::Uuid>()
             .map_err(|e| Status::invalid_argument(format!("Invalid UUID: {}", e)))?;
 
-        let direction = parse_direction(&req.direction);
+        let _direction = parse_direction(&req.direction);
         let depth = if req.depth > 0 { req.depth } else { 1 };
 
         let subgraph = self.graph_engine

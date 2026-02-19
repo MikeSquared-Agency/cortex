@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  cortex:
+    image: cortex:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    ports:
+      - "9090:9090"  # gRPC
+      - "9091:9091"  # HTTP
+
+    environment:
+      - RUST_LOG=info
+      - DATA_DIR=/data
+      - GRPC_ADDR=0.0.0.0:9090
+      - HTTP_ADDR=0.0.0.0:9091
+      - NATS_ENABLED=true
+      - NATS_URL=nats://nats:4222
+      - AUTO_LINKER_ENABLED=true
+      - AUTO_LINKER_INTERVAL=300
+      - AUTO_LINKER_BATCH_SIZE=100
+      - AUTO_LINKER_SIMILARITY_THRESHOLD=0.85
+      - AUTO_LINKER_DEDUP_THRESHOLD=0.95
+
+    volumes:
+      - cortex-data:/data
+
+    networks:
+      - cortex-net
+      - warren-net
+
+    deploy:
+      mode: replicated
+      replicas: 1
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Optional: NATS server for development
+  nats:
+    image: nats:2.10-alpine
+    ports:
+      - "4222:4222"
+      - "8222:8222"  # Monitoring
+
+    networks:
+      - warren-net
+
+    command:
+      - "-js"  # Enable JetStream
+      - "-m"   # Enable monitoring
+      - "8222"
+
+    deploy:
+      mode: replicated
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+volumes:
+  cortex-data:
+    driver: local
+
+networks:
+  cortex-net:
+    driver: overlay
+  warren-net:
+    external: true
+    name: warren-net

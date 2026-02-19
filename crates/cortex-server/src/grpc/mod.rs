@@ -1,8 +1,8 @@
+#![allow(dead_code)]
 mod service;
 mod conversions;
 
 pub use service::CortexServiceImpl;
-pub use conversions::*;
 
 use tonic::{Request, Status};
 

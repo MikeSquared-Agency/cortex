@@ -68,6 +68,11 @@ impl RedbStorage {
         })
     }
 
+    /// Get the database file path
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
     /// Helper to convert UUID to byte array
     fn uuid_to_bytes(id: &uuid::Uuid) -> [u8; 16] {
         *id.as_bytes()

@@ -1,0 +1,33 @@
+# Build artifacts
+target/
+**/*.rs.bk
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Data
+data/
+*.db
+*.redb
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+docs/
+*.md
+
+# CI/CD
+.github/
+
+# Local config
+.env
+.env.local
+
+# OS files
+.DS_Store
+Thumbs.db

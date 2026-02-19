@@ -1,0 +1,326 @@
+syntax = "proto3";
+package cortex.v1;
+
+import "google/protobuf/timestamp.proto";
+
+service CortexService {
+    // === Nodes ===
+
+    // Create a new knowledge node.
+    rpc CreateNode(CreateNodeRequest) returns (NodeResponse);
+
+    // Get a node by ID.
+    rpc GetNode(GetNodeRequest) returns (NodeResponse);
+
+    // Update a node's content (triggers re-embedding).
+    rpc UpdateNode(UpdateNodeRequest) returns (NodeResponse);
+
+    // Soft-delete a node.
+    rpc DeleteNode(DeleteNodeRequest) returns (DeleteResponse);
+
+    // List nodes with filtering.
+    rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
+
+    // === Edges ===
+
+    // Create a manual edge between two nodes.
+    rpc CreateEdge(CreateEdgeRequest) returns (EdgeResponse);
+
+    // Get edges for a node.
+    rpc GetEdges(GetEdgesRequest) returns (GetEdgesResponse);
+
+    // Delete an edge.
+    rpc DeleteEdge(DeleteEdgeRequest) returns (DeleteResponse);
+
+    // === Graph Queries ===
+
+    // Traverse the graph from starting nodes.
+    rpc Traverse(TraverseRequest) returns (SubgraphResponse);
+
+    // Find paths between two nodes.
+    rpc FindPaths(FindPathsRequest) returns (PathsResponse);
+
+    // Get node neighborhood (convenience).
+    rpc Neighborhood(NeighborhoodRequest) returns (SubgraphResponse);
+
+    // === Search ===
+
+    // Semantic similarity search.
+    rpc SimilaritySearch(SimilaritySearchRequest) returns (SearchResponse);
+
+    // Hybrid search (vector + graph proximity).
+    rpc HybridSearch(HybridSearchRequest) returns (HybridSearchResponse);
+
+    // === Briefings ===
+
+    // Get a synthesised context briefing for an agent.
+    rpc GetBriefing(BriefingRequest) returns (BriefingResponse);
+
+    // === Admin ===
+
+    // Get graph statistics.
+    rpc Stats(StatsRequest) returns (StatsResponse);
+
+    // Get auto-linker metrics.
+    rpc AutoLinkerStatus(AutoLinkerStatusRequest) returns (AutoLinkerStatusResponse);
+
+    // Trigger manual auto-linker cycle.
+    rpc TriggerAutoLink(TriggerAutoLinkRequest) returns (TriggerAutoLinkResponse);
+
+    // Reindex all embeddings (model change).
+    rpc Reindex(ReindexRequest) returns (ReindexResponse);
+
+    // Health check.
+    rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+// === Messages ===
+
+message CreateNodeRequest {
+    string kind = 1;           // NodeKind as string
+    string title = 2;
+    string body = 3;
+    map<string, string> metadata = 4;
+    repeated string tags = 5;
+    float importance = 6;      // 0.0-1.0, default 0.5
+    string source_agent = 7;
+    optional string source_session = 8;
+    optional string source_channel = 9;
+}
+
+message GetNodeRequest {
+    string id = 1;
+}
+
+message UpdateNodeRequest {
+    string id = 1;
+    optional string title = 2;
+    optional string body = 3;
+    map<string, string> metadata = 4;
+    repeated string tags = 5;
+    optional float importance = 6;
+}
+
+message DeleteNodeRequest {
+    string id = 1;
+}
+
+message DeleteResponse {
+    bool success = 1;
+}
+
+message ListNodesRequest {
+    repeated string kind_filter = 1;
+    repeated string tag_filter = 2;
+    string source_agent = 3;
+    float min_importance = 4;
+    uint32 limit = 5;
+    uint32 offset = 6;
+}
+
+message ListNodesResponse {
+    repeated NodeResponse nodes = 1;
+    uint64 total_count = 2;
+}
+
+message NodeResponse {
+    string id = 1;
+    string kind = 2;
+    string title = 3;
+    string body = 4;
+    map<string, string> metadata = 5;
+    repeated string tags = 6;
+    float importance = 7;
+    string source_agent = 8;
+    optional string source_session = 9;
+    optional string source_channel = 10;
+    uint64 access_count = 11;
+    google.protobuf.Timestamp created_at = 12;
+    google.protobuf.Timestamp updated_at = 13;
+    bool has_embedding = 14;
+    uint32 edge_count = 15;   // Total connected edges
+}
+
+message CreateEdgeRequest {
+    string from_id = 1;
+    string to_id = 2;
+    string relation = 3;     // Relation as string
+    float weight = 4;        // Default 1.0 for manual edges
+}
+
+message EdgeResponse {
+    string id = 1;
+    string from_id = 2;
+    string to_id = 3;
+    string relation = 4;
+    float weight = 5;
+    google.protobuf.Timestamp created_at = 6;
+    google.protobuf.Timestamp updated_at = 7;
+}
+
+message GetEdgesRequest {
+    string node_id = 1;
+    string direction = 2;  // "outgoing", "incoming", "both"
+}
+
+message GetEdgesResponse {
+    repeated EdgeResponse edges = 1;
+}
+
+message DeleteEdgeRequest {
+    string id = 1;
+}
+
+message TraverseRequest {
+    repeated string start_ids = 1;
+    uint32 max_depth = 2;     // 0 = start only
+    string direction = 3;     // "outgoing", "incoming", "both"
+    repeated string relation_filter = 4;
+    repeated string kind_filter = 5;
+    float min_weight = 6;
+    uint32 limit = 7;
+    string strategy = 8;     // "bfs", "dfs", "weighted"
+}
+
+message SubgraphResponse {
+    repeated NodeResponse nodes = 1;
+    repeated EdgeResponse edges = 2;
+    map<string, uint32> depths = 3;  // node_id → depth
+    uint32 visited_count = 4;
+    bool truncated = 5;
+}
+
+message FindPathsRequest {
+    string from_id = 1;
+    string to_id = 2;
+    uint32 max_paths = 3;     // Default 1 (shortest path)
+    uint32 max_depth = 4;     // Optional depth limit
+}
+
+message PathsResponse {
+    repeated PathEntry paths = 1;
+}
+
+message PathEntry {
+    repeated string node_ids = 1;
+    float total_weight = 2;
+    uint32 length = 3;
+}
+
+message NeighborhoodRequest {
+    string node_id = 1;
+    uint32 depth = 2;         // Default 1
+    string direction = 3;     // Default "both"
+}
+
+message SimilaritySearchRequest {
+    string query = 1;
+    uint32 limit = 2;         // Default 10
+    repeated string kind_filter = 3;
+    float min_score = 4;      // Default 0.0
+}
+
+message SearchResponse {
+    repeated SearchResultEntry results = 1;
+}
+
+message SearchResultEntry {
+    NodeResponse node = 1;
+    float score = 2;
+}
+
+message HybridSearchRequest {
+    string query = 1;
+    repeated string anchor_ids = 2;
+    float vector_weight = 3;  // Default 0.7
+    uint32 limit = 4;
+    repeated string kind_filter = 5;
+    uint32 max_anchor_depth = 6;  // Default 3
+}
+
+message HybridSearchResponse {
+    repeated HybridResultEntry results = 1;
+}
+
+message HybridResultEntry {
+    NodeResponse node = 1;
+    float vector_score = 2;
+    float graph_score = 3;
+    float combined_score = 4;
+    optional string nearest_anchor_id = 5;
+    optional uint32 nearest_anchor_depth = 6;
+}
+
+message BriefingRequest {
+    string agent_id = 1;      // e.g. "kai", "dutybound"
+    uint32 max_items = 2;     // Max nodes per section. Default 10.
+    bool include_contradictions = 3;  // Surface unresolved contradictions
+}
+
+message BriefingResponse {
+    string agent_id = 1;
+    string briefing_text = 2;   // Synthesised markdown text
+    repeated BriefingSection sections = 3;
+    google.protobuf.Timestamp generated_at = 4;
+    uint32 nodes_consulted = 5;
+}
+
+message BriefingSection {
+    string title = 1;           // e.g. "Identity", "Recent Decisions"
+    repeated NodeResponse nodes = 2;
+}
+
+message StatsRequest {
+}
+
+message StatsResponse {
+    uint64 node_count = 1;
+    uint64 edge_count = 2;
+    map<string, uint64> nodes_by_kind = 3;
+    map<string, uint64> edges_by_relation = 4;
+    uint64 db_size_bytes = 5;
+}
+
+message AutoLinkerStatusRequest {
+}
+
+message AutoLinkerStatusResponse {
+    uint64 cycles = 1;
+    uint64 nodes_processed = 2;
+    uint64 edges_created = 3;
+    uint64 edges_pruned = 4;
+    uint64 edges_deleted = 5;
+    uint64 duplicates_found = 6;
+    uint64 contradictions_found = 7;
+    uint64 last_cycle_duration_ms = 8;
+    google.protobuf.Timestamp cursor = 9;
+    uint64 backlog_size = 10;
+}
+
+message TriggerAutoLinkRequest {
+}
+
+message TriggerAutoLinkResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+message ReindexRequest {
+}
+
+message ReindexResponse {
+    bool success = 1;
+    uint64 nodes_reindexed = 2;
+    string message = 3;
+}
+
+message HealthRequest {
+}
+
+message HealthResponse {
+    bool healthy = 1;
+    string version = 2;
+    uint64 uptime_seconds = 3;
+    StatsResponse stats = 4;
+    AutoLinkerStatusResponse auto_linker = 5;
+}

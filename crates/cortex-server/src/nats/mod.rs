@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 mod ingest;
 
 pub use ingest::NatsIngest;
@@ -132,7 +133,7 @@ impl WarrenEvent {
             }
 
             WarrenEvent::EvidenceSubmitted {
-                evidence_id,
+                evidence_id: _,
                 item_id,
                 content,
                 submitted_by,
@@ -255,7 +256,12 @@ impl WarrenEvent {
 pub fn parse_subject(subject: &Subject) -> Option<&str> {
     let s = subject.as_str();
     if s.starts_with("warren.") {
-        Some(&s[7..]) // Remove "warren." prefix
+        let rest = &s[7..];
+        if rest.is_empty() {
+            None
+        } else {
+            Some(rest)
+        }
     } else {
         None
     }
@@ -283,6 +289,7 @@ mod tests {
     fn test_parse_subject_non_warren_returns_none() {
         assert_eq!(parse_subject(&make_subject("other.event")), None);
         assert_eq!(parse_subject(&make_subject("warren")), None); // no trailing dot
+        assert_eq!(parse_subject(&make_subject("warren.")), None); // empty after prefix
         assert_eq!(parse_subject(&make_subject("")), None);
     }
 

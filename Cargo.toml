@@ -40,6 +40,28 @@ prost = "0.13"
 log = "0.4"
 env_logger = "0.11"
 
+# HTTP/Web
+axum = "0.7"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+hyper = "1.5"
+
+# NATS
+async-nats = "0.38"
+
+# Tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# CLI
+clap = { version = "4.5", features = ["derive", "env"] }
+
+# Error handling
+anyhow = "1.0"
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json"] }
+
 # Testing
 proptest = "1.6"
 criterion = "0.5"
