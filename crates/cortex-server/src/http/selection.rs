@@ -506,15 +506,7 @@ pub async fn record_observation(
 
     // Atomically update the uses edge weight (single write transaction)
     let uses_rel = rels::uses();
-    let old_weight = state
-        .storage
-        .edges_between(agent.id, variant_uuid)?
-        .iter()
-        .find(|e| e.relation == uses_rel)
-        .map(|e| e.weight)
-        .unwrap_or(1.0);
-
-    let new_weight = state.storage.update_edge_weight_atomic(
+    let (old_weight, new_weight) = state.storage.update_edge_weight_atomic(
         agent.id,
         variant_uuid,
         &uses_rel,

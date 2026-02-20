@@ -412,7 +412,7 @@ impl RedbStorage {
         to: NodeId,
         relation: &crate::types::Relation,
         f: impl FnOnce(f32) -> f32,
-    ) -> Result<f32> {
+    ) -> Result<(f32, f32)> {
         let from_bytes = Self::uuid_to_bytes(&from);
         let write_txn = self.db.begin_write()?;
 
@@ -448,12 +448,13 @@ impl RedbStorage {
             })?;
             let mut edge: Edge = Self::deserialize_edge(bytes.value())?;
             drop(bytes);
+            let old_w = edge.weight;
             edge.weight = f(edge.weight).clamp(0.0, 1.0);
             edge.updated_at = chrono::Utc::now();
             let new_w = edge.weight;
             let serialized = Self::serialize_edge(&edge)?;
             edges_table.insert(&edge_id_bytes, serialized.as_slice())?;
-            new_w
+            (old_w, new_w)
         };
 
         write_txn.commit()?;
