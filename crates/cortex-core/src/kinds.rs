@@ -29,6 +29,9 @@ pub mod defaults {
     pub fn observation() -> NodeKind {
         NodeKind::new("observation").unwrap()
     }
+    pub fn prompt() -> NodeKind {
+        NodeKind::new("prompt").unwrap()
+    }
 
     pub fn all() -> Vec<NodeKind> {
         vec![
@@ -40,6 +43,7 @@ pub mod defaults {
             preference(),
             pattern(),
             observation(),
+            prompt(),
         ]
     }
 }

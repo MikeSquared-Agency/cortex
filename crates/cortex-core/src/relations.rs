@@ -27,6 +27,18 @@ pub mod defaults {
     pub fn instance_of() -> Relation {
         Relation::new("instance_of").unwrap()
     }
+    pub fn uses() -> Relation {
+        Relation::new("uses").unwrap()
+    }
+    pub fn branched_from() -> Relation {
+        Relation::new("branched_from").unwrap()
+    }
+    pub fn inherits_from() -> Relation {
+        Relation::new("inherits_from").unwrap()
+    }
+    pub fn used_by() -> Relation {
+        Relation::new("used_by").unwrap()
+    }
 
     pub fn all() -> Vec<Relation> {
         vec![
@@ -38,6 +50,10 @@ pub mod defaults {
             depends_on(),
             related_to(),
             instance_of(),
+            uses(),
+            branched_from(),
+            inherits_from(),
+            used_by(),
         ]
     }
 }

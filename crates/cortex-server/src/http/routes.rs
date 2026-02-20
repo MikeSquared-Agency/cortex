@@ -2,7 +2,7 @@ use super::{AppResult, AppState, JsonResponse, GRAPH_VIZ_HTML};
 use axum::{
     extract::{Path, Query, State},
     response::{Html, IntoResponse, Json},
-    routing::{get, post},
+    routing::{get, post, put},
     Router,
 };
 use cortex_core::{Edge, EdgeProvenance, NodeFilter, NodeKind, Relation, Source, *};
@@ -26,6 +26,12 @@ pub fn create_router(state: AppState) -> Router {
         .route("/auto-linker/status", get(auto_linker_status))
         .route("/auto-linker/trigger", post(trigger_auto_link))
         .route("/briefing/:agent_id", get(get_briefing))
+        .route("/agents/:name/prompts", get(list_agent_prompts))
+        .route(
+            "/agents/:name/prompts/:slug",
+            put(bind_prompt).delete(unbind_prompt),
+        )
+        .route("/agents/:name/resolved-prompt", get(resolved_prompt))
         .with_state(state)
 }
 
@@ -642,5 +648,220 @@ async fn get_briefing(
         sections,
         rendered,
         cached: briefing.cached,
+    })))
+}
+
+// ── Agent ↔ Prompt Bindings ────────────────────────────────────────────────
+
+/// Find a node by kind and title. Returns None if not found.
+fn find_node_by_kind_and_title(
+    storage: &cortex_core::RedbStorage,
+    kind: &NodeKind,
+    title: &str,
+) -> cortex_core::Result<Option<Node>> {
+    let nodes = storage.list_nodes(NodeFilter::new().with_kinds(vec![kind.clone()]))?;
+    Ok(nodes.into_iter().find(|n| n.data.title == title))
+}
+
+#[derive(Serialize)]
+struct PromptBinding {
+    slug: String,
+    id: String,
+    weight: f32,
+    edge_id: String,
+}
+
+/// GET /agents/:name/prompts — list all prompts bound to an agent, ordered by weight desc
+async fn list_agent_prompts(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+) -> AppResult<impl IntoResponse> {
+    let agent_kind = cortex_core::kinds::defaults::agent();
+    let uses_rel = cortex_core::relations::defaults::uses();
+
+    let agent = find_node_by_kind_and_title(&state.storage, &agent_kind, &name)?
+        .ok_or_else(|| anyhow::anyhow!("Agent '{}' not found", name))?;
+
+    let edges = state.storage.edges_from(agent.id)?;
+    let mut bindings: Vec<PromptBinding> = edges
+        .into_iter()
+        .filter(|e| e.relation == uses_rel)
+        .filter_map(|e| {
+            state
+                .storage
+                .get_node(e.to)
+                .ok()
+                .flatten()
+                .map(|prompt| PromptBinding {
+                    slug: prompt.data.title.clone(),
+                    id: prompt.id.to_string(),
+                    weight: e.weight,
+                    edge_id: e.id.to_string(),
+                })
+        })
+        .collect();
+
+    bindings.sort_by(|a, b| b.weight.partial_cmp(&a.weight).unwrap_or(std::cmp::Ordering::Equal));
+
+    Ok(Json(JsonResponse::ok(bindings)))
+}
+
+#[derive(Deserialize)]
+struct BindPromptBody {
+    weight: Option<f32>,
+}
+
+/// PUT /agents/:name/prompts/:slug — bind or update an agent→prompt edge
+async fn bind_prompt(
+    State(state): State<AppState>,
+    Path((name, slug)): Path<(String, String)>,
+    Json(body): Json<BindPromptBody>,
+) -> AppResult<impl IntoResponse> {
+    let agent_kind = cortex_core::kinds::defaults::agent();
+    let prompt_kind = cortex_core::kinds::defaults::prompt();
+    let uses_rel = cortex_core::relations::defaults::uses();
+
+    let agent = find_node_by_kind_and_title(&state.storage, &agent_kind, &name)?
+        .ok_or_else(|| anyhow::anyhow!("Agent '{}' not found. Create it first via POST /nodes with kind=agent.", name))?;
+
+    let prompt = find_node_by_kind_and_title(&state.storage, &prompt_kind, &slug)?
+        .ok_or_else(|| anyhow::anyhow!("Prompt '{}' not found. Create it first via POST /nodes with kind=prompt.", slug))?;
+
+    let weight = body.weight.unwrap_or(1.0).clamp(0.0, 1.0);
+
+    // Remove any existing uses edge between this agent and prompt
+    let existing = state.storage.edges_between(agent.id, prompt.id)?;
+    for edge in existing.iter().filter(|e| e.relation == uses_rel) {
+        state.storage.delete_edge(edge.id)?;
+    }
+
+    // Create the new (or replacement) edge
+    let edge = Edge {
+        id: uuid::Uuid::now_v7(),
+        from: agent.id,
+        to: prompt.id,
+        relation: uses_rel,
+        weight,
+        provenance: EdgeProvenance::Manual {
+            created_by: "http".to_string(),
+        },
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    };
+    state.storage.put_edge(&edge)?;
+
+    Ok(Json(JsonResponse::ok(serde_json::json!({
+        "agent": name,
+        "prompt": slug,
+        "weight": weight,
+        "edge_id": edge.id.to_string(),
+    }))))
+}
+
+/// DELETE /agents/:name/prompts/:slug — unbind a prompt from an agent
+async fn unbind_prompt(
+    State(state): State<AppState>,
+    Path((name, slug)): Path<(String, String)>,
+) -> AppResult<impl IntoResponse> {
+    let agent_kind = cortex_core::kinds::defaults::agent();
+    let prompt_kind = cortex_core::kinds::defaults::prompt();
+    let uses_rel = cortex_core::relations::defaults::uses();
+
+    let agent = find_node_by_kind_and_title(&state.storage, &agent_kind, &name)?
+        .ok_or_else(|| anyhow::anyhow!("Agent '{}' not found", name))?;
+
+    let prompt = find_node_by_kind_and_title(&state.storage, &prompt_kind, &slug)?
+        .ok_or_else(|| anyhow::anyhow!("Prompt '{}' not found", slug))?;
+
+    let existing = state.storage.edges_between(agent.id, prompt.id)?;
+    let to_delete: Vec<_> = existing
+        .iter()
+        .filter(|e| e.relation == uses_rel)
+        .collect();
+
+    if to_delete.is_empty() {
+        return Err(anyhow::anyhow!(
+            "No 'uses' binding found between agent '{}' and prompt '{}'",
+            name,
+            slug
+        )
+        .into());
+    }
+
+    for edge in to_delete {
+        state.storage.delete_edge(edge.id)?;
+    }
+
+    Ok(Json(JsonResponse::ok(serde_json::json!({
+        "agent": name,
+        "prompt": slug,
+        "unbound": true,
+    }))))
+}
+
+#[derive(Serialize)]
+struct ResolvedPromptData {
+    agent: String,
+    prompts_consulted: usize,
+    bindings: Vec<PromptBinding>,
+    resolved: String,
+}
+
+/// GET /agents/:name/resolved-prompt — merge all bound prompts in weight order
+async fn resolved_prompt(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+) -> AppResult<impl IntoResponse> {
+    let agent_kind = cortex_core::kinds::defaults::agent();
+    let uses_rel = cortex_core::relations::defaults::uses();
+
+    let agent = find_node_by_kind_and_title(&state.storage, &agent_kind, &name)?
+        .ok_or_else(|| anyhow::anyhow!("Agent '{}' not found", name))?;
+
+    let edges = state.storage.edges_from(agent.id)?;
+
+    // Collect (edge, prompt_node) pairs for uses edges, sorted by weight desc
+    let mut prompt_pairs: Vec<(cortex_core::Edge, Node)> = edges
+        .into_iter()
+        .filter(|e| e.relation == uses_rel)
+        .filter_map(|e| {
+            state
+                .storage
+                .get_node(e.to)
+                .ok()
+                .flatten()
+                .map(|prompt| (e, prompt))
+        })
+        .collect();
+
+    prompt_pairs
+        .sort_by(|a, b| b.0.weight.partial_cmp(&a.0.weight).unwrap_or(std::cmp::Ordering::Equal));
+
+    let bindings: Vec<PromptBinding> = prompt_pairs
+        .iter()
+        .map(|(e, p)| PromptBinding {
+            slug: p.data.title.clone(),
+            id: p.id.to_string(),
+            weight: e.weight,
+            edge_id: e.id.to_string(),
+        })
+        .collect();
+
+    // Merge prompt bodies: highest weight = base identity, rest appended as overlays
+    let mut resolved = String::new();
+    for (i, (edge, prompt)) in prompt_pairs.iter().enumerate() {
+        if i == 0 {
+            resolved.push_str(&format!("# {}\n\n", prompt.data.title));
+        } else {
+            resolved.push_str(&format!("\n\n---\n\n# {} (overlay, weight: {:.2})\n\n", prompt.data.title, edge.weight));
+        }
+        resolved.push_str(&prompt.data.body);
+    }
+
+    Ok(Json(JsonResponse::ok(ResolvedPromptData {
+        agent: name,
+        prompts_consulted: bindings.len(),
+        bindings,
+        resolved,
     })))
 }

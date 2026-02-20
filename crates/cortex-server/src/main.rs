@@ -130,6 +130,10 @@ async fn main() -> anyhow::Result<()> {
             let server = args.server;
             mcp::run(mcp::McpArgs { data_dir, server }).await?;
         }
+
+        Commands::Agent(cmd) => {
+            cli::agent::run(cmd, &cli.server).await?;
+        }
     }
 
     Ok(())

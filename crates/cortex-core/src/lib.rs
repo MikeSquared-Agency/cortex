@@ -6,6 +6,7 @@ pub mod ingest;
 pub mod kinds;
 pub mod linker;
 pub mod policies;
+pub mod prompt;
 pub mod relations;
 pub mod storage;
 pub mod types;

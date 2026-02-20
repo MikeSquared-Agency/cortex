@@ -1,3 +1,4 @@
+pub mod agent;
 pub mod audit;
 pub mod backup;
 pub mod briefing;
@@ -94,6 +95,9 @@ pub enum Commands {
     Security(SecurityCommands),
     /// Start an MCP server (stdio transport for AI agent integration)
     Mcp(McpArgs),
+    /// Agent ↔ prompt binding management
+    #[command(subcommand)]
+    Agent(AgentCommands),
 }
 
 // --- MCP args ---
@@ -133,6 +137,66 @@ pub enum ConfigCommands {
 pub enum SecurityCommands {
     /// Generate a new 256-bit AES encryption key
     GenerateKey,
+}
+
+// --- Agent args ---
+
+#[derive(Subcommand, Debug)]
+pub enum AgentCommands {
+    /// List all agent nodes
+    List(AgentListArgs),
+    /// Show prompts bound to an agent
+    Show(AgentShowArgs),
+    /// Bind (or update weight of) a prompt to an agent
+    Bind(AgentBindArgs),
+    /// Unbind a prompt from an agent
+    Unbind(AgentUnbindArgs),
+    /// Show the fully resolved effective prompt for an agent
+    Resolve(AgentResolveArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct AgentListArgs {
+    #[arg(long, default_value = "table")]
+    pub format: String,
+}
+
+#[derive(Args, Debug)]
+pub struct AgentShowArgs {
+    /// Agent name (title of the agent node)
+    pub name: String,
+    #[arg(long, default_value = "table")]
+    pub format: String,
+}
+
+#[derive(Args, Debug)]
+pub struct AgentBindArgs {
+    /// Agent name
+    pub name: String,
+    /// Prompt slug (title of the prompt node)
+    pub slug: String,
+    /// Edge weight [0.0–1.0]; higher = more important
+    #[arg(long, default_value = "1.0")]
+    pub weight: f32,
+    #[arg(long, default_value = "table")]
+    pub format: String,
+}
+
+#[derive(Args, Debug)]
+pub struct AgentUnbindArgs {
+    /// Agent name
+    pub name: String,
+    /// Prompt slug
+    pub slug: String,
+}
+
+#[derive(Args, Debug)]
+pub struct AgentResolveArgs {
+    /// Agent name
+    pub name: String,
+    /// Output format: text (default) | json
+    #[arg(long, default_value = "text")]
+    pub format: String,
 }
 
 // --- Audit args ---
