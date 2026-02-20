@@ -379,33 +379,22 @@ pub async fn record_observation(
     ];
     state.storage.put_edges_batch(&new_edges)?;
 
-    // Update the uses edge weight between agent and variant (delete + recreate)
+    // Atomically update the uses edge weight (single write transaction)
     let uses_rel = rels::uses();
-    let existing_edges = state.storage.edges_between(agent.id, variant_uuid)?;
-    let old_weight = existing_edges
+    let old_weight = state
+        .storage
+        .edges_between(agent.id, variant_uuid)?
         .iter()
         .find(|e| e.relation == uses_rel)
         .map(|e| e.weight)
         .unwrap_or(1.0);
 
-    let new_weight = sel::update_edge_weight(old_weight, obs_score);
-
-    for edge in existing_edges.iter().filter(|e| e.relation == uses_rel) {
-        state.storage.delete_edge(edge.id)?;
-    }
-    let updated_uses = Edge {
-        id: uuid::Uuid::now_v7(),
-        from: agent.id,
-        to: variant_uuid,
-        relation: uses_rel,
-        weight: new_weight,
-        provenance: EdgeProvenance::Manual {
-            created_by: "observe".to_string(),
-        },
-        created_at: chrono::Utc::now(),
-        updated_at: chrono::Utc::now(),
-    };
-    state.storage.put_edge(&updated_uses)?;
+    let new_weight = state.storage.update_edge_weight_atomic(
+        agent.id,
+        variant_uuid,
+        &uses_rel,
+        |w| sel::update_edge_weight(w, obs_score),
+    )?;
 
     // Determine if this is a variant swap
     let current_active = agent

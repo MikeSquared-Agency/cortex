@@ -399,6 +399,66 @@ impl RedbStorage {
             u64::from_le_bytes(bytes)
         }))
     }
+
+    /// Atomically update the weight of an edge identified by (from, to, relation).
+    ///
+    /// Reads the edge, applies `f` to its weight, and writes the updated edge
+    /// back — all within a single write transaction. Returns the new weight.
+    ///
+    /// Returns `Err(EdgeNotFound)` if no matching edge exists.
+    pub fn update_edge_weight_atomic(
+        &self,
+        from: NodeId,
+        to: NodeId,
+        relation: &crate::types::Relation,
+        f: impl FnOnce(f32) -> f32,
+    ) -> Result<f32> {
+        let from_bytes = Self::uuid_to_bytes(&from);
+        let write_txn = self.db.begin_write()?;
+
+        // Find the edge by scanning from-index
+        let edge_id = {
+            let from_index = write_txn.open_multimap_table(EDGES_BY_FROM)?;
+            let edges_table = write_txn.open_table(EDGES)?;
+            let mut found: Option<EdgeId> = None;
+            for result in from_index.get(&from_bytes)? {
+                let eid_bytes = *result?.value();
+                let eid = Self::bytes_to_uuid(&eid_bytes);
+                if let Some(bytes) = edges_table.get(&eid_bytes)? {
+                    let existing: Edge = Self::deserialize_edge(bytes.value())?;
+                    if existing.to == to && existing.relation == *relation {
+                        found = Some(eid);
+                        break;
+                    }
+                }
+            }
+            found
+        };
+
+        let edge_id = edge_id.ok_or_else(|| CortexError::Validation(
+            format!("No edge found from {} to {} with relation {}", from, to, relation),
+        ))?;
+
+        // Read, modify, write — still in the same transaction
+        let edge_id_bytes = Self::uuid_to_bytes(&edge_id);
+        let new_weight = {
+            let mut edges_table = write_txn.open_table(EDGES)?;
+            let bytes = edges_table.get(&edge_id_bytes)?.ok_or_else(|| {
+                CortexError::EdgeNotFound(edge_id)
+            })?;
+            let mut edge: Edge = Self::deserialize_edge(bytes.value())?;
+            drop(bytes);
+            edge.weight = f(edge.weight).clamp(0.0, 1.0);
+            edge.updated_at = chrono::Utc::now();
+            let new_w = edge.weight;
+            let serialized = Self::serialize_edge(&edge)?;
+            edges_table.insert(&edge_id_bytes, serialized.as_slice())?;
+            new_w
+        };
+
+        write_txn.commit()?;
+        Ok(new_weight)
+    }
 }
 
 impl Storage for RedbStorage {

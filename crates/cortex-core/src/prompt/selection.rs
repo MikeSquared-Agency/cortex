@@ -110,6 +110,11 @@ impl ContextSignals {
 /// Returns a value clamped to \[0.0, 1.0\] otherwise.
 ///
 /// Negative weights are supported: they penalise signals that are active.
+///
+/// **Note on all-negative weights:** When every weight is negative and signals are
+/// active, the dot product will be negative, clamping the result to 0.0. To get
+/// meaningful differentiation with anti-pattern weights, pair them with at least one
+/// positive weight (e.g. the desired signal) so the score can range above zero.
 pub fn context_fit(
     context_weights: Option<&serde_json::Value>,
     signals: &ContextSignals,

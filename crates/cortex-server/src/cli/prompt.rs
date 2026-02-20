@@ -378,9 +378,24 @@ async fn migrate(args: PromptMigrateArgs, config: &CortexConfig) -> Result<()> {
             } else {
                 // Use create_version for v2+.
                 match resolver.create_version(slug, branch, content, &mv.author) {
-                    Ok(_) => {
+                    Ok(node_id) => {
                         created += 1;
-                        println!("  created {}@{}/v{}", slug, branch, mv.version);
+                        // Validate that the actual version matches what the migration expected
+                        let actual_version = storage
+                            .get_node(node_id)
+                            .ok()
+                            .flatten()
+                            .and_then(|n| resolver.parse_content(&n).ok())
+                            .map(|c| c.version)
+                            .unwrap_or(0);
+                        if actual_version != mv.version {
+                            println!(
+                                "  ⚠ created {}@{}/v{} (migration expected v{} — version sequence gap?)",
+                                slug, branch, actual_version, mv.version,
+                            );
+                        } else {
+                            println!("  created {}@{}/v{}", slug, branch, mv.version);
+                        }
                         Ok(())
                     }
                     Err(e) => Err(anyhow::anyhow!(e)),
