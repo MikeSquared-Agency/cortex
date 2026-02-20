@@ -15,10 +15,19 @@ Complete guide to using Cortex for graph memory management.
 
 ## Installation
 
+### Install Script (recommended)
+
+```bash
+curl -sSf https://raw.githubusercontent.com/MikeSquared-Agency/cortex/main/install.sh | sh
+```
+
+No Rust toolchain or system dependencies required.
+
+
 ### From Source
 
 ```bash
-git clone https://github.com/your-org/cortex.git
+git clone https://github.com/MikeSquared-Agency/cortex.git
 cd cortex
 cargo build --release
 ```
@@ -26,8 +35,8 @@ cargo build --release
 ### Using Docker
 
 ```bash
-docker pull cortex:latest
-docker run -p 9090:9090 -p 9091:9091 -v cortex-data:/data cortex:latest
+docker pull mikesquared/cortex:latest
+docker run -p 9090:9090 -p 9091:9091 -v cortex-data:/data mikesquared/cortex:latest
 ```
 
 ## Quick Start
@@ -40,6 +49,9 @@ cargo run --bin cortex-server
 
 # Docker Compose
 docker-compose up -d
+
+# Using the installed binary
+cortex serve
 
 # With custom config
 cargo run --bin cortex-server -- \
@@ -488,6 +500,9 @@ tar -czf cortex-backup-$(date +%Y%m%d).tar.gz data/
 
 # Restart
 docker-compose up -d
+
+# Using the installed binary
+cortex serve
 ```
 
 ### Migration
@@ -549,6 +564,47 @@ See [MIGRATION.md](MIGRATION.md) for Alexandria import instructions.
 
 ## Support
 
-- GitHub Issues: https://github.com/your-org/cortex/issues
+- GitHub Issues: https://github.com/MikeSquared-Agency/cortex/issues
 - Documentation: https://cortex.warren.dev/docs
 - Slack: #cortex-support
+
+## Prompt Management
+
+### Creating Prompts
+
+```bash
+cortex prompt migrate prompts.json
+```
+
+### Listing and Inspecting
+
+```bash
+cortex prompt list
+cortex prompt get my-prompt
+cortex prompt get my-prompt --version 2
+```
+
+### Agent Binding
+
+```bash
+cortex agent bind my-agent my-prompt --weight 0.9
+cortex agent show my-agent
+cortex agent resolve my-agent
+```
+
+### Context-Aware Selection
+
+```bash
+cortex agent select my-agent --task-type coding --sentiment 0.3 --epsilon 0.2
+```
+
+### Performance Tracking
+
+```bash
+cortex agent observe my-agent \
+  --variant-id UUID --variant-slug my-prompt \
+  --sentiment-score 0.8 --task-outcome success
+
+cortex prompt performance my-prompt
+cortex agent history my-agent
+```

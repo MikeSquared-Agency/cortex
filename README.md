@@ -50,6 +50,35 @@ cortex search "authentication"
 cortex briefing my-agent
 ```
 
+### Prompt Management
+
+Cortex includes a built-in prompt versioning system with branching, inheritance, and context-aware selection.
+
+```bash
+# Import prompts from a migration file
+cortex prompt migrate prompts.json
+
+# List all prompts
+cortex prompt list
+
+# Get the resolved HEAD of a prompt (with inherited sections)
+cortex prompt get my-prompt
+
+# Bind a prompt to an agent
+cortex agent bind my-agent my-prompt --weight 0.9
+
+# Select the best variant for current context (epsilon-greedy)
+cortex agent select my-agent --task-type coding --sentiment 0.3
+
+# Record performance and auto-update weights
+cortex agent observe my-agent \
+  --variant-id UUID --variant-slug my-prompt \
+  --sentiment-score 0.8 --task-outcome success
+
+# Check performance metrics
+cortex prompt performance my-prompt
+```
+
 ### As a Library (Python)
 
 ```python
@@ -79,6 +108,8 @@ let results = cx.search("authentication", 5)?;
 - **[CLI Reference](docs/reference/cli.md)**
 - **[Python SDK](docs/reference/python-sdk.md)**
 - **[gRPC API](docs/reference/grpc-api.md)**
+- **[HTTP API](docs/reference/http-api.md)**
+- **[Prompt System](docs/concepts/prompt-system.md)**
 - **[Architecture](docs/concepts/architecture.md)**
 
 ## Why Not a Vector DB?
@@ -94,6 +125,7 @@ let results = cx.search("authentication", 5)?;
 | Hybrid search (vector+graph) | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Local embeddings | ✅ | ❌ | ❌ | ✅ | ❌ |
 | Single binary | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Prompt versioning | ✅ | ❌ | ❌ | ❌ | ❌ |
 
 **Our moat:** Graph-native memory with auto-linking and decay. Nobody else does this.
 
@@ -125,6 +157,10 @@ Cortex ships a live graph explorer. Start the server and open [http://localhost:
 │  ┌──────────┐  ┌───────────┐  ┌─────────┐  │
 │  │Auto-Link │  │ Briefing  │  │  Ingest │  │
 │  │(background)│ │  Engine   │  │ Pipeline│  │
+│  └──────────┘  └───────────┘  └─────────┘  │
+│  ┌──────────┐  ┌───────────┐  ┌─────────┐  │
+│  │  Prompt  │  │ Selection │  │ Observe │  │
+│  │  Resolver│  │  Engine   │  │ Scoring │  │
 │  └──────────┘  └───────────┘  └─────────┘  │
 └────────────────────────────────────────────┘
 ```
