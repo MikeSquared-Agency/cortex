@@ -14,7 +14,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/health", get(health))
         .route("/stats", get(stats))
         .route("/nodes", get(list_nodes).post(create_node))
-        .route("/nodes/:id", get(get_node))
+        .route("/nodes/:id", get(get_node).delete(delete_node).patch(patch_node))
         .route("/nodes/:id/neighbors", get(node_neighbors))
         .route("/edges", post(create_edge))
         .route("/edges/:id", get(get_edge))
@@ -353,6 +353,60 @@ async fn hybrid_search(
         .collect();
 
     Ok(Json(JsonResponse::ok(results)))
+}
+
+
+async fn delete_node(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> AppResult<impl IntoResponse> {
+    let node_id: uuid::Uuid = id.parse().map_err(|_| anyhow::anyhow!("Invalid UUID"))?;
+    state.storage.delete_node(node_id)?;
+    Ok(Json(JsonResponse::ok(serde_json::json!({"deleted": id}))))
+}
+
+#[derive(Deserialize)]
+struct PatchNodeBody {
+    kind: Option<String>,
+    title: Option<String>,
+    body: Option<String>,
+    tags: Option<Vec<String>>,
+    importance: Option<f32>,
+}
+
+async fn patch_node(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(patch): Json<PatchNodeBody>,
+) -> AppResult<impl IntoResponse> {
+    let node_id: uuid::Uuid = id.parse().map_err(|_| anyhow::anyhow!("Invalid UUID"))?;
+    let mut node = state.storage.get_node(node_id)?
+        .ok_or_else(|| anyhow::anyhow!("Node not found"))?;
+
+    if let Some(kind_str) = &patch.kind {
+        node.kind = cortex_core::NodeKind::new(kind_str)
+            .map_err(|e| anyhow::anyhow!("Invalid kind: {}", e))?;
+    }
+    if let Some(title) = patch.title {
+        node.data.title = title;
+    }
+    if let Some(body) = patch.body {
+        node.data.body = body;
+    }
+    if let Some(tags) = patch.tags {
+        node.data.tags = tags;
+    }
+    if let Some(importance) = patch.importance {
+        node.importance = importance;
+    }
+    node.updated_at = chrono::Utc::now();
+    state.storage.put_node(&node)?;
+
+    Ok(Json(JsonResponse::ok(serde_json::json!({
+        "id": id,
+        "kind": format!("{:?}", node.kind),
+        "title": node.data.title,
+    }))))
 }
 
 async fn get_node(
