@@ -1,4 +1,4 @@
-use super::{prompts, selection, AppResult, AppState, JsonResponse, GRAPH_VIZ_HTML};
+use super::{prompts, rollback, selection, AppResult, AppState, JsonResponse, GRAPH_VIZ_HTML};
 use axum::{
     extract::{Path, Query, State},
     response::{Html, IntoResponse, Json},
@@ -49,6 +49,14 @@ pub fn create_router(state: AppState) -> Router {
         .route("/prompts/:slug/versions/:version", get(prompts::get_version))
         .route("/prompts/:slug/branch", post(prompts::create_branch))
         .route("/prompts/:slug/performance", get(selection::prompt_performance))
+        // Automatic rollback on performance degradation (issue #23)
+        .route("/prompts/:slug/deploy", post(rollback::deploy_prompt))
+        .route("/prompts/:slug/rollback-status", get(rollback::rollback_status))
+        .route("/prompts/:slug/unquarantine", post(rollback::unquarantine_prompt))
+        .route(
+            "/prompts/:slug/versions/:version/performance",
+            get(selection::version_performance),
+        )
         .with_state(state)
 }
 

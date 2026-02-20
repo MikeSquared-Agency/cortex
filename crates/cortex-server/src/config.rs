@@ -4,6 +4,7 @@ use cortex_core::{AutoLinkerConfig, NodeKind, Relation, SimilarityConfig};
 pub use cortex_core::policies::RetentionConfig;
 #[allow(unused_imports)]
 pub use cortex_core::policies::RetentionMaxNodes;
+pub use cortex_core::prompt::RollbackConfig;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -34,6 +35,8 @@ pub struct CortexConfig {
     pub webhooks: Vec<WebhookConfig>,
     #[serde(default)]
     pub plugins: Vec<PluginConfig>,
+    #[serde(default)]
+    pub prompt_rollback: RollbackConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

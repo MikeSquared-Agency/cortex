@@ -95,6 +95,29 @@ const TOOLS = [
       required: ["from_id", "to_id"],
     },
   },
+  {
+    name: "cortex_observe",
+    description: "Record a performance observation after an agent interaction. Updates prompt variant weights via EMA for adaptive selection.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agent: { type: "string", description: "Agent name (e.g. 'kai')" },
+        variant_id: { type: "string", description: "UUID of the prompt variant node used" },
+        variant_slug: { type: "string", description: "Slug/title of the prompt variant" },
+        sentiment_score: { type: "number", description: "User sentiment 0.0 (frustrated) to 1.0 (pleased)", default: 0.5 },
+        correction_count: { type: "integer", description: "Number of user corrections in this interaction", default: 0 },
+        task_outcome: { type: "string", description: "success | partial | failure | unknown", default: "unknown" },
+        token_cost: { type: "integer", description: "Total tokens consumed" },
+        response_time_ms: { type: "integer", description: "Time to generate response in milliseconds" },
+        user_satisfaction: { type: "number", description: "Explicit user satisfaction score 0.0-1.0 if available" },
+        task_type: { type: "string", description: "Task category: coding | planning | casual | crisis | reflection" },
+        topic: { type: "string", description: "Topic or domain of the interaction" },
+        session_length: { type: "integer", description: "Session length in minutes" },
+        message_count: { type: "integer", description: "Number of messages in this session" },
+      },
+      required: ["agent", "variant_id", "variant_slug"],
+    },
+  },
 ];
 
 async function http(method, path, body) {
@@ -145,6 +168,28 @@ async function handleTool(name, args) {
         relation: args.relation || "relates-to",
       });
       return `Related: ${args.from_id} → [${args.relation || "relates-to"}] → ${args.to_id} (edge: ${r.data?.id || "?"})`;
+    }
+    case "cortex_observe": {
+      const body = {
+        variant_id: args.variant_id,
+        variant_slug: args.variant_slug,
+        sentiment_score: args.sentiment_score ?? 0.5,
+        correction_count: args.correction_count ?? 0,
+        task_outcome: args.task_outcome || "unknown",
+      };
+      if (args.token_cost != null) body.token_cost = args.token_cost;
+      if (args.response_time_ms != null) body.response_time_ms = args.response_time_ms;
+      if (args.user_satisfaction != null) body.user_satisfaction = args.user_satisfaction;
+      if (args.topic != null) body.topic = args.topic;
+      if (args.session_length != null) body.session_length = args.session_length;
+      if (args.message_count != null) body.message_count = args.message_count;
+      if (args.task_type) {
+        body.context_signals = { task_type: args.task_type, sentiment: args.sentiment_score ?? 0.5 };
+      }
+      const r = await http("POST", `/agents/${encodeURIComponent(args.agent)}/observe`, body);
+      if (r.error) return `Observe error: ${r.error}`;
+      const d = r.data || {};
+      return `Observed: score=${d.observation_score?.toFixed(3)}, weight ${d.old_edge_weight?.toFixed(3)} → ${d.new_edge_weight?.toFixed(3)} (obs: ${d.observation_id || "?"})`;
     }
     default:
       throw new Error(`Unknown tool: ${name}`);

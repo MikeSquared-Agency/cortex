@@ -1,4 +1,5 @@
 pub mod prompts;
+pub mod rollback;
 mod routes;
 pub mod selection;
 mod viz;
@@ -27,6 +28,7 @@ use axum::{
     Json,
 };
 use cortex_core::briefing::BriefingEngine;
+use cortex_core::prompt::RollbackConfig;
 use cortex_core::{FastEmbedService, GraphEngineImpl, HnswIndex, RedbStorage, RwLockVectorIndex};
 use serde::Serialize;
 use std::sync::atomic::AtomicU64;
@@ -60,6 +62,7 @@ pub struct AppState {
     pub graph_version: Arc<AtomicU64>,
     pub briefing_engine: Arc<HttpBriefingEngine>,
     pub start_time: std::time::Instant,
+    pub rollback_config: RollbackConfig,
 }
 
 /// JSON response wrapper

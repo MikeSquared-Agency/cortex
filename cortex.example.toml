@@ -70,7 +70,7 @@ grace_days = 7                  # Days before hard-deleting soft-deleted nodes
 
 # Per-kind TTL overrides (days). 0 = keep forever.
 [retention.by_kind]
-observation = 30
+observation = 90
 event = 90
 decision = 0                    # Decisions kept forever
 pattern = 0

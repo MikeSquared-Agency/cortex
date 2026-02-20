@@ -1,4 +1,7 @@
-use super::{PromptCommands, PromptGetArgs, PromptListArgs, PromptMigrateArgs, PromptPerformanceArgs};
+use super::{
+    PromptCommands, PromptDeployArgs, PromptGetArgs, PromptListArgs, PromptMigrateArgs,
+    PromptPerformanceArgs, PromptRollbackStatusArgs, PromptUnquarantineArgs,
+};
 use crate::config::CortexConfig;
 use anyhow::Result;
 use cortex_core::prompt::{PromptContent, PromptResolver};
@@ -14,6 +17,9 @@ pub async fn run(cmd: PromptCommands, config: &CortexConfig, server: &str) -> Re
         PromptCommands::Get(args) => get(args, config).await,
         PromptCommands::Migrate(args) => migrate(args, config).await,
         PromptCommands::Performance(args) => performance(args, server).await,
+        PromptCommands::Deploy(args) => deploy(args, server).await,
+        PromptCommands::RollbackStatus(args) => rollback_status(args, server).await,
+        PromptCommands::Unquarantine(args) => unquarantine(args, server).await,
     }
 }
 
@@ -210,6 +216,140 @@ async fn performance(args: PromptPerformanceArgs, server: &str) -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+// ── Deploy ───────────────────────────────────────────────────────────────────
+
+async fn deploy(args: PromptDeployArgs, server: &str) -> Result<()> {
+    let base = http_base(server);
+    let client = reqwest::Client::new();
+    let url = format!("{}/prompts/{}/deploy", base, args.slug);
+    let payload = serde_json::json!({
+        "branch": args.branch,
+        "agent_name": args.agent_name,
+        "baseline_sample_size": args.baseline_sample_size,
+    });
+    let resp = client
+        .post(&url)
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e))?;
+
+    if !resp.status().is_success() {
+        let body: serde_json::Value = resp.json().await?;
+        anyhow::bail!("{}", body["error"].as_str().unwrap_or("unknown error"));
+    }
+
+    let body: serde_json::Value = resp.json().await?;
+    let data = &body["data"];
+
+    if args.format == "json" {
+        println!("{}", serde_json::to_string_pretty(data)?);
+        return Ok(());
+    }
+
+    println!("Deployment recorded for '{}'@{}/v{}:", args.slug, args.branch, data["version"].as_u64().unwrap_or(0));
+    println!("  Deployment node: {}", data["deployment_node_id"].as_str().unwrap_or("-"));
+    println!("  Prompt node:     {}", data["prompt_node_id"].as_str().unwrap_or("-"));
+    println!("  Baseline corr:   {:.3}", data["baseline_correction_rate"].as_f64().unwrap_or(0.0));
+    println!("  Baseline senti:  {:.3}", data["baseline_sentiment"].as_f64().unwrap_or(0.0));
+    println!("  Baseline sample: {}", data["baseline_sample_size"].as_u64().unwrap_or(0));
+    println!();
+    println!("Monitoring window active. Use `cortex prompt rollback-status {}` to check.", args.slug);
+    Ok(())
+}
+
+// ── Rollback status ──────────────────────────────────────────────────────────
+
+async fn rollback_status(args: PromptRollbackStatusArgs, server: &str) -> Result<()> {
+    let base = http_base(server);
+    let client = reqwest::Client::new();
+    let url = format!("{}/prompts/{}/rollback-status?branch={}", base, args.slug, args.branch);
+    let resp = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e))?;
+
+    if !resp.status().is_success() {
+        let body: serde_json::Value = resp.json().await?;
+        anyhow::bail!("{}", body["error"].as_str().unwrap_or("unknown error"));
+    }
+
+    let body: serde_json::Value = resp.json().await?;
+    let data = &body["data"];
+
+    if args.format == "json" {
+        println!("{}", serde_json::to_string_pretty(data)?);
+        return Ok(());
+    }
+
+    let quarantined = data["is_quarantined"].as_bool().unwrap_or(false);
+    println!("Rollback status for '{}'@{}:", args.slug, args.branch);
+    println!("  Current version: v{}", data["current_version"].as_u64().unwrap_or(0));
+    println!("  Quarantined:     {}", if quarantined { "YES" } else { "no" });
+    println!("  Rollback count:  {}", data["rollback_count"].as_u64().unwrap_or(0));
+    if let Some(expires) = data["cooldown_expires_at"].as_str() {
+        println!("  Cooldown until:  {}", expires);
+    }
+
+    if let Some(dep) = data["active_deployment"].as_object() {
+        println!();
+        println!("  Active monitoring window:");
+        println!("    Observations: {}/{}", dep["n_observed"].as_u64().unwrap_or(0), dep["monitoring_window"].as_u64().unwrap_or(0));
+        println!("    Agent:        {}", dep["agent_name"].as_str().unwrap_or("-"));
+        println!("    Deployed at:  {}", dep["deployed_at"].as_str().unwrap_or("-"));
+        println!("    Mean corr:    {:.3}  (baseline {:.3})", dep["mean_correction"].as_f64().unwrap_or(0.0), dep["baseline_correction_rate"].as_f64().unwrap_or(0.0));
+        println!("    Mean senti:   {:.3}  (baseline {:.3})", dep["mean_sentiment"].as_f64().unwrap_or(0.0), dep["baseline_sentiment"].as_f64().unwrap_or(0.0));
+        println!("    Consec neg:   {}", dep["consecutive_negative"].as_u64().unwrap_or(0));
+    } else {
+        println!("  Active monitoring: none");
+    }
+
+    if let Some(rollbacks) = data["recent_rollbacks"].as_array() {
+        if !rollbacks.is_empty() {
+            println!();
+            println!("  Recent rollbacks:");
+            println!("  {:<8}  {:<8}  {:<30}  {}", "FROM", "TO", "TRIGGER", "TIMESTAMP");
+            println!("  {}", "─".repeat(75));
+            for r in rollbacks {
+                println!(
+                    "  v{:<7}  v{:<7}  {:<30}  {}",
+                    r["from_version"].as_u64().unwrap_or(0),
+                    r["to_version"].as_u64().unwrap_or(0),
+                    r["trigger"].as_str().unwrap_or("-"),
+                    r["rolled_back_at"].as_str().unwrap_or("-"),
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+// ── Unquarantine ─────────────────────────────────────────────────────────────
+
+async fn unquarantine(args: PromptUnquarantineArgs, server: &str) -> Result<()> {
+    let base = http_base(server);
+    let client = reqwest::Client::new();
+    let url = format!("{}/prompts/{}/unquarantine", base, args.slug);
+    let payload = serde_json::json!({ "branch": args.branch });
+    let resp = client
+        .post(&url)
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e))?;
+
+    if !resp.status().is_success() {
+        let body: serde_json::Value = resp.json().await?;
+        anyhow::bail!("{}", body["error"].as_str().unwrap_or("unknown error"));
+    }
+
+    println!("Quarantine lifted for '{}'@{}.", args.slug, args.branch);
+    println!("The version will now be eligible for exploration traffic (ε-greedy).");
     Ok(())
 }
 

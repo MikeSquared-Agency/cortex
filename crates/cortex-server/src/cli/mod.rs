@@ -284,6 +284,12 @@ pub enum PromptCommands {
     Migrate(PromptMigrateArgs),
     /// Show aggregate performance metrics for a prompt variant
     Performance(PromptPerformanceArgs),
+    /// Record a deployment and snapshot baseline metrics for rollback monitoring
+    Deploy(PromptDeployArgs),
+    /// Show rollback status, cooldown, and quarantine state for a prompt
+    RollbackStatus(PromptRollbackStatusArgs),
+    /// Remove quarantine from a prompt version (allows re-evaluation)
+    Unquarantine(PromptUnquarantineArgs),
 }
 
 #[derive(Args, Debug)]
@@ -330,6 +336,45 @@ pub struct PromptPerformanceArgs {
     /// Output format: table (default) | json
     #[arg(long, default_value = "table")]
     pub format: String,
+}
+
+#[derive(Args, Debug)]
+pub struct PromptDeployArgs {
+    /// Prompt slug to deploy
+    pub slug: String,
+    /// Branch (default: main)
+    #[arg(long, default_value = "main")]
+    pub branch: String,
+    /// Agent name responsible for this deployment
+    #[arg(long)]
+    pub agent_name: String,
+    /// Number of recent observations to use for baseline (default: 20)
+    #[arg(long, default_value = "20")]
+    pub baseline_sample_size: usize,
+    /// Output format: table (default) | json
+    #[arg(long, default_value = "table")]
+    pub format: String,
+}
+
+#[derive(Args, Debug)]
+pub struct PromptRollbackStatusArgs {
+    /// Prompt slug
+    pub slug: String,
+    /// Branch (default: main)
+    #[arg(long, default_value = "main")]
+    pub branch: String,
+    /// Output format: table (default) | json
+    #[arg(long, default_value = "table")]
+    pub format: String,
+}
+
+#[derive(Args, Debug)]
+pub struct PromptUnquarantineArgs {
+    /// Prompt slug
+    pub slug: String,
+    /// Branch (default: main)
+    #[arg(long, default_value = "main")]
+    pub branch: String,
 }
 
 // --- Audit args ---

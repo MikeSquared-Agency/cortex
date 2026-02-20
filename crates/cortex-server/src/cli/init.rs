@@ -102,6 +102,7 @@ pub async fn run() -> Result<()> {
         security: SecurityConfig::default(),
         webhooks: vec![],
         plugins: vec![],
+        prompt_rollback: Default::default(),
     };
 
     let toml_str = toml::to_string_pretty(&config)?;

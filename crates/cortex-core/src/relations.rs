@@ -42,6 +42,22 @@ pub mod defaults {
     pub fn performed() -> Relation {
         Relation::new("performed").unwrap()
     }
+    pub fn deployed() -> Relation {
+        Relation::new("deployed").unwrap()
+    }
+    pub fn observed_with() -> Relation {
+        Relation::new("observed_with").unwrap()
+    }
+    /// observation --observed_by--> agent node
+    pub fn observed_by() -> Relation {
+        Relation::new("observed_by").unwrap()
+    }
+    pub fn rolled_back() -> Relation {
+        Relation::new("rolled_back").unwrap()
+    }
+    pub fn rolled_back_to() -> Relation {
+        Relation::new("rolled_back_to").unwrap()
+    }
 
     pub fn all() -> Vec<Relation> {
         vec![
@@ -58,6 +74,11 @@ pub mod defaults {
             inherits_from(),
             used_by(),
             performed(),
+            deployed(),
+            observed_with(),
+            observed_by(),
+            rolled_back(),
+            rolled_back_to(),
         ]
     }
 }
