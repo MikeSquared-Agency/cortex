@@ -9,11 +9,25 @@ pub struct PromptContent {
     pub slug: String,
     #[serde(rename = "type")]
     pub prompt_type: String, // persona | skill | constraint | template | meta
+    /// Branch this version belongs to (e.g. "main", "dev").
+    #[serde(default = "default_branch")]
+    pub branch: String,
+    /// Version number within the slug+branch series. Starts at 1.
+    #[serde(default = "default_version")]
+    pub version: u32,
     pub sections: HashMap<String, serde_json::Value>,
     #[serde(default)]
     pub metadata: HashMap<String, serde_json::Value>,
     #[serde(default)]
     pub override_sections: HashMap<String, serde_json::Value>,
+}
+
+fn default_branch() -> String {
+    "main".to_string()
+}
+
+fn default_version() -> u32 {
+    1
 }
 
 /// A fully resolved prompt with inheritance applied.

@@ -766,6 +766,7 @@ dependencies = [
  "inquire",
  "log",
  "prost",
+ "rand 0.8.5",
  "redb",
  "reqwest",
  "rustyline",

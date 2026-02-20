@@ -134,6 +134,10 @@ async fn main() -> anyhow::Result<()> {
         Commands::Agent(cmd) => {
             cli::agent::run(cmd, &cli.server).await?;
         }
+
+        Commands::Prompt(cmd) => {
+            cli::prompt::run(cmd, &config, &cli.server).await?;
+        }
     }
 
     Ok(())

@@ -39,6 +39,9 @@ pub mod defaults {
     pub fn used_by() -> Relation {
         Relation::new("used_by").unwrap()
     }
+    pub fn performed() -> Relation {
+        Relation::new("performed").unwrap()
+    }
 
     pub fn all() -> Vec<Relation> {
         vec![
@@ -54,6 +57,7 @@ pub mod defaults {
             branched_from(),
             inherits_from(),
             used_by(),
+            performed(),
         ]
     }
 }

@@ -1,4 +1,4 @@
-use super::{AppResult, AppState, JsonResponse, GRAPH_VIZ_HTML};
+use super::{prompts, selection, AppResult, AppState, JsonResponse, GRAPH_VIZ_HTML};
 use axum::{
     extract::{Path, Query, State},
     response::{Html, IntoResponse, Json},
@@ -32,6 +32,23 @@ pub fn create_router(state: AppState) -> Router {
             put(bind_prompt).delete(unbind_prompt),
         )
         .route("/agents/:name/resolved-prompt", get(resolved_prompt))
+        // Semantic-aware prompt selection (issue #22)
+        .route("/agents/:name/active-variant", get(selection::active_variant))
+        .route("/agents/:name/variant-history", get(selection::variant_history))
+        .route("/agents/:name/observe", post(selection::record_observation))
+        // Prompt versioning + inheritance API
+        .route(
+            "/prompts",
+            get(prompts::list_prompts).post(prompts::create_prompt),
+        )
+        .route("/prompts/:slug/latest", get(prompts::get_latest))
+        .route(
+            "/prompts/:slug/versions",
+            get(prompts::list_versions).post(prompts::create_version),
+        )
+        .route("/prompts/:slug/versions/:version", get(prompts::get_version))
+        .route("/prompts/:slug/branch", post(prompts::create_branch))
+        .route("/prompts/:slug/performance", get(selection::prompt_performance))
         .with_state(state)
 }
 
@@ -653,16 +670,6 @@ async fn get_briefing(
 
 // ── Agent ↔ Prompt Bindings ────────────────────────────────────────────────
 
-/// Find a node by kind and title. Returns None if not found.
-fn find_node_by_kind_and_title(
-    storage: &cortex_core::RedbStorage,
-    kind: &NodeKind,
-    title: &str,
-) -> cortex_core::Result<Option<Node>> {
-    let nodes = storage.list_nodes(NodeFilter::new().with_kinds(vec![kind.clone()]))?;
-    Ok(nodes.into_iter().find(|n| n.data.title == title))
-}
-
 #[derive(Serialize)]
 struct PromptBinding {
     slug: String,
@@ -679,7 +686,7 @@ async fn list_agent_prompts(
     let agent_kind = cortex_core::kinds::defaults::agent();
     let uses_rel = cortex_core::relations::defaults::uses();
 
-    let agent = find_node_by_kind_and_title(&state.storage, &agent_kind, &name)?
+    let agent = super::find_by_title(&state.storage, &agent_kind, &name)?
         .ok_or_else(|| anyhow::anyhow!("Agent '{}' not found", name))?;
 
     let edges = state.storage.edges_from(agent.id)?;
@@ -721,10 +728,10 @@ async fn bind_prompt(
     let prompt_kind = cortex_core::kinds::defaults::prompt();
     let uses_rel = cortex_core::relations::defaults::uses();
 
-    let agent = find_node_by_kind_and_title(&state.storage, &agent_kind, &name)?
+    let agent = super::find_by_title(&state.storage, &agent_kind, &name)?
         .ok_or_else(|| anyhow::anyhow!("Agent '{}' not found. Create it first via POST /nodes with kind=agent.", name))?;
 
-    let prompt = find_node_by_kind_and_title(&state.storage, &prompt_kind, &slug)?
+    let prompt = super::find_by_title(&state.storage, &prompt_kind, &slug)?
         .ok_or_else(|| anyhow::anyhow!("Prompt '{}' not found. Create it first via POST /nodes with kind=prompt.", slug))?;
 
     let weight = body.weight.unwrap_or(1.0).clamp(0.0, 1.0);
@@ -767,10 +774,10 @@ async fn unbind_prompt(
     let prompt_kind = cortex_core::kinds::defaults::prompt();
     let uses_rel = cortex_core::relations::defaults::uses();
 
-    let agent = find_node_by_kind_and_title(&state.storage, &agent_kind, &name)?
+    let agent = super::find_by_title(&state.storage, &agent_kind, &name)?
         .ok_or_else(|| anyhow::anyhow!("Agent '{}' not found", name))?;
 
-    let prompt = find_node_by_kind_and_title(&state.storage, &prompt_kind, &slug)?
+    let prompt = super::find_by_title(&state.storage, &prompt_kind, &slug)?
         .ok_or_else(|| anyhow::anyhow!("Prompt '{}' not found", slug))?;
 
     let existing = state.storage.edges_between(agent.id, prompt.id)?;
@@ -815,7 +822,7 @@ async fn resolved_prompt(
     let agent_kind = cortex_core::kinds::defaults::agent();
     let uses_rel = cortex_core::relations::defaults::uses();
 
-    let agent = find_node_by_kind_and_title(&state.storage, &agent_kind, &name)?
+    let agent = super::find_by_title(&state.storage, &agent_kind, &name)?
         .ok_or_else(|| anyhow::anyhow!("Agent '{}' not found", name))?;
 
     let edges = state.storage.edges_from(agent.id)?;

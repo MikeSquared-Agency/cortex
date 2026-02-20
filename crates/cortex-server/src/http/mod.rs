@@ -1,8 +1,25 @@
+pub mod prompts;
 mod routes;
+pub mod selection;
 mod viz;
 
 pub use routes::create_router;
 pub use viz::GRAPH_VIZ_HTML;
+
+use cortex_core::{Node, NodeFilter, NodeKind, Storage};
+
+/// Find a node by kind and title (linear scan — no title index in storage).
+///
+/// Returns the first node whose `data.title` exactly matches `title`, or `None`.
+/// Shared by `routes` and `selection` to avoid duplicate implementations.
+pub(super) fn find_by_title(
+    storage: &cortex_core::RedbStorage,
+    kind: &NodeKind,
+    title: &str,
+) -> cortex_core::Result<Option<Node>> {
+    let nodes = storage.list_nodes(NodeFilter::new().with_kinds(vec![kind.clone()]))?;
+    Ok(nodes.into_iter().find(|n| n.data.title == title))
+}
 
 use axum::{
     http::StatusCode,

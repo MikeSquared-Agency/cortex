@@ -10,6 +10,7 @@ pub mod import;
 pub mod init;
 pub mod migrate;
 pub mod node;
+pub mod prompt;
 pub mod search;
 pub mod security;
 pub mod shell;
@@ -98,6 +99,9 @@ pub enum Commands {
     /// Agent ↔ prompt binding management
     #[command(subcommand)]
     Agent(AgentCommands),
+    /// Prompt versioning, branching, and migration (PromptForge integration)
+    #[command(subcommand)]
+    Prompt(PromptCommands),
 }
 
 // --- MCP args ---
@@ -153,6 +157,12 @@ pub enum AgentCommands {
     Unbind(AgentUnbindArgs),
     /// Show the fully resolved effective prompt for an agent
     Resolve(AgentResolveArgs),
+    /// Select the best prompt variant for the current context (epsilon-greedy)
+    Select(AgentSelectArgs),
+    /// Show variant swap and performance history
+    History(AgentHistoryArgs),
+    /// Record a performance observation and update edge weights
+    Observe(AgentObserveArgs),
 }
 
 #[derive(Args, Debug)]
@@ -196,6 +206,129 @@ pub struct AgentResolveArgs {
     pub name: String,
     /// Output format: text (default) | json
     #[arg(long, default_value = "text")]
+    pub format: String,
+}
+
+#[derive(Args, Debug)]
+pub struct AgentSelectArgs {
+    /// Agent name
+    pub name: String,
+    /// User sentiment: 0.0 (frustrated) – 1.0 (pleased)
+    #[arg(long, default_value = "0.5")]
+    pub sentiment: f32,
+    /// Task type: coding | planning | casual | crisis | reflection
+    #[arg(long, default_value = "casual")]
+    pub task_type: String,
+    /// Correction rate (0.0–1.0)
+    #[arg(long, default_value = "0.0")]
+    pub correction_rate: f32,
+    /// Topic shift from conversation start (0.0–1.0)
+    #[arg(long, default_value = "0.0")]
+    pub topic_shift: f32,
+    /// User energy proxy (0.0–1.0)
+    #[arg(long, default_value = "0.5")]
+    pub energy: f32,
+    /// Exploration rate for epsilon-greedy (0.0 = always exploit)
+    #[arg(long, default_value = "0.2")]
+    pub epsilon: f32,
+    /// Output format: table (default) | json
+    #[arg(long, default_value = "table")]
+    pub format: String,
+}
+
+#[derive(Args, Debug)]
+pub struct AgentHistoryArgs {
+    /// Agent name
+    pub name: String,
+    /// Maximum number of history entries to show
+    #[arg(long, default_value = "20")]
+    pub limit: usize,
+    /// Output format: table (default) | json
+    #[arg(long, default_value = "table")]
+    pub format: String,
+}
+
+#[derive(Args, Debug)]
+pub struct AgentObserveArgs {
+    /// Agent name
+    pub name: String,
+    /// UUID of the prompt variant node that was active
+    #[arg(long)]
+    pub variant_id: String,
+    /// Slug of the prompt variant (for display)
+    #[arg(long)]
+    pub variant_slug: String,
+    /// Observed sentiment score: 0.0–1.0
+    #[arg(long, default_value = "0.5")]
+    pub sentiment_score: f32,
+    /// Number of corrections the user made
+    #[arg(long, default_value = "0")]
+    pub correction_count: u32,
+    /// Task outcome: success | partial | failure | unknown
+    #[arg(long, default_value = "unknown")]
+    pub task_outcome: String,
+    /// Token cost of the interaction
+    #[arg(long)]
+    pub token_cost: Option<u32>,
+}
+
+// --- Prompt args ---
+
+#[derive(Subcommand, Debug)]
+pub enum PromptCommands {
+    /// List all prompts (HEAD of each slug+branch)
+    List(PromptListArgs),
+    /// Show a prompt (resolved with inheritance by default)
+    Get(PromptGetArgs),
+    /// Import prompts from a migration JSON file
+    Migrate(PromptMigrateArgs),
+    /// Show aggregate performance metrics for a prompt variant
+    Performance(PromptPerformanceArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct PromptListArgs {
+    /// Filter by branch
+    #[arg(long)]
+    pub branch: Option<String>,
+    /// Output format: table (default) | json
+    #[arg(long, default_value = "table")]
+    pub format: String,
+}
+
+#[derive(Args, Debug)]
+pub struct PromptGetArgs {
+    /// Prompt slug
+    pub slug: String,
+    /// Branch (default: main)
+    #[arg(long)]
+    pub branch: Option<String>,
+    /// Specific version number (omit for HEAD)
+    #[arg(long)]
+    pub version: Option<u32>,
+    /// Output format: table (default) | json
+    #[arg(long, default_value = "table")]
+    pub format: String,
+}
+
+#[derive(Args, Debug)]
+pub struct PromptMigrateArgs {
+    /// Path to migration JSON file
+    pub file: std::path::PathBuf,
+    /// Preview without writing to the database
+    #[arg(long)]
+    pub dry_run: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct PromptPerformanceArgs {
+    /// Prompt slug
+    pub slug: String,
+    /// Maximum observations to include
+    #[arg(long, default_value = "50")]
+    pub limit: usize,
+    /// Output format: table (default) | json
+    #[arg(long, default_value = "table")]
     pub format: String,
 }
 
