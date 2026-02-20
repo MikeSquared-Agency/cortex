@@ -63,6 +63,7 @@ pub struct AppState {
     pub briefing_engine: Arc<HttpBriefingEngine>,
     pub start_time: std::time::Instant,
     pub rollback_config: RollbackConfig,
+    pub webhooks: Vec<crate::config::WebhookConfig>,
 }
 
 /// JSON response wrapper

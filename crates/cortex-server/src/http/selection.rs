@@ -640,6 +640,32 @@ pub async fn record_observation(
         })
     });
 
+    // Fire rollback notification webhooks (issue #23 — notify_on_rollback)
+    if let Some(ref rb) = rollback_result {
+        for wh in &state.webhooks {
+            if wh.events.iter().any(|e| e == "rollback" || e == "*") {
+                let payload = serde_json::json!({
+                    "event": "prompt.rollback",
+                    "agent": name,
+                    "from_version": rb.from_version,
+                    "to_version": rb.to_version,
+                    "trigger": rb.trigger.kind_str(),
+                    "cooldown_hours": rb.cooldown_hours,
+                    "is_quarantined": rb.is_quarantined,
+                    "rollback_node_id": rb.rollback_node_id.to_string(),
+                });
+                let url = wh.url.clone();
+                // Fire-and-forget in background to avoid blocking the response
+                tokio::spawn(async move {
+                    let client = reqwest::Client::new();
+                    if let Err(e) = client.post(&url).json(&payload).send().await {
+                        log::warn!("rollback webhook to {} failed: {}", url, e);
+                    }
+                });
+            }
+        }
+    }
+
     Ok(Json(JsonResponse::ok(serde_json::json!({
         "observation_id": obs_node.id.to_string(),
         "variant_id": body.variant_id,

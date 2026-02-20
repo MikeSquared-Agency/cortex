@@ -98,7 +98,11 @@ pub async fn run() -> Result<()> {
         },
         ingest: IngestConfig::default(),
         observability: ObservabilityConfig::default(),
-        retention: RetentionConfig::default(),
+        retention: {
+            let mut r = RetentionConfig::default();
+            r.by_kind.insert("observation".to_string(), 90);
+            r
+        },
         security: SecurityConfig::default(),
         webhooks: vec![],
         plugins: vec![],

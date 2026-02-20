@@ -137,6 +137,7 @@ fn route(cortex: &Cortex, method: &str, params: &Value) -> Result<Value> {
             },
             "instructions": "Cortex is a persistent graph memory engine for AI agents. \
                 Use cortex_store to remember facts, decisions, goals, and observations. \
+                Use cortex_observe after interactions to record performance metrics. \
                 Use cortex_search or cortex_recall to retrieve relevant knowledge. \
                 Use cortex_briefing at session start for a structured overview. \
                 Use cortex_traverse to explore how concepts connect. \
@@ -337,6 +338,49 @@ fn tools_schema() -> Value {
                     },
                     "required": ["from_id", "to_id"]
                 }
+            },
+            {
+                "name": "cortex_observe",
+                "description": "Record a performance observation for an agent's prompt variant. Call this after interactions to track how well the current prompt is performing. Feeds into automatic variant selection and rollback.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "agent_name": {
+                            "type": "string",
+                            "description": "Name of the agent (e.g. 'kai')"
+                        },
+                        "variant_slug": {
+                            "type": "string",
+                            "description": "Slug/title of the active prompt variant"
+                        },
+                        "variant_id": {
+                            "type": "string",
+                            "description": "UUID of the active prompt variant node"
+                        },
+                        "sentiment_score": {
+                            "type": "number",
+                            "description": "User sentiment: 0.0 (frustrated) to 1.0 (pleased). Default: 0.5"
+                        },
+                        "correction_count": {
+                            "type": "integer",
+                            "description": "Number of user corrections in this interaction. Default: 0"
+                        },
+                        "task_outcome": {
+                            "type": "string",
+                            "description": "Outcome: success, partial, failure, or unknown. Default: unknown",
+                            "enum": ["success", "partial", "failure", "unknown"]
+                        },
+                        "task_type": {
+                            "type": "string",
+                            "description": "Type of task: coding, planning, casual, crisis, reflection. Default: casual"
+                        },
+                        "token_cost": {
+                            "type": "integer",
+                            "description": "Total tokens consumed (optional)"
+                        }
+                    },
+                    "required": ["agent_name", "variant_slug", "variant_id"]
+                }
             }
         ]
     })
@@ -352,6 +396,7 @@ fn call_tool(cortex: &Cortex, name: &str, args: &Value) -> Result<String> {
         "cortex_briefing" => tool_briefing(cortex, args),
         "cortex_traverse" => tool_traverse(cortex, args),
         "cortex_relate" => tool_relate(cortex, args),
+        "cortex_observe" => tool_observe(cortex, args),
         _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
     }
 }
@@ -670,6 +715,101 @@ fn tool_relate(cortex: &Cortex, args: &Value) -> Result<String> {
     }))?)
 }
 
+
+fn tool_observe(cortex: &Cortex, args: &Value) -> Result<String> {
+    let agent_name = args["agent_name"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("agent_name is required"))?;
+    let variant_slug = args["variant_slug"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("variant_slug is required"))?;
+    let variant_id_str = args["variant_id"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("variant_id is required"))?;
+    let variant_id: NodeId = Uuid::parse_str(variant_id_str)
+        .map_err(|_| anyhow::anyhow!("Invalid variant_id: not a UUID"))?;
+
+    let sentiment_score = args.get("sentiment_score")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.5) as f32;
+    let correction_count = args.get("correction_count")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as u32;
+    let task_outcome = args.get("task_outcome")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+    let task_type = args.get("task_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("casual");
+    let token_cost = args.get("token_cost")
+        .and_then(|v| v.as_u64())
+        .map(|v| v as u32);
+
+    use cortex_core::prompt::selection as sel;
+
+    // Compute observation score
+    let obs_score = sel::observation_score(sentiment_score, correction_count, task_outcome);
+
+    // Create observation node
+    let obs_body = format!(
+        "Sentiment: {:.2}, Corrections: {}, Outcome: {}, Task: {}",
+        sentiment_score, correction_count, task_outcome, task_type
+    );
+    let mut obs_node = Node::new(
+        cortex_core::kinds::defaults::observation(),
+        format!("{}: Performance for {}", task_outcome, variant_slug),
+        obs_body,
+        Source { agent: agent_name.to_string(), session: None, channel: None },
+        obs_score,
+    );
+    obs_node.data.metadata.insert("observation_type".into(), json!("performance"));
+    obs_node.data.metadata.insert("variant_id".into(), json!(variant_id_str));
+    obs_node.data.metadata.insert("variant_slug".into(), json!(variant_slug));
+    obs_node.data.metadata.insert("sentiment_score".into(), json!(sentiment_score));
+    obs_node.data.metadata.insert("correction_count".into(), json!(correction_count));
+    obs_node.data.metadata.insert("task_outcome".into(), json!(task_outcome));
+    obs_node.data.metadata.insert("observation_score".into(), json!(obs_score));
+    if let Some(tc) = token_cost {
+        obs_node.data.metadata.insert("token_cost".into(), json!(tc));
+    }
+
+    let obs_id = obs_node.id;
+    cortex.store(obs_node)?;
+
+    // Link: agent --performed--> observation (best-effort — skip if agent node not found)
+    let agent_kind = cortex_core::kinds::defaults::agent();
+    if let Ok(agents) = cortex.list_nodes(cortex_core::storage::NodeFilter::new().with_kinds(vec![agent_kind])) {
+        if let Some(agent) = agents.into_iter().find(|n| n.data.title == agent_name) {
+            let _ = cortex.create_edge(Edge::new(
+                agent.id,
+                obs_id,
+                cortex_core::relations::defaults::performed(),
+                1.0,
+                EdgeProvenance::Manual { created_by: "mcp".into() },
+            ));
+        }
+    }
+
+    // Link: observation --informed_by--> variant
+    let _ = cortex.create_edge(Edge::new(
+        obs_id,
+        variant_id,
+        cortex_core::relations::defaults::informed_by(),
+        1.0,
+        EdgeProvenance::Manual { created_by: "mcp".into() },
+    ));
+
+    Ok(serde_json::to_string(&json!({
+        "observation_id": obs_id.to_string(),
+        "observation_score": obs_score,
+        "variant_slug": variant_slug,
+        "sentiment_score": sentiment_score,
+        "correction_count": correction_count,
+        "task_outcome": task_outcome,
+        "message": format!("Observation recorded: score={:.3} for variant '{}'", obs_score, variant_slug),
+    }))?)
+}
+
 // ── Resource handlers ─────────────────────────────────────────────────────────
 
 fn read_resource(cortex: &Cortex, uri: &str) -> Result<Value> {
@@ -939,6 +1079,24 @@ fn tools_list() -> Value {
                     },
                     "required": ["from_id", "to_id"]
                 }
+            },
+            {
+                "name": "cortex_observe",
+                "description": "Record a performance observation for an agent's prompt variant",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "agent_name": { "type": "string" },
+                        "variant_slug": { "type": "string" },
+                        "variant_id": { "type": "string" },
+                        "sentiment_score": { "type": "number", "default": 0.5 },
+                        "correction_count": { "type": "integer", "default": 0 },
+                        "task_outcome": { "type": "string", "default": "unknown" },
+                        "task_type": { "type": "string", "default": "casual" },
+                        "token_cost": { "type": "integer" }
+                    },
+                    "required": ["agent_name", "variant_slug", "variant_id"]
+                }
             }
         ]
     })
@@ -1065,6 +1223,21 @@ async fn remote_tool_call(
                 "content": [{ "type": "text", "text": serde_json::to_string_pretty(&resp["data"])? }]
             }))
         }
+        "cortex_observe" => {
+            let agent_name = args.get("agent_name").and_then(|v| v.as_str()).unwrap_or("");
+            let resp: Value = http
+                .post(format!("{}/agents/{}/observe", base_url, agent_name))
+                .json(&args)
+                .send()
+                .await?
+                .json()
+                .await?;
+            let obs_id = resp["data"]["observation_id"].as_str().unwrap_or("unknown");
+            let score = resp["data"]["observation_score"].as_f64().unwrap_or(0.0);
+            Ok(json!({
+                "content": [{ "type": "text", "text": format!("Observation recorded: id={}, score={:.3}", obs_id, score) }]
+            }))
+        }
         "cortex_relate" => {
             let from_id = args.get("from_id").and_then(|v| v.as_str()).unwrap_or("");
             let to_id = args.get("to_id").and_then(|v| v.as_str()).unwrap_or("");
@@ -1146,7 +1319,8 @@ mod tests {
         assert!(names.contains(&"cortex_briefing"));
         assert!(names.contains(&"cortex_traverse"));
         assert!(names.contains(&"cortex_relate"));
-        assert_eq!(tools.len(), 6);
+        assert!(names.contains(&"cortex_observe"));
+        assert_eq!(tools.len(), 7);
     }
 
     #[test]

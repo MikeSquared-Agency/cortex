@@ -271,6 +271,7 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
             briefing_engine: briefing_engine.clone(),
             start_time: std::time::Instant::now(),
             rollback_config: config.prompt_rollback.clone(),
+            webhooks: config.webhooks.clone(),
         };
 
         let app = crate::http::create_router(app_state);
