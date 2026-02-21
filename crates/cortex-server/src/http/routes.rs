@@ -1,13 +1,53 @@
 use super::{prompts, rollback, selection, AppResult, AppState, JsonResponse, GRAPH_VIZ_HTML};
 use axum::{
     extract::{Path, Query, State},
-    response::{Html, IntoResponse, Json},
+    http::{HeaderMap, StatusCode},
+    response::{Html, IntoResponse, Json, Response},
     routing::{get, post, put},
     Router,
 };
-use cortex_core::{apply_score_decay, Edge, EdgeProvenance, NodeFilter, NodeKind, Relation, Source, *};
+use cortex_core::{
+    apply_score_decay, Edge, EdgeProvenance, GateRejection, GateResult, NodeFilter, NodeKind,
+    Relation, Source, WriteGate, *,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+// ── Gate rejection response (422 Unprocessable Entity) ────────────────────────
+
+#[derive(Serialize)]
+struct GateDetail {
+    check: String,
+    reason: String,
+    suggestion: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    existing_node: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    existing_title: Option<String>,
+}
+
+#[derive(Serialize)]
+struct GateErrorBody {
+    success: bool,
+    error: String,
+    gate: GateDetail,
+}
+
+fn gate_rejection_response(rejection: GateRejection) -> Response {
+    let check_name = rejection.check.to_string();
+    let body = GateErrorBody {
+        success: false,
+        error: format!("Write gate: {} check failed", check_name),
+        gate: GateDetail {
+            check: check_name,
+            reason: rejection.reason,
+            suggestion: rejection.suggestion,
+            existing_node: rejection.existing_node,
+            existing_title: rejection.existing_title,
+        },
+    };
+    (StatusCode::UNPROCESSABLE_ENTITY, Json(body)).into_response()
+}
 
 pub fn create_router(state: AppState) -> Router {
     Router::new()
@@ -215,15 +255,27 @@ struct CreateNodeBody {
     source_agent: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct CreateNodeQuery {
+    gate: Option<String>,
+}
+
 async fn create_node(
     State(state): State<AppState>,
+    Query(query): Query<CreateNodeQuery>,
+    headers: HeaderMap,
     Json(body): Json<CreateNodeBody>,
 ) -> AppResult<impl IntoResponse> {
+    let agent_id = headers
+        .get("x-agent-id")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("anonymous");
+
     let kind_str = body.kind.as_deref().unwrap_or("fact");
     let kind = NodeKind::new(kind_str).map_err(|e| anyhow::anyhow!("Invalid kind: {}", e))?;
     let importance = body.importance.unwrap_or(0.5);
     let tags = body.tags.unwrap_or_default();
-    let source_agent = body.source_agent.unwrap_or_else(|| "http".to_string());
+    let source_agent = body.source_agent.unwrap_or_else(|| agent_id.to_string());
     let node_body = body.body.unwrap_or_else(|| body.title.clone());
 
     let mut node = Node::new(
@@ -239,25 +291,79 @@ async fn create_node(
     );
     node.data.tags = tags;
 
-    // Generate embedding
-    let embedding = state
-        .embedding_service
-        .embed(&format!("{} {}", node.data.title, node.data.body))?;
+    // ── Write gate ────────────────────────────────────────────────────────────
+    let gate_config = &state.write_gate;
+    let gate_skipped = query.gate.as_deref() == Some("skip")
+        && headers
+            .get("x-gate-override")
+            .and_then(|v| v.to_str().ok())
+            == Some("true");
 
-    // Store node
-    state.storage.put_node(&node)?;
+    if gate_config.enabled && !gate_skipped {
+        // Check 1: Substance
+        if let GateResult::Reject(r) = WriteGate::check_substance(&node, gate_config) {
+            return Ok(gate_rejection_response(r));
+        }
 
-    // Index embedding
-    {
-        let mut index = state.vector_index.write().unwrap();
-        index.insert(node.id, &embedding)?;
+        // Check 2: Specificity
+        if let GateResult::Reject(r) = WriteGate::check_specificity(&node, gate_config) {
+            return Ok(gate_rejection_response(r));
+        }
+
+        // Generate embedding now so the conflict check can use it
+        let embedding = state
+            .embedding_service
+            .embed(&format!("{} {}", node.data.title, node.data.body))?;
+
+        // Check 3: Conflict (read lock — no writes yet)
+        {
+            let index = state.vector_index.read().unwrap();
+            if let GateResult::Reject(r) =
+                WriteGate::check_conflict(&node, &embedding, &*index, &*state.storage, gate_config)
+            {
+                return Ok(gate_rejection_response(r));
+            }
+        }
+
+        // All checks passed — store and index
+        state.storage.put_node(&node)?;
+        {
+            let mut index = state.vector_index.write().unwrap();
+            index.insert(node.id, &embedding)?;
+        }
+
+        tracing::info!(
+            "[AUDIT] POST /nodes agent={} gate=PASS title={:?} kind={}",
+            agent_id,
+            node.data.title,
+            kind_str,
+        );
+    } else {
+        // Bypass: generate embedding, store, index without gate checks
+        let embedding = state
+            .embedding_service
+            .embed(&format!("{} {}", node.data.title, node.data.body))?;
+
+        state.storage.put_node(&node)?;
+        {
+            let mut index = state.vector_index.write().unwrap();
+            index.insert(node.id, &embedding)?;
+        }
+
+        tracing::info!(
+            "[AUDIT] POST /nodes agent={} gate=SKIPPED title={:?} kind={}",
+            agent_id,
+            node.data.title,
+            kind_str,
+        );
     }
 
     Ok(Json(JsonResponse::ok(serde_json::json!({
         "id": node.id.to_string(),
         "title": node.data.title,
         "kind": kind_str,
-    }))))
+    })))
+    .into_response())
 }
 
 #[derive(Deserialize)]
@@ -270,8 +376,13 @@ struct CreateEdgeBody {
 
 async fn create_edge(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(body): Json<CreateEdgeBody>,
 ) -> AppResult<impl IntoResponse> {
+    let agent_id = headers
+        .get("x-agent-id")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("anonymous");
     let from: uuid::Uuid = body
         .from_id
         .parse()
@@ -299,6 +410,14 @@ async fn create_edge(
     };
 
     state.storage.put_edge(&edge)?;
+
+    tracing::info!(
+        "[AUDIT] POST /edges agent={} from={} to={} relation={}",
+        agent_id,
+        body.from_id,
+        body.to_id,
+        relation_str
+    );
 
     Ok(Json(JsonResponse::ok(serde_json::json!({
         "id": edge.id.to_string(),
@@ -397,10 +516,19 @@ async fn hybrid_search(
 
 async fn delete_node(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(id): Path<String>,
 ) -> AppResult<impl IntoResponse> {
+    let agent_id = headers
+        .get("x-agent-id")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("anonymous");
+
     let node_id: uuid::Uuid = id.parse().map_err(|_| anyhow::anyhow!("Invalid UUID"))?;
     state.storage.delete_node(node_id)?;
+
+    tracing::info!("[AUDIT] DELETE /nodes/{} agent={}", id, agent_id);
+
     Ok(Json(JsonResponse::ok(serde_json::json!({"deleted": id}))))
 }
 

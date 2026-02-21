@@ -1,6 +1,7 @@
 pub mod api;
 pub mod briefing;
 pub mod error;
+pub mod gate;
 pub mod graph;
 pub mod ingest;
 pub mod kinds;
@@ -13,6 +14,7 @@ pub mod types;
 pub mod vector;
 
 pub use api::{Cortex, LibraryConfig};
+pub use gate::{GateCheck, GateRejection, GateResult, KindOverrideConfig, WriteGate, WriteGateConfig};
 pub use error::{CortexError, Result};
 pub use graph::{
     GraphEngine, GraphEngineImpl, Path, PathRequest, PathResult, Subgraph, TraversalBudget,

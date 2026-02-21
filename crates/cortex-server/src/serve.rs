@@ -8,7 +8,7 @@ use std::sync::{Arc, RwLock as StdRwLock};
 use std::time::Duration;
 use tokio::task::JoinHandle;
 use tonic::transport::Server;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 /// RAII guard: re-encrypts the temp DB file back to the original encrypted path on drop.
 struct EncryptedDbGuard {
@@ -34,6 +34,21 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
     info!("gRPC: {}", config.server.grpc_addr);
     info!("HTTP: {}", config.server.http_addr);
     info!("Data: {:?}", config.server.data_dir);
+
+    // Validate auth config early so we fail fast before opening the database.
+    let auth_enabled = config.security.auth_enabled;
+    let auth_token = config.security.resolved_token();
+    if auth_enabled {
+        if auth_token.is_none() {
+            return Err(anyhow::anyhow!(
+                "[security] auth_enabled = true but no token found. \
+                 Set CORTEX_AUTH_TOKEN env var or set auth_token in [security] config."
+            ));
+        }
+        info!("Bearer token auth: enabled");
+    } else {
+        warn!("Auth disabled — Cortex is open to all connections on {}", config.server.http_addr);
+    }
 
     // Encryption at rest: decrypt to a temp file before opening with redb
     let db_path = config.db_path();
@@ -248,11 +263,26 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
         );
 
         let addr = config.grpc_addr();
+        let grpc_auth_enabled = auth_enabled;
+        let grpc_auth_token = auth_token.clone().map(|t| format!("Bearer {}", t));
 
         tokio::spawn(async move {
             info!("Starting gRPC server on {}", addr);
+            let svc = CortexServiceServer::with_interceptor(
+                grpc_service,
+                move |req: tonic::Request<()>| {
+                    if !grpc_auth_enabled {
+                        return Ok(req);
+                    }
+                    let expected = grpc_auth_token.as_deref().unwrap_or("");
+                    match req.metadata().get("authorization").and_then(|v| v.to_str().ok()) {
+                        Some(t) if t == expected => Ok(req),
+                        _ => Err(tonic::Status::unauthenticated("Invalid or missing token")),
+                    }
+                },
+            );
             Server::builder()
-                .add_service(CortexServiceServer::new(grpc_service))
+                .add_service(svc)
                 .serve(addr)
                 .await
                 .expect("gRPC server failed");
@@ -273,9 +303,16 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
             rollback_config: config.prompt_rollback.clone(),
             webhooks: config.webhooks.clone(),
             score_decay: config.score_decay.clone(),
+            write_gate: config.write_gate.clone(),
         };
 
-        let app = crate::http::create_router(app_state);
+        let http_auth_token = auth_token.clone();
+        let app = crate::http::create_router(app_state).layer(axum::middleware::from_fn(
+            move |req, next| {
+                let tok = http_auth_token.clone();
+                async move { crate::http::auth::check(req, next, auth_enabled, tok).await }
+            },
+        ));
         let addr = config.http_addr();
 
         tokio::spawn(async move {

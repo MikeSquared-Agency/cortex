@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod prompts;
 pub mod rollback;
 mod routes;
@@ -29,7 +30,9 @@ use axum::{
 };
 use cortex_core::briefing::BriefingEngine;
 use cortex_core::prompt::RollbackConfig;
-use cortex_core::{FastEmbedService, GraphEngineImpl, HnswIndex, RedbStorage, RwLockVectorIndex};
+use cortex_core::{
+    FastEmbedService, GraphEngineImpl, HnswIndex, RedbStorage, RwLockVectorIndex, WriteGateConfig,
+};
 use serde::Serialize;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
@@ -65,6 +68,7 @@ pub struct AppState {
     pub rollback_config: RollbackConfig,
     pub webhooks: Vec<crate::config::WebhookConfig>,
     pub score_decay: cortex_core::ScoreDecayConfig,
+    pub write_gate: WriteGateConfig,
 }
 
 /// JSON response wrapper

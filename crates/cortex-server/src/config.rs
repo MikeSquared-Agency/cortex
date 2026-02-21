@@ -6,6 +6,7 @@ pub use cortex_core::policies::RetentionConfig;
 pub use cortex_core::policies::RetentionMaxNodes;
 pub use cortex_core::prompt::RollbackConfig;
 pub use cortex_core::ScoreDecayConfig;
+pub use cortex_core::WriteGateConfig;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -40,6 +41,8 @@ pub struct CortexConfig {
     pub prompt_rollback: RollbackConfig,
     #[serde(default)]
     pub score_decay: ScoreDecayConfig,
+    #[serde(default)]
+    pub write_gate: WriteGateConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -220,6 +223,19 @@ pub struct ObservabilityConfig {
 pub struct SecurityConfig {
     pub encryption: bool,
     // Key comes from CORTEX_ENCRYPTION_KEY env var, never stored in config
+    pub auth_enabled: bool,
+    /// Fallback inline token. Prefer CORTEX_AUTH_TOKEN env var.
+    pub auth_token: Option<String>,
+}
+
+impl SecurityConfig {
+    /// Resolve the auth token: env var takes priority over inline config value.
+    pub fn resolved_token(&self) -> Option<String> {
+        std::env::var("CORTEX_AUTH_TOKEN")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .or_else(|| self.auth_token.clone())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
