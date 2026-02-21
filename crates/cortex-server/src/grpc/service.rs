@@ -78,6 +78,8 @@ impl CortexService for CortexServiceImpl {
         &self,
         request: Request<CreateNodeRequest>,
     ) -> Result<Response<NodeResponse>, Status> {
+        let agent_id = crate::grpc::get_metadata(&request, "x-agent-id")
+            .unwrap_or_else(|| "anonymous".to_string());
         let req = request.into_inner();
 
         let kind =
@@ -121,6 +123,13 @@ impl CortexService for CortexServiceImpl {
         }
 
         self.bump_version();
+
+        tracing::info!(
+            "[AUDIT] gRPC CreateNode agent={} title={:?} kind={:?}",
+            agent_id,
+            node.data.title,
+            node.kind
+        );
 
         let edge_count = self.get_edge_count(node.id);
         Ok(Response::new(node_to_response(&node, edge_count)))
@@ -215,6 +224,8 @@ impl CortexService for CortexServiceImpl {
         &self,
         request: Request<DeleteNodeRequest>,
     ) -> Result<Response<DeleteResponse>, Status> {
+        let agent_id = crate::grpc::get_metadata(&request, "x-agent-id")
+            .unwrap_or_else(|| "anonymous".to_string());
         let req = request.into_inner();
         let node_id = req
             .id
@@ -226,6 +237,8 @@ impl CortexService for CortexServiceImpl {
             .map_err(|e| Status::internal(e.to_string()))?;
 
         self.bump_version();
+
+        tracing::info!("[AUDIT] gRPC DeleteNode agent={} id={}", agent_id, req.id);
 
         Ok(Response::new(DeleteResponse { success: true }))
     }
@@ -292,6 +305,8 @@ impl CortexService for CortexServiceImpl {
         &self,
         request: Request<CreateEdgeRequest>,
     ) -> Result<Response<EdgeResponse>, Status> {
+        let agent_id = crate::grpc::get_metadata(&request, "x-agent-id")
+            .unwrap_or_else(|| "anonymous".to_string());
         let req = request.into_inner();
 
         let from_id = req
@@ -321,6 +336,14 @@ impl CortexService for CortexServiceImpl {
             .map_err(|e| Status::internal(e.to_string()))?;
 
         self.bump_version();
+
+        tracing::info!(
+            "[AUDIT] gRPC CreateEdge agent={} from={} to={} relation={}",
+            agent_id,
+            req.from_id,
+            req.to_id,
+            req.relation
+        );
 
         Ok(Response::new(edge_to_response(&edge)))
     }
@@ -378,6 +401,8 @@ impl CortexService for CortexServiceImpl {
         &self,
         request: Request<DeleteEdgeRequest>,
     ) -> Result<Response<DeleteResponse>, Status> {
+        let agent_id = crate::grpc::get_metadata(&request, "x-agent-id")
+            .unwrap_or_else(|| "anonymous".to_string());
         let req = request.into_inner();
         let edge_id = req
             .id
@@ -389,6 +414,8 @@ impl CortexService for CortexServiceImpl {
             .map_err(|e| Status::internal(e.to_string()))?;
 
         self.bump_version();
+
+        tracing::info!("[AUDIT] gRPC DeleteEdge agent={} id={}", agent_id, req.id);
 
         Ok(Response::new(DeleteResponse { success: true }))
     }
