@@ -194,6 +194,8 @@ struct NodeData {
     importance: f32,
     source_agent: String,
     edge_count: usize,
+    access_count: u64,
+    last_accessed_at: String,
 }
 
 async fn list_nodes(
@@ -238,6 +240,8 @@ async fn list_nodes(
                 importance: n.importance,
                 source_agent: n.source.agent.clone(),
                 edge_count,
+                access_count: n.access_count,
+                last_accessed_at: n.last_accessed_at.to_rfc3339(),
             }
         })
         .collect();
@@ -599,6 +603,8 @@ async fn get_node(
         importance: node.importance,
         source_agent: node.source.agent.clone(),
         edge_count: outgoing.len() + incoming.len(),
+        access_count: node.access_count,
+        last_accessed_at: node.last_accessed_at.to_rfc3339(),
     };
 
     Ok(Json(JsonResponse::ok(node_data)))
@@ -655,6 +661,8 @@ async fn node_neighbors(
                 importance: n.importance,
                 source_agent: n.source.agent.clone(),
                 edge_count: outgoing.len() + incoming.len(),
+                access_count: n.access_count,
+                last_accessed_at: n.last_accessed_at.to_rfc3339(),
             }
         })
         .collect();
@@ -751,6 +759,8 @@ async fn search(
                             importance: node.importance,
                             source_agent: node.source.agent.clone(),
                             edge_count: outgoing.len() + incoming.len(),
+                            access_count: node.access_count,
+                            last_accessed_at: node.last_accessed_at.to_rfc3339(),
                         },
                         "score": final_score,
                         "raw_score": r.score,
@@ -841,6 +851,8 @@ async fn graph_export(State(state): State<AppState>) -> AppResult<Json<JsonRespo
             importance: n.importance,
             source_agent: n.source.agent.clone(),
             edge_count: edge_counts.get(&n.id).copied().unwrap_or(0),
+            access_count: n.access_count,
+            last_accessed_at: n.last_accessed_at.to_rfc3339(),
         })
         .collect();
 
@@ -922,6 +934,8 @@ async fn get_briefing(
                         importance: n.importance,
                         source_agent: n.source.agent.clone(),
                         edge_count: outgoing.len() + incoming.len(),
+                        access_count: n.access_count,
+                        last_accessed_at: n.last_accessed_at.to_rfc3339(),
                     }
                 })
                 .collect();
