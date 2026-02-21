@@ -60,7 +60,15 @@ impl RedbStorage {
         }
 
         let is_new = !path.exists();
-        let db = Database::create(&path)?;
+        let db = if is_new {
+            Database::create(&path)?
+        } else {
+            // Use builder().open() so redb can auto-repair after unclean shutdowns.
+            // Database::create() uses a different internal path that fails on dirty files.
+            Database::builder()
+                .set_repair_callback(|_| {})
+                .open(&path)?
+        };
 
         if is_new {
             // New database: initialize all tables and write schema version
@@ -84,6 +92,8 @@ impl RedbStorage {
         } else {
             // Existing database: check schema version
             Self::check_schema_version(&db)?;
+            // Pre-flight: sample records to catch schema regressions before binding ports
+            Self::preflight_check(&db)?;
             // Ensure tables exist (creates new tables for existing DBs, e.g. audit)
             let write_txn = db.begin_write()?;
             {
@@ -105,6 +115,46 @@ impl RedbStorage {
             path,
             audit_log: None,
         })
+    }
+
+    /// Sample up to 10 node records and hard-fail if ALL of them fail to deserialize.
+    ///
+    /// This catches schema regressions (e.g. a struct field added without a migration)
+    /// before the server binds ports. Individual corrupt records are handled gracefully
+    /// elsewhere (`stats`, `list_nodes`), but if *every* sampled record is unreadable
+    /// the database schema has broken and the user must run a migration tool.
+    fn preflight_check(db: &Database) -> Result<()> {
+        let read_txn = db.begin_read()?;
+        let table = match read_txn.open_table(NODES) {
+            Ok(t) => t,
+            Err(_) => return Ok(()), // table not yet created (fresh DB)
+        };
+
+        let mut checked = 0u32;
+        let mut failed = 0u32;
+
+        for item in table.iter()? {
+            if checked >= 10 {
+                break;
+            }
+            let (_, value) = item?;
+            checked += 1;
+            if bincode::deserialize::<Node>(value.value()).is_err() {
+                failed += 1;
+            }
+        }
+
+        if checked > 0 && failed == checked {
+            return Err(CortexError::Validation(format!(
+                "Schema mismatch: all {} sampled node records failed to deserialize.\n\
+                 The Node struct format has changed without a migration.\n\
+                 Run the migration tool and then restart:\n\
+                   cargo run --bin fix_nodes -- [path-to-cortex.redb]",
+                checked
+            )));
+        }
+
+        Ok(())
     }
 
     /// Check schema version. Returns error if migration is needed.
@@ -632,14 +682,15 @@ impl Storage for RedbStorage {
                 for node_id in node_ids {
                     let node_id_bytes = Self::uuid_to_bytes(&node_id);
                     if let Some(bytes) = nodes_table.get(&node_id_bytes)? {
-                        let node = Self::deserialize_node(bytes.value())?;
-                        if Self::node_matches_filter(&node, &filter) {
-                            nodes.push(node);
-                            // Early exit when limit reached (no offset case)
-                            if filter.offset.is_none() {
-                                if let Some(limit) = filter.limit {
-                                    if nodes.len() >= limit {
-                                        break;
+                        if let Ok(node) = Self::deserialize_node(bytes.value()) {
+                            if Self::node_matches_filter(&node, &filter) {
+                                nodes.push(node);
+                                // Early exit when limit reached (no offset case)
+                                if filter.offset.is_none() {
+                                    if let Some(limit) = filter.limit {
+                                        if nodes.len() >= limit {
+                                            break;
+                                        }
                                     }
                                 }
                             }
@@ -651,7 +702,10 @@ impl Storage for RedbStorage {
             // Full table scan
             for item in nodes_table.iter()? {
                 let (_, value) = item?;
-                let node = Self::deserialize_node(value.value())?;
+                let node = match Self::deserialize_node(value.value()) {
+                    Ok(n) => n,
+                    Err(_) => continue, // skip corrupt records
+                };
                 if Self::node_matches_filter(&node, &filter) {
                     nodes.push(node);
                     // Early exit: if no offset, stop once limit is reached
@@ -1017,24 +1071,50 @@ impl Storage for RedbStorage {
         let mut oldest_node: Option<DateTime<Utc>> = None;
         let mut newest_node: Option<DateTime<Utc>> = None;
 
+        let mut corrupt_nodes = 0u64;
         for item in nodes_table.iter()? {
             let (_, value) = item?;
-            let node: Node = Self::deserialize_node(value.value())?;
-            if !node.deleted {
-                *node_counts_by_kind.entry(node.kind).or_insert(0) += 1;
-                if oldest_node.is_none() || node.created_at < oldest_node.unwrap() {
-                    oldest_node = Some(node.created_at);
+            match Self::deserialize_node(value.value()) {
+                Ok(node) if !node.deleted => {
+                    *node_counts_by_kind.entry(node.kind).or_insert(0) += 1;
+                    if oldest_node.is_none() || node.created_at < oldest_node.unwrap() {
+                        oldest_node = Some(node.created_at);
+                    }
+                    if newest_node.is_none() || node.created_at > newest_node.unwrap() {
+                        newest_node = Some(node.created_at);
+                    }
                 }
-                if newest_node.is_none() || node.created_at > newest_node.unwrap() {
-                    newest_node = Some(node.created_at);
+                Ok(_) => {} // deleted
+                Err(_) => {
+                    corrupt_nodes += 1;
                 }
             }
         }
+        if corrupt_nodes > 0 {
+            eprintln!(
+                "WARNING: {} corrupt node record(s) skipped during stats scan. \
+                 Run `cortex migrate` or contact support.",
+                corrupt_nodes
+            );
+        }
 
+        let mut corrupt_edges = 0u64;
         for item in edges_table.iter()? {
             let (_, value) = item?;
-            let edge: Edge = Self::deserialize_edge(value.value())?;
-            *edge_counts_by_relation.entry(edge.relation).or_insert(0) += 1;
+            match Self::deserialize_edge(value.value()) {
+                Ok(edge) => {
+                    *edge_counts_by_relation.entry(edge.relation).or_insert(0) += 1;
+                }
+                Err(_) => {
+                    corrupt_edges += 1;
+                }
+            }
+        }
+        if corrupt_edges > 0 {
+            eprintln!(
+                "WARNING: {} corrupt edge record(s) skipped during stats scan.",
+                corrupt_edges
+            );
         }
 
         let db_size_bytes = std::fs::metadata(&self.path).map(|m| m.len()).unwrap_or(0);
@@ -1054,6 +1134,40 @@ impl Storage for RedbStorage {
         std::fs::copy(&self.path, path)
             .map_err(|e| CortexError::Validation(format!("Failed to create snapshot: {}", e)))?;
         Ok(())
+    }
+}
+
+/// Build a fully-deterministic Node for schema regression tests.
+/// Every field is hard-coded — no randomness, no wall-clock time.
+#[cfg(test)]
+fn make_canonical_node() -> Node {
+    use crate::types::*;
+    use chrono::TimeZone;
+
+    Node {
+        id: uuid::Uuid::from_bytes([
+            0x01, 0x92, 0xab, 0xcd, 0xef, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09,
+            0x0a, 0x0b,
+        ]),
+        kind: NodeKind::new("fact").unwrap(),
+        data: NodeData {
+            title: "Schema regression test".to_string(),
+            body: "This node is used to detect Node struct changes.".to_string(),
+            metadata: std::collections::HashMap::new(),
+            tags: vec!["regression".to_string()],
+        },
+        embedding: None,
+        source: Source {
+            agent: "test-agent".to_string(),
+            session: None,
+            channel: None,
+        },
+        importance: 0.5,
+        access_count: 0,
+        last_accessed_at: DateTime::<Utc>::UNIX_EPOCH,
+        created_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
+        updated_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
+        deleted: false,
     }
 }
 
@@ -1652,5 +1766,131 @@ mod optimization_tests {
         // Stats should work (iterates all nodes)
         let stats = storage.stats().unwrap();
         assert_eq!(stats.node_count, 100);
+    }
+}
+
+/// Schema regression tests.
+///
+/// `test_node_schema_golden` locks the bincode serialization format for `Node`.
+/// If you add, remove, or reorder fields in `Node` or `NodeData`, this test will fail.
+///
+/// # Recovery steps
+/// 1. Bump `CURRENT_SCHEMA_VERSION` in `redb_storage.rs`.
+/// 2. Add a migration binary in `crates/cortex-server/src/bin/`.
+/// 3. Regenerate the golden bytes:
+///    ```
+///    cargo test -p cortex-core generate_golden_node_bytes -- --nocapture
+///    ```
+///    Copy the printed bytes into `GOLDEN_NODE_BYTES` below.
+#[cfg(test)]
+mod schema_regression_tests {
+    use super::*;
+
+    /// Prints the current bincode bytes for the canonical node.
+    /// Run this test to regenerate `GOLDEN_NODE_BYTES` after an intentional
+    /// schema change + migration has been written.
+    #[test]
+    fn generate_golden_node_bytes() {
+        let node = make_canonical_node();
+        let bytes = bincode::serialize(&node).unwrap();
+        println!("GOLDEN_NODE_BYTES ({} bytes):", bytes.len());
+        println!("{:?}", bytes);
+    }
+
+    /// Golden-bytes regression test for the `Node` bincode format.
+    ///
+    /// Fails immediately if the serialized layout changes — preventing silent
+    /// database corruption on the next deploy.
+    #[test]
+    fn test_node_schema_golden() {
+        // Generated by: cargo test -p cortex-core generate_golden_node_bytes -- --nocapture
+        // Node struct: id, kind, data(title, body, metadata, tags), embedding,
+        //              source(agent, session, channel), importance, access_count,
+        //              last_accessed_at, created_at, updated_at, deleted
+        // Schema version: 2  (CURRENT_SCHEMA_VERSION)
+        #[rustfmt::skip]
+        const GOLDEN_NODE_BYTES: &[u8] = &[
+            16, 0, 0, 0, 0, 0, 0, 0, 1, 146, 171, 205, 239, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+            4, 0, 0, 0, 0, 0, 0, 0, 102, 97, 99, 116,
+            22, 0, 0, 0, 0, 0, 0, 0, 83, 99, 104, 101, 109, 97, 32, 114, 101, 103, 114, 101, 115,
+            115, 105, 111, 110, 32, 116, 101, 115, 116,
+            48, 0, 0, 0, 0, 0, 0, 0, 84, 104, 105, 115, 32, 110, 111, 100, 101, 32, 105, 115, 32,
+            117, 115, 101, 100, 32, 116, 111, 32, 100, 101, 116, 101, 99, 116, 32, 78, 111, 100,
+            101, 32, 115, 116, 114, 117, 99, 116, 32, 99, 104, 97, 110, 103, 101, 115, 46,
+            0, 0, 0, 0, 0, 0, 0, 0,
+            1, 0, 0, 0, 0, 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 114, 101, 103, 114, 101, 115, 115,
+            105, 111, 110,
+            0,
+            10, 0, 0, 0, 0, 0, 0, 0, 116, 101, 115, 116, 45, 97, 103, 101, 110, 116,
+            0, 0,
+            0, 0, 0, 63, 0, 0, 0, 0, 0, 0, 0, 0,
+            20, 0, 0, 0, 0, 0, 0, 0, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 84, 48, 48, 58, 48,
+            48, 58, 48, 48, 90,
+            20, 0, 0, 0, 0, 0, 0, 0, 50, 48, 50, 51, 45, 49, 49, 45, 49, 52, 84, 50, 50, 58, 49,
+            51, 58, 50, 48, 90,
+            20, 0, 0, 0, 0, 0, 0, 0, 50, 48, 50, 51, 45, 49, 49, 45, 49, 52, 84, 50, 50, 58, 49,
+            51, 58, 50, 48, 90,
+            0,
+        ];
+
+        // Verify current serialization matches the golden snapshot.
+        let node = make_canonical_node();
+        let bytes = bincode::serialize(&node).unwrap();
+        assert_eq!(
+            bytes.as_slice(),
+            GOLDEN_NODE_BYTES,
+            "\n\nNODE SCHEMA REGRESSION DETECTED\n\
+             The bincode serialization of `Node` has changed.\n\
+             All existing cortex databases will be UNREADABLE without a migration.\n\n\
+             Required steps:\n\
+             1. Bump CURRENT_SCHEMA_VERSION in redb_storage.rs\n\
+             2. Add a migration binary in crates/cortex-server/src/bin/\n\
+             3. Regenerate golden bytes:\n\
+                cargo test -p cortex-core generate_golden_node_bytes -- --nocapture\n\
+             4. Paste the printed bytes into GOLDEN_NODE_BYTES in schema_regression_tests\n"
+        );
+
+        // Also verify the golden bytes deserialize back correctly.
+        let recovered: Node = bincode::deserialize(GOLDEN_NODE_BYTES)
+            .expect("Golden bytes failed to deserialize — regenerate them");
+        assert_eq!(recovered.data.title, "Schema regression test");
+        assert_eq!(recovered.importance, 0.5);
+        assert_eq!(recovered.access_count, 0);
+        assert!(!recovered.deleted);
+    }
+
+    /// Pre-flight check: a fresh database should always pass.
+    #[test]
+    fn test_preflight_passes_on_fresh_db() {
+        use tempfile::TempDir;
+        let tmp = TempDir::new().unwrap();
+        let db_path = tmp.path().join("pf.redb");
+        // Should not panic or error — no nodes yet
+        RedbStorage::open(&db_path).unwrap();
+    }
+
+    /// Pre-flight check: a database with valid nodes should pass.
+    #[test]
+    fn test_preflight_passes_with_valid_nodes() {
+        use crate::types::*;
+        use tempfile::TempDir;
+        let tmp = TempDir::new().unwrap();
+        let db_path = tmp.path().join("pf2.redb");
+        let storage = RedbStorage::open(&db_path).unwrap();
+        let node = Node::new(
+            NodeKind::new("fact").unwrap(),
+            "Preflight test".to_string(),
+            "body".to_string(),
+            Source {
+                agent: "test".to_string(),
+                session: None,
+                channel: None,
+            },
+            0.5,
+        );
+        storage.put_node(&node).unwrap();
+        drop(storage);
+        // Re-opening should pass pre-flight with no error
+        RedbStorage::open(&db_path).unwrap();
     }
 }

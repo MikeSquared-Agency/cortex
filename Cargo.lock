@@ -754,6 +754,7 @@ dependencies = [
  "async-nats",
  "async-trait",
  "axum",
+ "bincode",
  "chrono",
  "clap",
  "cortex-client",

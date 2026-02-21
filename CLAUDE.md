@@ -79,6 +79,26 @@ Check `specs/` — all implemented specs are tagged. Deferred work tracked in Gi
 - `sdks/python/` — 30 pytest tests
 - `sdks/go/` — 9 Go tests
 
+## Schema evolution — REQUIRED steps
+
+Cortex uses **bincode** (positional binary encoding) for Node/Edge records. Changing field
+order, adding fields mid-struct, or removing fields **silently corrupts all existing databases**.
+
+**Any change to `Node`, `NodeData`, `Edge`, or `EdgeProvenance` MUST follow this checklist:**
+
+1. **Bump `CURRENT_SCHEMA_VERSION`** in `crates/cortex-core/src/storage/redb_storage.rs`
+2. **Write a migration binary** in `crates/cortex-server/src/bin/` (see `fix_nodes.rs` for a template)
+3. **Regenerate golden bytes** so the regression test passes:
+   ```bash
+   cargo test -p cortex-core generate_golden_node_bytes -- --nocapture
+   ```
+   Copy the printed byte array into `GOLDEN_NODE_BYTES` in `schema_regression_tests` (same file).
+4. **Add fields at the END of the struct** to minimise migration impact.
+5. **Test the migration** against a real database before deploying.
+
+The `test_node_schema_golden` test in `redb_storage.rs` will fail immediately if the bincode
+format changes without these steps being followed.
+
 ## Common pitfalls
 
 - Port 9090 may conflict with existing services — override in `cortex.toml`
