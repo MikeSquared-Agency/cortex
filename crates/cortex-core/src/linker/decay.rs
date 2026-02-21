@@ -48,10 +48,18 @@ impl<S: Storage> DecayEngine<S> {
                 deleted_count += 1;
             } else if updated_edge.weight != edge.weight {
                 // Weight changed, update edge
-                self.storage.put_edge(&updated_edge)?;
-
-                if updated_edge.weight < self.config.prune_threshold {
-                    pruned_count += 1;
+                match self.storage.put_edge(&updated_edge) {
+                    Ok(()) => {
+                        if updated_edge.weight < self.config.prune_threshold {
+                            pruned_count += 1;
+                        }
+                    }
+                    Err(crate::error::CortexError::InvalidEdge { .. }) => {
+                        // Edge references a deleted node — clean it up
+                        self.storage.delete_edge(updated_edge.id)?;
+                        deleted_count += 1;
+                    }
+                    Err(e) => return Err(e),
                 }
             }
         }

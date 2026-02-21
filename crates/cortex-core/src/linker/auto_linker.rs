@@ -168,10 +168,10 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
                     continue;
                 }
 
-                // Get neighbor node
+                // Get neighbor node (skip deleted)
                 let neighbor = match self.storage.get_node(result.node_id)? {
-                    Some(n) => n,
-                    None => continue,
+                    Some(n) if !n.deleted => n,
+                    _ => continue,
                 };
 
                 // Apply link rules
@@ -227,6 +227,10 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
                     // Race condition or edge created between check and insert — skip
                     continue;
                 }
+                Err(crate::error::CortexError::InvalidEdge { .. }) => {
+                    // Target or source node was deleted — skip
+                    continue;
+                }
                 Err(e) => return Err(e),
             }
         }
@@ -256,6 +260,7 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
                 match dedup_scanner.execute_action(&pair) {
                     Ok(()) => {}
                     Err(crate::error::CortexError::DuplicateEdge { .. }) => continue,
+                    Err(crate::error::CortexError::InvalidEdge { .. }) => continue,
                     Err(e) => return Err(e),
                 }
             }

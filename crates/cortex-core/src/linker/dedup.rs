@@ -201,7 +201,12 @@ impl<S: Storage, V: VectorIndex, G: GraphEngine> DedupScanner<S, V, G> {
                         similarity: pair.similarity,
                     },
                 );
-                self.storage.put_edge(&edge)?;
+                match self.storage.put_edge(&edge) {
+                    Ok(()) => {},
+                    Err(crate::error::CortexError::DuplicateEdge { .. }) => {},
+                    Err(crate::error::CortexError::InvalidEdge { .. }) => {},
+                    Err(e) => return Err(e),
+                }
             }
             DedupAction::Link => {
                 // Create related edge
@@ -214,7 +219,12 @@ impl<S: Storage, V: VectorIndex, G: GraphEngine> DedupScanner<S, V, G> {
                         similarity: pair.similarity,
                     },
                 );
-                self.storage.put_edge(&edge)?;
+                match self.storage.put_edge(&edge) {
+                    Ok(()) => {},
+                    Err(crate::error::CortexError::DuplicateEdge { .. }) => {},
+                    Err(crate::error::CortexError::InvalidEdge { .. }) => {},
+                    Err(e) => return Err(e),
+                }
             }
         }
         Ok(())
@@ -243,7 +253,12 @@ impl<S: Storage, V: VectorIndex, G: GraphEngine> DedupScanner<S, V, G> {
             if edge.from == edge.to {
                 self.storage.delete_edge(edge.id)?;
             } else {
-                self.storage.put_edge(&edge)?;
+                match self.storage.put_edge(&edge) {
+                    Ok(()) => {},
+                    Err(crate::error::CortexError::DuplicateEdge { .. }) => {},
+                    Err(crate::error::CortexError::InvalidEdge { .. }) => {},
+                    Err(e) => return Err(e),
+                }
             }
         }
 
@@ -254,7 +269,12 @@ impl<S: Storage, V: VectorIndex, G: GraphEngine> DedupScanner<S, V, G> {
             if edge.from == edge.to {
                 self.storage.delete_edge(edge.id)?;
             } else {
-                self.storage.put_edge(&edge)?;
+                match self.storage.put_edge(&edge) {
+                    Ok(()) => {},
+                    Err(crate::error::CortexError::DuplicateEdge { .. }) => {},
+                    Err(crate::error::CortexError::InvalidEdge { .. }) => {},
+                    Err(e) => return Err(e),
+                }
             }
         }
 
@@ -266,7 +286,12 @@ impl<S: Storage, V: VectorIndex, G: GraphEngine> DedupScanner<S, V, G> {
             0.95,
             EdgeProvenance::AutoDedup { similarity: 1.0 },
         );
-        self.storage.put_edge(&supersedes_edge)?;
+        match self.storage.put_edge(&supersedes_edge) {
+            Ok(()) => {},
+            Err(crate::error::CortexError::DuplicateEdge { .. }) => {},
+            Err(crate::error::CortexError::InvalidEdge { .. }) => {},
+            Err(e) => return Err(e),
+        }
 
         // Merge metadata
         let mut updated_keep = keep_node.clone();
