@@ -1,4 +1,7 @@
-use super::{prompts, rollback, selection, AppResult, AppState, JsonResponse, GRAPH_VIZ_HTML};
+use super::{
+    metrics::{EndpointLabel, GateCheckLabel},
+    prompts, rollback, selection, AppResult, AppState, JsonResponse, GRAPH_VIZ_HTML,
+};
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
@@ -52,6 +55,7 @@ fn gate_rejection_response(rejection: GateRejection) -> Response {
 pub fn create_router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
+        .route("/metrics", get(metrics_handler))
         .route("/stats", get(stats))
         .route("/nodes", get(list_nodes).post(create_node))
         .route("/nodes/:id", get(get_node).delete(delete_node).patch(patch_node))
@@ -147,6 +151,54 @@ async fn health(State(state): State<AppState>) -> AppResult<Json<JsonResponse<He
             db_size_bytes: db_size,
         },
     })))
+}
+
+async fn metrics_handler(State(state): State<AppState>) -> impl IntoResponse {
+    use super::metrics::{KindLabel, RelationLabel};
+    use axum::http::header;
+    use cortex_core::NodeFilter;
+
+    let m = &state.metrics;
+
+    // Storage gauges
+    if let Ok(stats) = state.storage.stats() {
+        m.node_count.set(stats.node_count as i64);
+        m.edge_count.set(stats.edge_count as i64);
+        for (kind, count) in stats.node_counts_by_kind {
+            m.nodes_by_kind
+                .get_or_create(&KindLabel { kind: format!("{:?}", kind) })
+                .set(count as i64);
+        }
+        for (relation, count) in stats.edge_counts_by_relation {
+            m.edges_by_relation
+                .get_or_create(&RelationLabel { relation: format!("{:?}", relation) })
+                .set(count as i64);
+        }
+    }
+
+    if let Ok(meta) = std::fs::metadata(state.storage.path()) {
+        m.db_size.set(meta.len() as i64);
+    }
+
+    // Echo / fizzle stats (O(n) node scan — trivial at current scale)
+    if let Ok(nodes) = state.storage.list_nodes(NodeFilter::new()) {
+        let total_accesses: u64 = nodes.iter().map(|n| n.access_count).sum();
+        let active: u64 = nodes.iter().filter(|n| n.access_count > 0).count() as u64;
+        m.echo_total_accesses.set(total_accesses as i64);
+        m.echo_active_nodes.set(active as i64);
+    }
+
+    // Uptime
+    m.uptime_seconds.set(state.start_time.elapsed().as_secs() as i64);
+
+    let mut output = String::new();
+    prometheus_client::encoding::text::encode(&mut output, &m.registry).unwrap_or_default();
+
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/plain; version=0.0.4; charset=utf-8")],
+        output,
+    )
 }
 
 async fn stats(State(state): State<AppState>) -> AppResult<Json<JsonResponse<StatsData>>> {
@@ -306,11 +358,21 @@ async fn create_node(
     if gate_config.enabled && !gate_skipped {
         // Check 1: Substance
         if let GateResult::Reject(r) = WriteGate::check_substance(&node, gate_config) {
+            state
+                .metrics
+                .gate_rejected
+                .get_or_create(&GateCheckLabel { check: r.check.to_string() })
+                .inc();
             return Ok(gate_rejection_response(r));
         }
 
         // Check 2: Specificity
         if let GateResult::Reject(r) = WriteGate::check_specificity(&node, gate_config) {
+            state
+                .metrics
+                .gate_rejected
+                .get_or_create(&GateCheckLabel { check: r.check.to_string() })
+                .inc();
             return Ok(gate_rejection_response(r));
         }
 
@@ -325,6 +387,11 @@ async fn create_node(
             if let GateResult::Reject(r) =
                 WriteGate::check_conflict(&node, &embedding, &*index, &*state.storage, gate_config)
             {
+                state
+                    .metrics
+                    .gate_rejected
+                    .get_or_create(&GateCheckLabel { check: r.check.to_string() })
+                    .inc();
                 return Ok(gate_rejection_response(r));
             }
         }
@@ -336,6 +403,7 @@ async fn create_node(
             index.insert(node.id, &embedding)?;
         }
 
+        state.metrics.gate_passed.inc();
         tracing::info!(
             "[AUDIT] POST /nodes agent={} gate=PASS title={:?} kind={}",
             agent_id,
@@ -354,6 +422,7 @@ async fn create_node(
             index.insert(node.id, &embedding)?;
         }
 
+        state.metrics.gate_skipped.inc();
         tracing::info!(
             "[AUDIT] POST /nodes agent={} gate=SKIPPED title={:?} kind={}",
             agent_id,
@@ -444,6 +513,7 @@ async fn hybrid_search(
     State(state): State<AppState>,
     Query(query): Query<HybridSearchQuery>,
 ) -> AppResult<impl IntoResponse> {
+    let t = std::time::Instant::now();
     let embedding = state.embedding_service.embed(&query.q)?;
     let limit = query.limit.unwrap_or(10);
     let recency_bias = query
@@ -496,6 +566,18 @@ async fn hybrid_search(
     scored.truncate(limit);
 
     let results: Vec<serde_json::Value> = scored.into_iter().map(|(v, _)| v).collect();
+
+    // Record search metrics
+    state
+        .metrics
+        .search_requests
+        .get_or_create(&EndpointLabel { endpoint: "hybrid".into() })
+        .inc();
+    state
+        .metrics
+        .search_duration
+        .get_or_create(&EndpointLabel { endpoint: "hybrid".into() })
+        .observe(t.elapsed().as_secs_f64());
 
     // Fire-and-forget access recording.
     {
@@ -715,6 +797,7 @@ async fn search(
     State(state): State<AppState>,
     Query(query): Query<SearchQuery>,
 ) -> AppResult<impl IntoResponse> {
+    let t = std::time::Instant::now();
     let embedding = state.embedding_service.embed(&query.q)?;
     let limit = query.limit.unwrap_or(10);
     let recency_bias = query
@@ -775,6 +858,18 @@ async fn search(
     scored.truncate(limit);
 
     let search_results: Vec<serde_json::Value> = scored.into_iter().map(|(v, _)| v).collect();
+
+    // Record search metrics
+    state
+        .metrics
+        .search_requests
+        .get_or_create(&EndpointLabel { endpoint: "vector".into() })
+        .inc();
+    state
+        .metrics
+        .search_duration
+        .get_or_create(&EndpointLabel { endpoint: "vector".into() })
+        .observe(t.elapsed().as_secs_f64());
 
     // Fire-and-forget: record access for every node returned.
     // Done after results are assembled so it never blocks the response.

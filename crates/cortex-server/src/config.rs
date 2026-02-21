@@ -209,13 +209,30 @@ pub struct StdinIngestConfig {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ObservabilityConfig {
     pub prometheus: bool,
     pub prometheus_port: u16,
     pub opentelemetry: bool,
     pub otlp_endpoint: Option<String>,
+    /// Enable the /metrics endpoint (Prometheus text format). Default: true.
+    pub metrics_enabled: bool,
+    /// Require bearer token auth on /metrics. Default: false (Prometheus scrapes unauthenticated).
+    pub metrics_require_auth: bool,
+}
+
+impl Default for ObservabilityConfig {
+    fn default() -> Self {
+        Self {
+            prometheus: false,
+            prometheus_port: 0,
+            opentelemetry: false,
+            otlp_endpoint: None,
+            metrics_enabled: true,
+            metrics_require_auth: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

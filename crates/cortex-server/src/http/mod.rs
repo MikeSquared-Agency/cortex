@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod metrics;
 pub mod prompts;
 pub mod rollback;
 mod routes;
@@ -37,6 +38,8 @@ use serde::Serialize;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
+pub use metrics::CortexMetrics;
+
 /// Concrete briefing engine type shared across HTTP handlers
 pub type HttpBriefingEngine = BriefingEngine<
     RedbStorage,
@@ -64,6 +67,7 @@ pub struct AppState {
     >,
     pub graph_version: Arc<AtomicU64>,
     pub briefing_engine: Arc<HttpBriefingEngine>,
+    pub metrics: Arc<CortexMetrics>,
     pub start_time: std::time::Instant,
     pub rollback_config: RollbackConfig,
     pub webhooks: Vec<crate::config::WebhookConfig>,

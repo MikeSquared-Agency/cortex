@@ -1,4 +1,5 @@
 use crate::config::CortexConfig;
+use crate::http::CortexMetrics;
 use cortex_core::briefing::{BriefingConfig, BriefingEngine};
 use cortex_core::storage::encrypted;
 use cortex_core::*;
@@ -152,6 +153,10 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
     ));
     info!("Briefing engine ready");
 
+    // Initialize prometheus metrics
+    let cortex_metrics = Arc::new(CortexMetrics::new());
+    let metrics_require_auth = config.observability.metrics_require_auth;
+
     // Start auto-linker background task (also runs retention sweep each cycle)
     let auto_linker_task = {
         let linker = auto_linker.clone();
@@ -161,6 +166,7 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
         let has_retention = retention_cfg.default_ttl_days > 0
             || !retention_cfg.by_kind.is_empty()
             || retention_cfg.max_nodes.is_some();
+        let metrics_for_linker = cortex_metrics.clone();
 
         tokio::spawn(async move {
             let retention_engine = if has_retention {
@@ -177,6 +183,22 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
                     if let Err(e) = linker.run_cycle() {
                         error!("Auto-linker cycle failed: {}", e);
                     }
+                    // Mirror linker metrics to Prometheus after each cycle
+                    let m = linker.metrics();
+                    let pm = &metrics_for_linker;
+                    pm.linker_cycles.inc();
+                    pm.linker_edges_created.inc_by(m.edges_created);
+                    pm.linker_edges_pruned.inc_by(m.edges_pruned);
+                    pm.linker_edges_deleted.inc_by(m.edges_deleted);
+                    pm.linker_duplicates_found.inc_by(m.duplicates_found);
+                    pm.linker_contradictions_found.inc_by(m.contradictions_found);
+                    pm.linker_backlog.set(m.backlog_size as i64);
+                    pm.linker_last_cycle_nodes.set(m.nodes_processed as i64);
+                    pm.linker_last_cycle_edges.set(m.edges_created as i64);
+                    pm.linker_cycle_duration
+                        .observe(m.last_cycle_duration.as_secs_f64());
+                    pm.node_count.set(m.total_nodes as i64);
+                    pm.edge_count.set(m.total_edges as i64);
                 }
 
                 if let Some(ref retention) = retention_engine {
@@ -299,6 +321,7 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
             auto_linker: auto_linker.clone(),
             graph_version: graph_version.clone(),
             briefing_engine: briefing_engine.clone(),
+            metrics: cortex_metrics.clone(),
             start_time: std::time::Instant::now(),
             rollback_config: config.prompt_rollback.clone(),
             webhooks: config.webhooks.clone(),
@@ -306,13 +329,31 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
             write_gate: config.write_gate.clone(),
         };
 
+        let metrics_for_mw = cortex_metrics.clone();
         let http_auth_token = auth_token.clone();
-        let app = crate::http::create_router(app_state).layer(axum::middleware::from_fn(
-            move |req, next| {
+        let app = crate::http::create_router(app_state)
+            .layer(axum::middleware::from_fn(move |req, next| {
                 let tok = http_auth_token.clone();
-                async move { crate::http::auth::check(req, next, auth_enabled, tok).await }
-            },
-        ));
+                async move {
+                    crate::http::auth::check(req, next, auth_enabled, tok, metrics_require_auth)
+                        .await
+                }
+            }))
+            .layer(axum::middleware::from_fn(
+                move |req: axum::extract::Request, next: axum::middleware::Next| {
+                    let m = metrics_for_mw.clone();
+                    async move {
+                        use crate::http::metrics::HttpLabel;
+                        let method = req.method().to_string();
+                        let response = next.run(req).await;
+                        let status = response.status().as_u16().to_string();
+                        m.http_requests
+                            .get_or_create(&HttpLabel { method, status })
+                            .inc();
+                        response
+                    }
+                },
+            ));
         let addr = config.http_addr();
 
         tokio::spawn(async move {

@@ -7,13 +7,24 @@ use axum::{
 
 use super::JsonResponse;
 
-/// Bearer token auth middleware. Skips `/health`. Short-circuits if auth is disabled.
-pub async fn check(req: Request, next: Next, auth_enabled: bool, token: Option<String>) -> Response {
+/// Bearer token auth middleware. Skips `/health` and (by default) `/metrics`.
+/// Short-circuits if auth is disabled.
+pub async fn check(
+    req: Request,
+    next: Next,
+    auth_enabled: bool,
+    token: Option<String>,
+    metrics_require_auth: bool,
+) -> Response {
     if !auth_enabled {
         return next.run(req).await;
     }
 
-    if req.uri().path() == "/health" {
+    let path = req.uri().path();
+    if path == "/health" {
+        return next.run(req).await;
+    }
+    if path == "/metrics" && !metrics_require_auth {
         return next.run(req).await;
     }
 
