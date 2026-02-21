@@ -8,6 +8,13 @@ use uuid::Uuid;
 /// Type alias for node identifiers
 pub type NodeId = Uuid;
 
+/// Serde default for `last_accessed_at`: Unix epoch, meaning "never accessed".
+/// Existing nodes deserialized without this field will appear maximally stale,
+/// flooring at `min_factor` in the score decay formula.
+fn default_last_accessed_at() -> DateTime<Utc> {
+    DateTime::<Utc>::UNIX_EPOCH
+}
+
 /// Type alias for edge identifiers
 pub type EdgeId = Uuid;
 
@@ -41,6 +48,13 @@ pub struct Node {
     /// Used for reinforcement — frequently accessed nodes
     /// resist decay.
     pub access_count: u64,
+
+    /// Last time this node was returned in a search result or included in a
+    /// briefing. Distinct from `updated_at` (which changes on content edits).
+    /// Used by query-time score decay to compute days_idle.
+    /// Defaults to the Unix epoch for nodes created before this field existed.
+    #[serde(default = "default_last_accessed_at")]
+    pub last_accessed_at: DateTime<Utc>,
 
     /// When this knowledge was created.
     pub created_at: DateTime<Utc>,
@@ -291,6 +305,7 @@ impl Node {
             source,
             importance: importance.clamp(0.0, 1.0),
             access_count: 0,
+            last_accessed_at: now,
             created_at: now,
             updated_at: now,
             deleted: false,
@@ -335,10 +350,13 @@ impl Node {
         Ok(())
     }
 
-    /// Increment access count and update timestamp
+    /// Increment access count and update last-accessed timestamp.
+    /// Called when this node is returned in a search result or included in a briefing.
     pub fn record_access(&mut self) {
+        let now = Utc::now();
         self.access_count += 1;
-        self.updated_at = Utc::now();
+        self.last_accessed_at = now;
+        self.updated_at = now;
     }
 }
 

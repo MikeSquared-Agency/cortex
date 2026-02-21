@@ -5,7 +5,7 @@ use axum::{
     routing::{get, post, put},
     Router,
 };
-use cortex_core::{Edge, EdgeProvenance, NodeFilter, NodeKind, Relation, Source, *};
+use cortex_core::{apply_score_decay, Edge, EdgeProvenance, NodeFilter, NodeKind, Relation, Source, *};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -312,6 +312,9 @@ async fn create_edge(
 struct HybridSearchQuery {
     q: String,
     limit: Option<usize>,
+    /// Blend weight for temporal freshness in final score.
+    /// 0.0 = pure relevance, 1.0 = heavily favour recent nodes.
+    recency_bias: Option<f32>,
 }
 
 async fn hybrid_search(
@@ -320,15 +323,24 @@ async fn hybrid_search(
 ) -> AppResult<impl IntoResponse> {
     let embedding = state.embedding_service.embed(&query.q)?;
     let limit = query.limit.unwrap_or(10);
+    let recency_bias = query
+        .recency_bias
+        .unwrap_or(state.score_decay.recency_weight);
+
+    // Fetch extra candidates for re-ranking.
+    let candidate_limit = if state.score_decay.enabled && recency_bias > 0.0 {
+        (limit * 3).max(30)
+    } else {
+        limit * 2
+    };
 
     let index = state.vector_index.read().unwrap();
-    let vector_results = index.search(&embedding, limit * 2, None)?;
+    let vector_results = index.search(&embedding, candidate_limit, None)?;
     drop(index);
 
-    // For hybrid: combine vector scores with graph connectivity
-    let results: Vec<_> = vector_results
+    // For hybrid: combine vector scores with graph connectivity, then apply decay.
+    let mut scored: Vec<(serde_json::Value, f32)> = vector_results
         .iter()
-        .take(limit)
         .filter_map(|r| {
             state
                 .storage
@@ -339,18 +351,45 @@ async fn hybrid_search(
                     let edge_count = state.storage.edges_from(node.id).unwrap_or_default().len()
                         + state.storage.edges_to(node.id).unwrap_or_default().len();
                     let graph_boost = (edge_count as f32 * 0.05).min(0.3);
-                    serde_json::json!({
+                    let combined = r.score + graph_boost;
+                    let final_score =
+                        apply_score_decay(&node, combined, &state.score_decay, recency_bias);
+
+                    let value = serde_json::json!({
                         "id": node.id.to_string(),
                         "kind": format!("{:?}", node.kind),
                         "title": node.data.title,
                         "body": node.data.body,
-                        "score": r.score + graph_boost,
+                        "score": final_score,
                         "vector_score": r.score,
                         "graph_boost": graph_boost,
-                    })
+                    });
+                    (value, final_score)
                 })
         })
         .collect();
+
+    scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    scored.truncate(limit);
+
+    let results: Vec<serde_json::Value> = scored.into_iter().map(|(v, _)| v).collect();
+
+    // Fire-and-forget access recording.
+    {
+        let node_ids: Vec<NodeId> = results
+            .iter()
+            .filter_map(|v| v["id"].as_str()?.parse().ok())
+            .collect();
+        let storage = state.storage.clone();
+        tokio::spawn(async move {
+            for id in node_ids {
+                if let Ok(Some(mut node)) = storage.get_node(id) {
+                    node.record_access();
+                    let _ = storage.put_node(&node);
+                }
+            }
+        });
+    }
 
     Ok(Json(JsonResponse::ok(results)))
 }
@@ -530,6 +569,10 @@ async fn get_edge(
 struct SearchQuery {
     q: String,
     limit: Option<usize>,
+    /// Blend weight for temporal freshness in final score.
+    /// 0.0 = pure relevance (default), 1.0 = heavily favour recent nodes.
+    /// Overrides the configured `score_decay.recency_weight` for this query.
+    recency_bias: Option<f32>,
 }
 
 async fn search(
@@ -538,12 +581,24 @@ async fn search(
 ) -> AppResult<impl IntoResponse> {
     let embedding = state.embedding_service.embed(&query.q)?;
     let limit = query.limit.unwrap_or(10);
+    let recency_bias = query
+        .recency_bias
+        .unwrap_or(state.score_decay.recency_weight);
+
+    // Fetch extra candidates so re-ranking by temporal score doesn't cut off
+    // good results that vector-rank lower but are fresher / more accessed.
+    let candidate_limit = if state.score_decay.enabled && recency_bias > 0.0 {
+        (limit * 3).max(30)
+    } else {
+        limit
+    };
 
     let index = state.vector_index.read().unwrap();
-    let results = index.search(&embedding, limit, None)?;
+    let results = index.search(&embedding, candidate_limit, None)?;
     drop(index);
 
-    let search_results: Vec<_> = results
+    // Pair each raw result with its Node, applying score decay if enabled.
+    let mut scored: Vec<(serde_json::Value, f32)> = results
         .iter()
         .filter_map(|r| {
             state
@@ -552,10 +607,13 @@ async fn search(
                 .ok()
                 .flatten()
                 .map(|node| {
+                    let final_score =
+                        apply_score_decay(&node, r.score, &state.score_decay, recency_bias);
+
                     let outgoing = state.storage.edges_from(node.id).unwrap_or_default();
                     let incoming = state.storage.edges_to(node.id).unwrap_or_default();
 
-                    serde_json::json!({
+                    let value = serde_json::json!({
                         "node": NodeData {
                             id: node.id.to_string(),
                             kind: format!("{:?}", node.kind),
@@ -566,11 +624,37 @@ async fn search(
                             source_agent: node.source.agent.clone(),
                             edge_count: outgoing.len() + incoming.len(),
                         },
-                        "score": r.score
-                    })
+                        "score": final_score,
+                        "raw_score": r.score,
+                    });
+                    (value, final_score)
                 })
         })
         .collect();
+
+    // Re-rank by final score (decay may reshuffle from original vector order).
+    scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    scored.truncate(limit);
+
+    let search_results: Vec<serde_json::Value> = scored.into_iter().map(|(v, _)| v).collect();
+
+    // Fire-and-forget: record access for every node returned.
+    // Done after results are assembled so it never blocks the response.
+    {
+        let node_ids: Vec<NodeId> = search_results
+            .iter()
+            .filter_map(|v| v["node"]["id"].as_str()?.parse().ok())
+            .collect();
+        let storage = state.storage.clone();
+        tokio::spawn(async move {
+            for id in node_ids {
+                if let Ok(Some(mut node)) = storage.get_node(id) {
+                    node.record_access();
+                    let _ = storage.put_node(&node);
+                }
+            }
+        });
+    }
 
     Ok(Json(JsonResponse::ok(search_results)))
 }

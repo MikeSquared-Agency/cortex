@@ -64,6 +64,7 @@ pub struct AppState {
     pub start_time: std::time::Instant,
     pub rollback_config: RollbackConfig,
     pub webhooks: Vec<crate::config::WebhookConfig>,
+    pub score_decay: cortex_core::ScoreDecayConfig,
 }
 
 /// JSON response wrapper

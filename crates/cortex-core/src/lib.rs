@@ -30,8 +30,9 @@ pub use policies::{
 pub use storage::{NodeFilter, RedbStorage, Storage, StorageStats, CURRENT_SCHEMA_VERSION};
 pub use types::*;
 pub use vector::{
-    embedding_input, EmbeddingService, FastEmbedService, HnswIndex, HybridQuery, HybridResult,
-    HybridSearch, RwLockVectorIndex, SimilarityConfig, SimilarityResult, VectorFilter, VectorIndex,
+    apply_score_decay, embedding_input, EmbeddingService, FastEmbedService, HnswIndex, HybridQuery,
+    HybridResult, HybridSearch, RwLockVectorIndex, ScoreDecayConfig, SimilarityConfig,
+    SimilarityResult, VectorFilter, VectorIndex,
 };
 
 #[cfg(test)]

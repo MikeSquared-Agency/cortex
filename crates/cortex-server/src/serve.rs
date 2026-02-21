@@ -272,6 +272,7 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
             start_time: std::time::Instant::now(),
             rollback_config: config.prompt_rollback.clone(),
             webhooks: config.webhooks.clone(),
+            score_decay: config.score_decay.clone(),
         };
 
         let app = crate::http::create_router(app_state);

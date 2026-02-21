@@ -5,6 +5,7 @@ pub use cortex_core::policies::RetentionConfig;
 #[allow(unused_imports)]
 pub use cortex_core::policies::RetentionMaxNodes;
 pub use cortex_core::prompt::RollbackConfig;
+pub use cortex_core::ScoreDecayConfig;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -37,6 +38,8 @@ pub struct CortexConfig {
     pub plugins: Vec<PluginConfig>,
     #[serde(default)]
     pub prompt_rollback: RollbackConfig,
+    #[serde(default)]
+    pub score_decay: ScoreDecayConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

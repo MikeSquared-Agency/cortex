@@ -107,6 +107,7 @@ pub async fn run() -> Result<()> {
         webhooks: vec![],
         plugins: vec![],
         prompt_rollback: Default::default(),
+        score_decay: Default::default(),
     };
 
     let toml_str = toml::to_string_pretty(&config)?;
