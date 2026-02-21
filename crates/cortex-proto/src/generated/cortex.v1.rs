@@ -116,6 +116,9 @@ pub struct NodeResponse {
     /// Total connected edges
     #[prost(uint32, tag = "15")]
     pub edge_count: u32,
+    /// Last time returned in search/briefing
+    #[prost(message, optional, tag = "16")]
+    pub last_accessed_at: ::core::option::Option<::prost_types::Timestamp>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CreateEdgeRequest {

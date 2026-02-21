@@ -123,6 +123,8 @@ pub enum NodeCommands {
     Get(NodeGetArgs),
     List(NodeListArgs),
     Delete(NodeDeleteArgs),
+    /// Show access-tracking stats for a node (access count, last accessed, decay info)
+    Stats(NodeStatsArgs),
 }
 
 #[derive(Subcommand, Debug)]
@@ -445,6 +447,13 @@ pub struct NodeDeleteArgs {
     /// Skip confirmation prompt
     #[arg(long, short = 'y')]
     pub yes: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct NodeStatsArgs {
+    pub id: String,
+    #[arg(long, default_value = "table")]
+    pub format: String,
 }
 
 // --- Edge args ---

@@ -25,6 +25,7 @@ pub fn node_to_response(node: &Node, edge_count: usize) -> NodeResponse {
         access_count: node.access_count,
         created_at: Some(datetime_to_timestamp(node.created_at)),
         updated_at: Some(datetime_to_timestamp(node.updated_at)),
+        last_accessed_at: Some(datetime_to_timestamp(node.last_accessed_at)),
         has_embedding: node.embedding.is_some(),
         edge_count: edge_count as u32,
     }

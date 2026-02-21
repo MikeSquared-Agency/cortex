@@ -1,9 +1,10 @@
 use crate::cli::{
     grpc_connect, print_node_table, NodeCommands, NodeCreateArgs, NodeDeleteArgs, NodeGetArgs,
-    NodeListArgs,
+    NodeListArgs, NodeStatsArgs,
 };
 use anyhow::Result;
 use cortex_proto::*;
+use prost_types;
 
 pub async fn run(cmd: NodeCommands, server: &str) -> Result<()> {
     match cmd {
@@ -11,6 +12,7 @@ pub async fn run(cmd: NodeCommands, server: &str) -> Result<()> {
         NodeCommands::Get(args) => get(args, server).await,
         NodeCommands::List(args) => list(args, server).await,
         NodeCommands::Delete(args) => delete(args, server).await,
+        NodeCommands::Stats(args) => stats(args, server).await,
     }
 }
 
@@ -152,6 +154,75 @@ async fn delete(args: NodeDeleteArgs, server: &str) -> Result<()> {
     Ok(())
 }
 
+async fn stats(args: NodeStatsArgs, server: &str) -> Result<()> {
+    use cortex_proto::GetNodeRequest;
+
+    let mut client = grpc_connect(server).await?;
+    let n = client
+        .get_node(GetNodeRequest { id: args.id })
+        .await?
+        .into_inner();
+
+    if args.format == "json" {
+        println!(
+            "{}",
+            serde_json::json!({
+                "id": n.id,
+                "kind": n.kind,
+                "title": n.title,
+                "access_count": n.access_count,
+                "last_accessed_at": fmt_timestamp(n.last_accessed_at.as_ref()),
+                "created_at": fmt_timestamp(n.created_at.as_ref()),
+                "updated_at": fmt_timestamp(n.updated_at.as_ref()),
+                "days_since_access": days_since(n.last_accessed_at.as_ref()),
+            })
+        );
+    } else {
+        println!();
+        println!("Node Access Stats");
+        println!("{}", "─".repeat(50));
+        println!("ID:               {}", n.id);
+        println!("Kind:             {}", n.kind);
+        println!("Title:            {}", crate::cli::truncate(&n.title, 40));
+        println!("{}", "─".repeat(50));
+        println!("Access count:     {}", n.access_count);
+        println!(
+            "Last accessed:    {}",
+            fmt_timestamp(n.last_accessed_at.as_ref())
+        );
+        if let Some(days) = days_since(n.last_accessed_at.as_ref()) {
+            println!("Days idle:        {:.1}", days);
+        }
+        println!("Created:          {}", fmt_timestamp(n.created_at.as_ref()));
+        println!("Updated:          {}", fmt_timestamp(n.updated_at.as_ref()));
+        println!("{}", "─".repeat(50));
+        println!();
+    }
+
+    Ok(())
+}
+
+/// Format an optional protobuf Timestamp as a human-readable UTC string.
+fn fmt_timestamp(ts: Option<&prost_types::Timestamp>) -> String {
+    match ts {
+        None => "—".to_string(),
+        Some(t) => {
+            match chrono::DateTime::from_timestamp(t.seconds, t.nanos as u32) {
+                Some(dt) => dt.format("%Y-%m-%d %H:%M UTC").to_string(),
+                None => "invalid".to_string(),
+            }
+        }
+    }
+}
+
+/// Return fractional days since the given timestamp, or None if unavailable.
+fn days_since(ts: Option<&prost_types::Timestamp>) -> Option<f64> {
+    let t = ts?;
+    let dt = chrono::DateTime::from_timestamp(t.seconds, t.nanos as u32)?;
+    let elapsed = chrono::Utc::now().signed_duration_since(dt);
+    Some(elapsed.num_seconds().max(0) as f64 / 86_400.0)
+}
+
 pub fn print_node_detail(n: &NodeResponse) {
     println!("ID:         {}", n.id);
     println!("Kind:       {}", n.kind);
@@ -161,5 +232,9 @@ pub fn print_node_detail(n: &NodeResponse) {
     println!("Tags:       {}", n.tags.join(", "));
     println!("Source:     {}", n.source_agent);
     println!("Access:     {}", n.access_count);
+    println!(
+        "Last seen:  {}",
+        fmt_timestamp(n.last_accessed_at.as_ref())
+    );
     println!("Embedding:  {}", if n.has_embedding { "yes" } else { "no" });
 }

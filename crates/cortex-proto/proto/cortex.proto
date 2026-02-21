@@ -139,6 +139,7 @@ message NodeResponse {
     google.protobuf.Timestamp updated_at = 13;
     bool has_embedding = 14;
     uint32 edge_count = 15;   // Total connected edges
+    google.protobuf.Timestamp last_accessed_at = 16;  // Last time returned in search/briefing
 }
 
 message CreateEdgeRequest {
