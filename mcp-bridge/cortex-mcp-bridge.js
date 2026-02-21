@@ -9,13 +9,19 @@
  *     "cortex": {
  *       "command": "node",
  *       "args": ["/path/to/cortex-mcp-bridge.js"],
- *       "env": { "CORTEX_URL": "http://localhost:19091" }
+ *       "env": {
+ *         "CORTEX_URL": "https://cortex.example.com",
+ *         "CORTEX_AUTH_TOKEN": "your-token-here"
+ *       }
  *     }
  *   }
  * }
+ *
+ * CORTEX_AUTH_TOKEN is optional — omit it for local servers with auth disabled.
  */
 
 const BASE = process.env.CORTEX_URL || "http://localhost:19091";
+const TOKEN = process.env.CORTEX_AUTH_TOKEN || null;
 const readline = require("readline");
 
 const TOOLS = [
@@ -122,7 +128,9 @@ const TOOLS = [
 
 async function http(method, path, body) {
   const url = `${BASE}${path}`;
-  const opts = { method, headers: { "Content-Type": "application/json" } };
+  const headers = { "Content-Type": "application/json" };
+  if (TOKEN) headers["Authorization"] = `Bearer ${TOKEN}`;
+  const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(url, opts);
   return res.json();
