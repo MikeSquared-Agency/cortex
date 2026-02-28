@@ -163,6 +163,7 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
         let storage_for_retention = storage.clone();
         let interval = auto_linker_config.interval;
         let retention_cfg = config.retention.clone();
+        let score_decay_cfg = config.score_decay.clone();
         let has_retention = retention_cfg.default_ttl_days > 0
             || !retention_cfg.by_kind.is_empty()
             || retention_cfg.max_nodes.is_some();
@@ -170,7 +171,7 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
 
         tokio::spawn(async move {
             let retention_engine = if has_retention {
-                Some(RetentionEngine::new(retention_cfg))
+                Some(RetentionEngine::new(retention_cfg, score_decay_cfg))
             } else {
                 None
             };

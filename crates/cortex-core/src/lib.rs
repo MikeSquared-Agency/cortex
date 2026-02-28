@@ -26,8 +26,8 @@ pub use linker::{
     Resolution, SimilarityLinkRule, StructuralRule,
 };
 pub use policies::{
-    AuditAction, AuditEntry, AuditFilter, AuditLog, RetentionConfig, RetentionEngine,
-    RetentionMaxNodes,
+    AuditAction, AuditEntry, AuditFilter, AuditLog, KindRetention, RetentionConfig,
+    RetentionEngine, RetentionMaxNodes,
 };
 pub use storage::{NodeFilter, RedbStorage, Storage, StorageStats, CURRENT_SCHEMA_VERSION};
 pub use types::*;

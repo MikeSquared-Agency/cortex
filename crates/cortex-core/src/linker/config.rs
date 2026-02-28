@@ -36,6 +36,10 @@ pub struct AutoLinkerConfig {
 
     /// Decay configuration.
     pub decay: DecayConfig,
+
+    /// Embedding model name. Used for config change detection — if this changes,
+    /// the linker resets its cursor and re-scans all nodes.
+    pub embedding_model: String,
 }
 
 impl Default for AutoLinkerConfig {
@@ -51,6 +55,7 @@ impl Default for AutoLinkerConfig {
             generic_content_threshold: 30,
             run_on_startup: true,
             decay: DecayConfig::default(),
+            embedding_model: "BAAI/bge-small-en-v1.5".into(),
         }
     }
 }
@@ -82,6 +87,11 @@ impl AutoLinkerConfig {
 
     pub fn with_max_edges_per_cycle(mut self, max: usize) -> Self {
         self.max_edges_per_cycle = max;
+        self
+    }
+
+    pub fn with_embedding_model(mut self, model: String) -> Self {
+        self.embedding_model = model;
         self
     }
 

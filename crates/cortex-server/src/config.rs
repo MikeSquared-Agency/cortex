@@ -333,7 +333,13 @@ impl CortexConfig {
             .with_interval(Duration::from_secs(self.auto_linker.interval_seconds))
             .with_similarity(
                 SimilarityConfig::new()
-                    .with_auto_link_threshold(self.auto_linker.similarity_threshold),
+                    .with_auto_link_threshold(self.auto_linker.similarity_threshold)
+                    .with_dedup_threshold(self.auto_linker.dedup_threshold),
             )
+            .with_decay(
+                cortex_core::DecayConfig::new()
+                    .with_daily_decay_rate(self.auto_linker.decay_rate_per_day),
+            )
+            .with_embedding_model(self.embedding.model.clone())
     }
 }
