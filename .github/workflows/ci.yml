@@ -18,7 +18,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install protobuf compiler
-        run: sudo apt-get install -y protobuf-compiler
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "28.x"
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -72,13 +74,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install protobuf compiler (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get install -y protobuf-compiler
-
-      - name: Install protobuf compiler (macOS)
-        if: runner.os == 'macOS'
-        run: brew install protobuf
+      - name: Install protobuf compiler
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "28.x"
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
