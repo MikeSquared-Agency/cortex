@@ -58,7 +58,10 @@ pub fn create_router(state: AppState) -> Router {
         .route("/metrics", get(metrics_handler))
         .route("/stats", get(stats))
         .route("/nodes", get(list_nodes).post(create_node))
-        .route("/nodes/:id", get(get_node).delete(delete_node).patch(patch_node))
+        .route(
+            "/nodes/:id",
+            get(get_node).delete(delete_node).patch(patch_node),
+        )
         .route("/nodes/:id/neighbors", get(node_neighbors))
         .route("/edges", post(create_edge))
         .route("/edges/:id", get(get_edge))
@@ -77,8 +80,14 @@ pub fn create_router(state: AppState) -> Router {
         )
         .route("/agents/:name/resolved-prompt", get(resolved_prompt))
         // Semantic-aware prompt selection (issue #22)
-        .route("/agents/:name/active-variant", get(selection::active_variant))
-        .route("/agents/:name/variant-history", get(selection::variant_history))
+        .route(
+            "/agents/:name/active-variant",
+            get(selection::active_variant),
+        )
+        .route(
+            "/agents/:name/variant-history",
+            get(selection::variant_history),
+        )
         .route("/agents/:name/observe", post(selection::record_observation))
         // Prompt versioning + inheritance API
         .route(
@@ -90,13 +99,25 @@ pub fn create_router(state: AppState) -> Router {
             "/prompts/:slug/versions",
             get(prompts::list_versions).post(prompts::create_version),
         )
-        .route("/prompts/:slug/versions/:version", get(prompts::get_version))
+        .route(
+            "/prompts/:slug/versions/:version",
+            get(prompts::get_version),
+        )
         .route("/prompts/:slug/branch", post(prompts::create_branch))
-        .route("/prompts/:slug/performance", get(selection::prompt_performance))
+        .route(
+            "/prompts/:slug/performance",
+            get(selection::prompt_performance),
+        )
         // Automatic rollback on performance degradation (issue #23)
         .route("/prompts/:slug/deploy", post(rollback::deploy_prompt))
-        .route("/prompts/:slug/rollback-status", get(rollback::rollback_status))
-        .route("/prompts/:slug/unquarantine", post(rollback::unquarantine_prompt))
+        .route(
+            "/prompts/:slug/rollback-status",
+            get(rollback::rollback_status),
+        )
+        .route(
+            "/prompts/:slug/unquarantine",
+            post(rollback::unquarantine_prompt),
+        )
         .route(
             "/prompts/:slug/versions/:version/performance",
             get(selection::version_performance),
@@ -166,12 +187,16 @@ async fn metrics_handler(State(state): State<AppState>) -> impl IntoResponse {
         m.edge_count.set(stats.edge_count as i64);
         for (kind, count) in stats.node_counts_by_kind {
             m.nodes_by_kind
-                .get_or_create(&KindLabel { kind: format!("{:?}", kind) })
+                .get_or_create(&KindLabel {
+                    kind: format!("{:?}", kind),
+                })
                 .set(count as i64);
         }
         for (relation, count) in stats.edge_counts_by_relation {
             m.edges_by_relation
-                .get_or_create(&RelationLabel { relation: format!("{:?}", relation) })
+                .get_or_create(&RelationLabel {
+                    relation: format!("{:?}", relation),
+                })
                 .set(count as i64);
         }
     }
@@ -189,14 +214,18 @@ async fn metrics_handler(State(state): State<AppState>) -> impl IntoResponse {
     }
 
     // Uptime
-    m.uptime_seconds.set(state.start_time.elapsed().as_secs() as i64);
+    m.uptime_seconds
+        .set(state.start_time.elapsed().as_secs() as i64);
 
     let mut output = String::new();
     prometheus_client::encoding::text::encode(&mut output, &m.registry).unwrap_or_default();
 
     (
         StatusCode::OK,
-        [(header::CONTENT_TYPE, "text/plain; version=0.0.4; charset=utf-8")],
+        [(
+            header::CONTENT_TYPE,
+            "text/plain; version=0.0.4; charset=utf-8",
+        )],
         output,
     )
 }
@@ -350,10 +379,7 @@ async fn create_node(
     // ── Write gate ────────────────────────────────────────────────────────────
     let gate_config = &state.write_gate;
     let gate_skipped = query.gate.as_deref() == Some("skip")
-        && headers
-            .get("x-gate-override")
-            .and_then(|v| v.to_str().ok())
-            == Some("true");
+        && headers.get("x-gate-override").and_then(|v| v.to_str().ok()) == Some("true");
 
     if gate_config.enabled && !gate_skipped {
         // Check 1: Substance
@@ -361,7 +387,9 @@ async fn create_node(
             state
                 .metrics
                 .gate_rejected
-                .get_or_create(&GateCheckLabel { check: r.check.to_string() })
+                .get_or_create(&GateCheckLabel {
+                    check: r.check.to_string(),
+                })
                 .inc();
             return Ok(gate_rejection_response(r));
         }
@@ -371,7 +399,9 @@ async fn create_node(
             state
                 .metrics
                 .gate_rejected
-                .get_or_create(&GateCheckLabel { check: r.check.to_string() })
+                .get_or_create(&GateCheckLabel {
+                    check: r.check.to_string(),
+                })
                 .inc();
             return Ok(gate_rejection_response(r));
         }
@@ -390,7 +420,9 @@ async fn create_node(
                 state
                     .metrics
                     .gate_rejected
-                    .get_or_create(&GateCheckLabel { check: r.check.to_string() })
+                    .get_or_create(&GateCheckLabel {
+                        check: r.check.to_string(),
+                    })
                     .inc();
                 return Ok(gate_rejection_response(r));
             }
@@ -571,12 +603,16 @@ async fn hybrid_search(
     state
         .metrics
         .search_requests
-        .get_or_create(&EndpointLabel { endpoint: "hybrid".into() })
+        .get_or_create(&EndpointLabel {
+            endpoint: "hybrid".into(),
+        })
         .inc();
     state
         .metrics
         .search_duration
-        .get_or_create(&EndpointLabel { endpoint: "hybrid".into() })
+        .get_or_create(&EndpointLabel {
+            endpoint: "hybrid".into(),
+        })
         .observe(t.elapsed().as_secs_f64());
 
     // Fire-and-forget access recording.
@@ -598,7 +634,6 @@ async fn hybrid_search(
 
     Ok(Json(JsonResponse::ok(results)))
 }
-
 
 async fn delete_node(
     State(state): State<AppState>,
@@ -633,7 +668,9 @@ async fn patch_node(
     Json(patch): Json<PatchNodeBody>,
 ) -> AppResult<impl IntoResponse> {
     let node_id: uuid::Uuid = id.parse().map_err(|_| anyhow::anyhow!("Invalid UUID"))?;
-    let mut node = state.storage.get_node(node_id)?
+    let mut node = state
+        .storage
+        .get_node(node_id)?
         .ok_or_else(|| anyhow::anyhow!("Node not found"))?;
 
     if let Some(kind_str) = &patch.kind {
@@ -863,12 +900,16 @@ async fn search(
     state
         .metrics
         .search_requests
-        .get_or_create(&EndpointLabel { endpoint: "vector".into() })
+        .get_or_create(&EndpointLabel {
+            endpoint: "vector".into(),
+        })
         .inc();
     state
         .metrics
         .search_duration
-        .get_or_create(&EndpointLabel { endpoint: "vector".into() })
+        .get_or_create(&EndpointLabel {
+            endpoint: "vector".into(),
+        })
         .observe(t.elapsed().as_secs_f64());
 
     // Fire-and-forget: record access for every node returned.
@@ -1091,7 +1132,11 @@ async fn list_agent_prompts(
         })
         .collect();
 
-    bindings.sort_by(|a, b| b.weight.partial_cmp(&a.weight).unwrap_or(std::cmp::Ordering::Equal));
+    bindings.sort_by(|a, b| {
+        b.weight
+            .partial_cmp(&a.weight)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     Ok(Json(JsonResponse::ok(bindings)))
 }
@@ -1111,11 +1156,19 @@ async fn bind_prompt(
     let prompt_kind = cortex_core::kinds::defaults::prompt();
     let uses_rel = cortex_core::relations::defaults::uses();
 
-    let agent = super::find_by_title(&state.storage, &agent_kind, &name)?
-        .ok_or_else(|| anyhow::anyhow!("Agent '{}' not found. Create it first via POST /nodes with kind=agent.", name))?;
+    let agent = super::find_by_title(&state.storage, &agent_kind, &name)?.ok_or_else(|| {
+        anyhow::anyhow!(
+            "Agent '{}' not found. Create it first via POST /nodes with kind=agent.",
+            name
+        )
+    })?;
 
-    let prompt = super::find_by_title(&state.storage, &prompt_kind, &slug)?
-        .ok_or_else(|| anyhow::anyhow!("Prompt '{}' not found. Create it first via POST /nodes with kind=prompt.", slug))?;
+    let prompt = super::find_by_title(&state.storage, &prompt_kind, &slug)?.ok_or_else(|| {
+        anyhow::anyhow!(
+            "Prompt '{}' not found. Create it first via POST /nodes with kind=prompt.",
+            slug
+        )
+    })?;
 
     let weight = body.weight.unwrap_or(1.0).clamp(0.0, 1.0);
 
@@ -1164,10 +1217,7 @@ async fn unbind_prompt(
         .ok_or_else(|| anyhow::anyhow!("Prompt '{}' not found", slug))?;
 
     let existing = state.storage.edges_between(agent.id, prompt.id)?;
-    let to_delete: Vec<_> = existing
-        .iter()
-        .filter(|e| e.relation == uses_rel)
-        .collect();
+    let to_delete: Vec<_> = existing.iter().filter(|e| e.relation == uses_rel).collect();
 
     if to_delete.is_empty() {
         return Err(anyhow::anyhow!(
@@ -1224,8 +1274,11 @@ async fn resolved_prompt(
         })
         .collect();
 
-    prompt_pairs
-        .sort_by(|a, b| b.0.weight.partial_cmp(&a.0.weight).unwrap_or(std::cmp::Ordering::Equal));
+    prompt_pairs.sort_by(|a, b| {
+        b.0.weight
+            .partial_cmp(&a.0.weight)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     let bindings: Vec<PromptBinding> = prompt_pairs
         .iter()
@@ -1243,7 +1296,10 @@ async fn resolved_prompt(
         if i == 0 {
             resolved.push_str(&format!("# {}\n\n", prompt.data.title));
         } else {
-            resolved.push_str(&format!("\n\n---\n\n# {} (overlay, weight: {:.2})\n\n", prompt.data.title, edge.weight));
+            resolved.push_str(&format!(
+                "\n\n---\n\n# {} (overlay, weight: {:.2})\n\n",
+                prompt.data.title, edge.weight
+            ));
         }
         resolved.push_str(&prompt.data.body);
     }

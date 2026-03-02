@@ -33,7 +33,9 @@ pub async fn check(
         None => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(JsonResponse::<()>::err("Auth enabled but no token configured")),
+                Json(JsonResponse::<()>::err(
+                    "Auth enabled but no token configured",
+                )),
             )
                 .into_response();
         }
@@ -45,7 +47,10 @@ pub async fn check(
             if value.starts_with("Bearer ") && &value[7..] == expected {
                 next.run(req).await
             } else {
-                (StatusCode::UNAUTHORIZED, Json(JsonResponse::<()>::err("Invalid token")))
+                (
+                    StatusCode::UNAUTHORIZED,
+                    Json(JsonResponse::<()>::err("Invalid token")),
+                )
                     .into_response()
             }
         }

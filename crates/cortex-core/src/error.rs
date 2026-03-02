@@ -6,7 +6,7 @@ pub type Result<T> = std::result::Result<T, CortexError>;
 #[derive(Debug, Error)]
 pub enum CortexError {
     #[error("Storage error: {0}")]
-    Storage(#[from] redb::Error),
+    Storage(Box<redb::Error>),
 
     #[error("Database error: {0}")]
     Database(#[from] redb::DatabaseError),
@@ -15,7 +15,7 @@ pub enum CortexError {
     Table(#[from] redb::TableError),
 
     #[error("Transaction error: {0}")]
-    Transaction(#[from] redb::TransactionError),
+    Transaction(Box<redb::TransactionError>),
 
     #[error("Commit error: {0}")]
     Commit(#[from] redb::CommitError),
@@ -47,4 +47,16 @@ pub enum CortexError {
 
     #[error("Validation error: {0}")]
     Validation(String),
+}
+
+impl From<redb::Error> for CortexError {
+    fn from(e: redb::Error) -> Self {
+        CortexError::Storage(Box::new(e))
+    }
+}
+
+impl From<redb::TransactionError> for CortexError {
+    fn from(e: redb::TransactionError) -> Self {
+        CortexError::Transaction(Box::new(e))
+    }
 }

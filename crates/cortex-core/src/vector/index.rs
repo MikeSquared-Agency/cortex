@@ -252,7 +252,7 @@ impl HnswIndex {
 
     /// Convert distance to similarity score
     fn distance_to_similarity(distance: f32) -> f32 {
-        (1.0 - distance).max(0.0).min(1.0)
+        (1.0 - distance).clamp(0.0, 1.0)
     }
 
     /// Brute-force fallback search when HNSW index hasn't been built yet

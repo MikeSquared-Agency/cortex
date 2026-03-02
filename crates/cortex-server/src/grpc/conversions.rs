@@ -54,8 +54,7 @@ pub fn datetime_to_timestamp(dt: chrono::DateTime<chrono::Utc>) -> Timestamp {
 
 /// Convert protobuf Timestamp to chrono DateTime
 pub fn timestamp_to_datetime(ts: Timestamp) -> chrono::DateTime<chrono::Utc> {
-    chrono::DateTime::from_timestamp(ts.seconds, ts.nanos as u32)
-        .unwrap_or_else(|| chrono::Utc::now())
+    chrono::DateTime::from_timestamp(ts.seconds, ts.nanos as u32).unwrap_or_else(chrono::Utc::now)
 }
 
 /// Parse NodeKind from string. Accepts any valid NodeKind format (lowercase, alphanumeric, hyphens).

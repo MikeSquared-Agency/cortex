@@ -40,21 +40,22 @@ async fn list(_args: AgentListArgs, base: &str) -> Result<()> {
     // List all nodes of kind=agent via the nodes API
     let client = reqwest::Client::new();
     let url = format!("{}/nodes?kind=agent&limit=100", base);
-    let resp = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e))?;
+    let resp =
+        client.get(&url).send().await.map_err(|e| {
+            anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e)
+        })?;
 
     let body: serde_json::Value = resp.json().await?;
     let nodes = body["data"].as_array().cloned().unwrap_or_default();
 
     if nodes.is_empty() {
-        println!("(no agents found — create one via `cortex node create --kind agent --title <name>`)");
+        println!(
+            "(no agents found — create one via `cortex node create --kind agent --title <name>`)"
+        );
         return Ok(());
     }
 
-    println!("{:<36}  {:<20}  {}", "ID", "NAME", "TAGS");
+    println!("{:<36}  {:<20}  TAGS", "ID", "NAME");
     println!("{}", "─".repeat(70));
     for node in &nodes {
         let id = node["id"].as_str().unwrap_or("-");
@@ -72,11 +73,10 @@ async fn list(_args: AgentListArgs, base: &str) -> Result<()> {
 async fn show(args: AgentShowArgs, base: &str) -> Result<()> {
     let client = reqwest::Client::new();
     let url = format!("{}/agents/{}/prompts", base, args.name);
-    let resp = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e))?;
+    let resp =
+        client.get(&url).send().await.map_err(|e| {
+            anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e)
+        })?;
 
     if !resp.status().is_success() {
         let body: serde_json::Value = resp.json().await?;
@@ -98,7 +98,10 @@ async fn show(args: AgentShowArgs, base: &str) -> Result<()> {
     }
 
     println!("Prompts bound to agent '{}':", args.name);
-    println!("{:<6}  {:<30}  {:<36}  {}", "WEIGHT", "SLUG", "NODE ID", "EDGE ID");
+    println!(
+        "{:<6}  {:<30}  {:<36}  EDGE ID",
+        "WEIGHT", "SLUG", "NODE ID"
+    );
     println!("{}", "─".repeat(90));
     for b in &bindings {
         println!(
@@ -150,11 +153,10 @@ async fn bind(args: AgentBindArgs, base: &str) -> Result<()> {
 async fn unbind(args: AgentUnbindArgs, base: &str) -> Result<()> {
     let client = reqwest::Client::new();
     let url = format!("{}/agents/{}/prompts/{}", base, args.name, args.slug);
-    let resp = client
-        .delete(&url)
-        .send()
-        .await
-        .map_err(|e| anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e))?;
+    let resp =
+        client.delete(&url).send().await.map_err(|e| {
+            anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e)
+        })?;
 
     if !resp.status().is_success() {
         let body: serde_json::Value = resp.json().await?;
@@ -170,11 +172,10 @@ async fn unbind(args: AgentUnbindArgs, base: &str) -> Result<()> {
 async fn resolve(args: AgentResolveArgs, base: &str) -> Result<()> {
     let client = reqwest::Client::new();
     let url = format!("{}/agents/{}/resolved-prompt", base, args.name);
-    let resp = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e))?;
+    let resp =
+        client.get(&url).send().await.map_err(|e| {
+            anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e)
+        })?;
 
     if !resp.status().is_success() {
         let body: serde_json::Value = resp.json().await?;
@@ -214,11 +215,10 @@ async fn select(args: AgentSelectArgs, base: &str) -> Result<()> {
         args.energy,
         args.epsilon,
     );
-    let resp = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e))?;
+    let resp =
+        client.get(&url).send().await.map_err(|e| {
+            anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e)
+        })?;
 
     if !resp.status().is_success() {
         let body: serde_json::Value = resp.json().await?;
@@ -253,7 +253,7 @@ async fn select(args: AgentSelectArgs, base: &str) -> Result<()> {
         if let Some(all) = data["all_variants"].as_array() {
             if all.len() > 1 {
                 println!();
-                println!("{:<30}  {:<8}  {:<8}  {}", "SLUG", "EDGE", "CTX", "TOTAL");
+                println!("{:<30}  {:<8}  {:<8}  TOTAL", "SLUG", "EDGE", "CTX");
                 println!("{}", "─".repeat(60));
                 for v in all {
                     println!(
@@ -275,12 +275,14 @@ async fn select(args: AgentSelectArgs, base: &str) -> Result<()> {
 
 async fn history(args: AgentHistoryArgs, base: &str) -> Result<()> {
     let client = reqwest::Client::new();
-    let url = format!("{}/agents/{}/variant-history?limit={}", base, args.name, args.limit);
-    let resp = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e))?;
+    let url = format!(
+        "{}/agents/{}/variant-history?limit={}",
+        base, args.name, args.limit
+    );
+    let resp =
+        client.get(&url).send().await.map_err(|e| {
+            anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e)
+        })?;
 
     if !resp.status().is_success() {
         let body: serde_json::Value = resp.json().await?;
@@ -301,7 +303,10 @@ async fn history(args: AgentHistoryArgs, base: &str) -> Result<()> {
         return Ok(());
     }
 
-    println!("{:<10}  {:<30}  {:<8}  {:<10}  {}", "TYPE", "VARIANT", "SCORE", "OUTCOME", "TIMESTAMP");
+    println!(
+        "{:<10}  {:<30}  {:<8}  {:<10}  TIMESTAMP",
+        "TYPE", "VARIANT", "SCORE", "OUTCOME"
+    );
     println!("{}", "─".repeat(80));
     for item in &items {
         let obs_type = item["type"].as_str().unwrap_or("?");
@@ -315,7 +320,10 @@ async fn history(args: AgentHistoryArgs, base: &str) -> Result<()> {
             .unwrap_or_else(|| "-".into());
         let outcome = item["task_outcome"].as_str().unwrap_or("-");
         let ts = item["created_at"].as_str().unwrap_or("-");
-        println!("{:<10}  {:<30}  {:<8}  {:<10}  {}", obs_type, slug, score, outcome, ts);
+        println!(
+            "{:<10}  {:<30}  {:<8}  {:<10}  {}",
+            obs_type, slug, score, outcome, ts
+        );
     }
 
     Ok(())
@@ -336,12 +344,10 @@ async fn observe(args: AgentObserveArgs, base: &str) -> Result<()> {
         payload["token_cost"] = serde_json::json!(tc);
     }
 
-    let resp = client
-        .post(&url)
-        .json(&payload)
-        .send()
-        .await
-        .map_err(|e| anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e))?;
+    let resp =
+        client.post(&url).json(&payload).send().await.map_err(|e| {
+            anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e)
+        })?;
 
     if !resp.status().is_success() {
         let body: serde_json::Value = resp.json().await?;
@@ -353,9 +359,18 @@ async fn observe(args: AgentObserveArgs, base: &str) -> Result<()> {
     let data = &body["data"];
 
     println!("Observation recorded for agent '{}':", args.name);
-    println!("  Observation ID:   {}", data["observation_id"].as_str().unwrap_or("-"));
-    println!("  Variant:          {}", data["variant_slug"].as_str().unwrap_or("-"));
-    println!("  Score:            {:.3}", data["observation_score"].as_f64().unwrap_or(0.0));
+    println!(
+        "  Observation ID:   {}",
+        data["observation_id"].as_str().unwrap_or("-")
+    );
+    println!(
+        "  Variant:          {}",
+        data["variant_slug"].as_str().unwrap_or("-")
+    );
+    println!(
+        "  Score:            {:.3}",
+        data["observation_score"].as_f64().unwrap_or(0.0)
+    );
     println!(
         "  Edge weight:      {:.3} → {:.3}",
         data["old_edge_weight"].as_f64().unwrap_or(0.0),

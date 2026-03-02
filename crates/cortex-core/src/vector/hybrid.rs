@@ -88,6 +88,9 @@ pub struct HybridResult {
     pub nearest_anchor: Option<(NodeId, u32)>, // Closest anchor and depth
 }
 
+/// (score, nearest_anchor_id, depth_to_anchor)
+type ProximityEntry = (f32, Option<NodeId>, u32);
+
 /// Hybrid search combining vector similarity and graph proximity
 pub struct HybridSearch<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> {
     storage: Arc<S>,
@@ -187,7 +190,7 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> HybridSear
         &self,
         anchors: &[NodeId],
         max_depth: u32,
-    ) -> Result<HashMap<NodeId, (f32, Option<NodeId>, u32)>> {
+    ) -> Result<HashMap<NodeId, ProximityEntry>> {
         let mut proximity_scores = HashMap::new();
 
         for anchor_id in anchors {

@@ -604,7 +604,7 @@ pub fn print_node_table(nodes: &[cortex_proto::NodeResponse]) {
         println!("(no results)");
         return;
     }
-    println!("{:<36}  {:<12}  {:<6}  {}", "ID", "KIND", "IMP", "TITLE");
+    println!("{:<36}  {:<12}  {:<6}  TITLE", "ID", "KIND", "IMP");
     println!("{}", "─".repeat(80));
     for n in nodes {
         let title = truncate(&n.title, 40);

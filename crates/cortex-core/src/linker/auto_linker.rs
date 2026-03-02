@@ -13,6 +13,8 @@ use std::time::Instant;
 
 const CURSOR_KEY: &str = "auto_linker_cursor";
 const CYCLE_COUNT_KEY: &str = "auto_linker_cycle_count";
+const LAST_THRESHOLD_KEY: &str = "auto_linker_last_threshold";
+const LAST_MODEL_KEY: &str = "auto_linker_last_model";
 
 /// Auto-linker: Background process for self-growing graph
 pub struct AutoLinker<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> {
@@ -86,8 +88,8 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
         match storage.get_metadata(CURSOR_KEY)? {
             Some(bytes) => {
                 let timestamp: i64 = bincode::deserialize(&bytes)
-                    .map_err(|e| crate::error::CortexError::Serialization(e))?;
-                Ok(DateTime::from_timestamp(timestamp, 0).unwrap_or_else(|| Utc::now()))
+                    .map_err(crate::error::CortexError::Serialization)?;
+                Ok(DateTime::from_timestamp(timestamp, 0).unwrap_or_else(Utc::now))
             }
             None => {
                 // Default: 24 hours ago
@@ -99,16 +101,17 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
     /// Save cursor to persistent storage
     fn save_cursor(&self) -> Result<()> {
         let timestamp = self.cursor.timestamp();
-        let bytes = bincode::serialize(&timestamp)
-            .map_err(|e| crate::error::CortexError::Serialization(e))?;
+        let bytes =
+            bincode::serialize(&timestamp).map_err(crate::error::CortexError::Serialization)?;
         self.storage.put_metadata(CURSOR_KEY, &bytes)
     }
 
     /// Load cycle count from persistent storage
     fn load_cycle_count(storage: &Arc<S>) -> Result<u64> {
         match storage.get_metadata(CYCLE_COUNT_KEY)? {
-            Some(bytes) => bincode::deserialize(&bytes)
-                .map_err(|e| crate::error::CortexError::Serialization(e)),
+            Some(bytes) => {
+                bincode::deserialize(&bytes).map_err(crate::error::CortexError::Serialization)
+            }
             None => Ok(0),
         }
     }
@@ -116,8 +119,58 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
     /// Save cycle count to persistent storage
     fn save_cycle_count(&self) -> Result<()> {
         let bytes = bincode::serialize(&self.cycle_count)
-            .map_err(|e| crate::error::CortexError::Serialization(e))?;
+            .map_err(crate::error::CortexError::Serialization)?;
         self.storage.put_metadata(CYCLE_COUNT_KEY, &bytes)
+    }
+
+    /// Detect changes to similarity_threshold or embedding_model since last run.
+    /// If either changed, reset the cursor to epoch so all nodes are re-scanned
+    /// against their ANN neighbors with the new parameters.
+    fn check_config_change(&mut self) -> Result<()> {
+        let current_threshold = self.config.similarity.auto_link_threshold;
+        let current_model = &self.config.embedding_model;
+
+        // Load previously stored values
+        let stored_threshold: Option<f32> = self
+            .storage
+            .get_metadata(LAST_THRESHOLD_KEY)?
+            .and_then(|bytes| bincode::deserialize(&bytes).ok());
+        let stored_model: Option<String> = self
+            .storage
+            .get_metadata(LAST_MODEL_KEY)?
+            .and_then(|bytes| bincode::deserialize(&bytes).ok());
+
+        let threshold_changed = stored_threshold
+            .map(|st| (st - current_threshold).abs() > f32::EPSILON)
+            .unwrap_or(false); // First run: no stored value, no reset needed
+        let model_changed = stored_model
+            .as_ref()
+            .map(|sm| sm != current_model)
+            .unwrap_or(false); // First run: no stored value, no reset needed
+
+        if threshold_changed || model_changed {
+            log::info!(
+                "Config change detected (threshold: {:?} → {}, model: {:?} → {}). Resetting linker cursor.",
+                stored_threshold,
+                current_threshold,
+                stored_model,
+                current_model,
+            );
+            self.cursor = DateTime::<Utc>::UNIX_EPOCH;
+            self.metrics.update_cursor(self.cursor);
+        }
+
+        // Always persist current values so next cycle can compare
+        let threshold_bytes = bincode::serialize(&current_threshold)
+            .map_err(crate::error::CortexError::Serialization)?;
+        self.storage
+            .put_metadata(LAST_THRESHOLD_KEY, &threshold_bytes)?;
+
+        let model_bytes =
+            bincode::serialize(current_model).map_err(crate::error::CortexError::Serialization)?;
+        self.storage.put_metadata(LAST_MODEL_KEY, &model_bytes)?;
+
+        Ok(())
     }
 
     /// Run a single processing cycle
@@ -127,10 +180,17 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
 
         let now = Utc::now();
 
+        // 0. Config/model change detection — reset cursor if params changed
+        self.check_config_change()?;
+
         // 1. Scan for new/updated nodes since cursor
         let new_nodes = self.get_nodes_since_cursor()?;
 
-        if new_nodes.is_empty() && self.cycle_count % self.config.decay_every_n_cycles != 0 {
+        if new_nodes.is_empty()
+            && !self
+                .cycle_count
+                .is_multiple_of(self.config.decay_every_n_cycles)
+        {
             // Nothing to do this cycle
             self.metrics.set_cycle_duration(start.elapsed());
             return Ok(());
@@ -236,14 +296,20 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
         }
 
         // 4. Decay pass (periodic)
-        if self.cycle_count % self.config.decay_every_n_cycles == 0 {
+        if self
+            .cycle_count
+            .is_multiple_of(self.config.decay_every_n_cycles)
+        {
             let (pruned, deleted) = self.decay_engine.apply_decay(now)?;
             self.metrics.add_edges_pruned(pruned);
             self.metrics.add_edges_deleted(deleted);
         }
 
         // 5. Dedup scan (periodic)
-        if self.cycle_count % self.config.dedup_every_n_cycles == 0 {
+        if self
+            .cycle_count
+            .is_multiple_of(self.config.dedup_every_n_cycles)
+        {
             let dedup_scanner = DedupScanner::new(
                 self.storage.clone(),
                 self.vector_index.clone(),
@@ -494,5 +560,156 @@ mod tests {
 
         // Cursors should match (at second precision, since we serialize as i64 seconds)
         assert_eq!(cursor1.timestamp(), cursor2.timestamp());
+    }
+
+    #[test]
+    fn test_config_change_resets_cursor() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("config_change_test.redb");
+        let storage = Arc::new(RedbStorage::open(&db_path).unwrap());
+
+        let embedding_service = Arc::new(FastEmbedService::new().unwrap());
+        let vector_index = Arc::new(RwLock::new(HnswIndex::new(384)));
+        let graph_engine = Arc::new(GraphEngineImpl::new(storage.clone()));
+
+        let config = AutoLinkerConfig::new()
+            .with_similarity(SimilarityConfig::new().with_auto_link_threshold(0.75));
+
+        let mut linker = AutoLinker::new(
+            storage.clone(),
+            graph_engine.clone(),
+            vector_index.clone(),
+            embedding_service.clone(),
+            config,
+        )
+        .unwrap();
+
+        // Run check_config_change once to persist initial config values
+        linker.check_config_change().unwrap();
+
+        // Manually advance cursor to simulate work done
+        linker.cursor = Utc::now();
+        linker.save_cursor().unwrap();
+        let advanced_cursor = linker.cursor.timestamp();
+
+        // Create a new linker with a DIFFERENT threshold
+        let new_config = AutoLinkerConfig::new()
+            .with_similarity(SimilarityConfig::new().with_auto_link_threshold(0.80));
+
+        let mut linker2 = AutoLinker::new(
+            storage.clone(),
+            graph_engine.clone(),
+            vector_index.clone(),
+            embedding_service.clone(),
+            new_config,
+        )
+        .unwrap();
+
+        // Manually set cursor to the advanced position
+        linker2.cursor = DateTime::from_timestamp(advanced_cursor, 0).unwrap();
+
+        // Config change should reset cursor to epoch
+        linker2.check_config_change().unwrap();
+        assert_eq!(
+            linker2.cursor.timestamp(),
+            DateTime::<Utc>::UNIX_EPOCH.timestamp(),
+            "Threshold change should reset cursor to epoch"
+        );
+    }
+
+    #[test]
+    fn test_unchanged_config_preserves_cursor() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("no_config_change_test.redb");
+        let storage = Arc::new(RedbStorage::open(&db_path).unwrap());
+
+        let embedding_service = Arc::new(FastEmbedService::new().unwrap());
+        let vector_index = Arc::new(RwLock::new(HnswIndex::new(384)));
+        let graph_engine = Arc::new(GraphEngineImpl::new(storage.clone()));
+
+        let config = AutoLinkerConfig::new()
+            .with_similarity(SimilarityConfig::new().with_auto_link_threshold(0.75));
+
+        let mut linker = AutoLinker::new(
+            storage.clone(),
+            graph_engine.clone(),
+            vector_index.clone(),
+            embedding_service.clone(),
+            config.clone(),
+        )
+        .unwrap();
+
+        // Persist initial config
+        linker.check_config_change().unwrap();
+
+        // Advance cursor
+        linker.cursor = Utc::now();
+        let advanced_ts = linker.cursor.timestamp();
+
+        // Create new linker with SAME config
+        let mut linker2 = AutoLinker::new(
+            storage.clone(),
+            graph_engine,
+            vector_index,
+            embedding_service,
+            config,
+        )
+        .unwrap();
+        linker2.cursor = DateTime::from_timestamp(advanced_ts, 0).unwrap();
+
+        // No change — cursor should stay
+        linker2.check_config_change().unwrap();
+        assert_eq!(
+            linker2.cursor.timestamp(),
+            advanced_ts,
+            "Unchanged config should not reset cursor"
+        );
+    }
+
+    #[test]
+    fn test_model_change_resets_cursor() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("model_change_test.redb");
+        let storage = Arc::new(RedbStorage::open(&db_path).unwrap());
+
+        let embedding_service = Arc::new(FastEmbedService::new().unwrap());
+        let vector_index = Arc::new(RwLock::new(HnswIndex::new(384)));
+        let graph_engine = Arc::new(GraphEngineImpl::new(storage.clone()));
+
+        let config = AutoLinkerConfig::new().with_embedding_model("BAAI/bge-small-en-v1.5".into());
+
+        let mut linker = AutoLinker::new(
+            storage.clone(),
+            graph_engine.clone(),
+            vector_index.clone(),
+            embedding_service.clone(),
+            config,
+        )
+        .unwrap();
+
+        linker.check_config_change().unwrap();
+        linker.cursor = Utc::now();
+        let advanced_ts = linker.cursor.timestamp();
+
+        // New linker with different model
+        let new_config =
+            AutoLinkerConfig::new().with_embedding_model("BAAI/bge-large-en-v1.5".into());
+
+        let mut linker2 = AutoLinker::new(
+            storage.clone(),
+            graph_engine,
+            vector_index,
+            embedding_service,
+            new_config,
+        )
+        .unwrap();
+        linker2.cursor = DateTime::from_timestamp(advanced_ts, 0).unwrap();
+
+        linker2.check_config_change().unwrap();
+        assert_eq!(
+            linker2.cursor.timestamp(),
+            DateTime::<Utc>::UNIX_EPOCH.timestamp(),
+            "Model change should reset cursor to epoch"
+        );
     }
 }

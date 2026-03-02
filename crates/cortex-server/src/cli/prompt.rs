@@ -51,7 +51,10 @@ async fn list(args: PromptListArgs, config: &CortexConfig) -> Result<()> {
     match args.format.as_str() {
         "json" => println!("{}", serde_json::to_string_pretty(&prompts)?),
         _ => {
-            println!("{:<30}  {:<12}  {:<14}  {:<5}  {}", "SLUG", "TYPE", "BRANCH", "VER", "NODE ID");
+            println!(
+                "{:<30}  {:<12}  {:<14}  {:<5}  NODE ID",
+                "SLUG", "TYPE", "BRANCH", "VER"
+            );
             println!("{}", "─".repeat(100));
             for p in &prompts {
                 println!(
@@ -95,14 +98,15 @@ async fn get(args: PromptGetArgs, config: &CortexConfig) -> Result<()> {
     } else {
         let node = resolver
             .find_head(&args.slug, branch)?
-            .ok_or_else(|| {
-                anyhow::anyhow!("Prompt '{}@{}' not found", args.slug, branch)
-            })?;
+            .ok_or_else(|| anyhow::anyhow!("Prompt '{}@{}' not found", args.slug, branch))?;
         let resolved = resolver.resolve(&node)?;
         match args.format.as_str() {
             "json" => println!("{}", serde_json::to_string_pretty(&resolved)?),
             _ => {
-                println!("Prompt: {}@{}/v{}", resolved.slug, resolved.branch, resolved.version);
+                println!(
+                    "Prompt: {}@{}/v{}",
+                    resolved.slug, resolved.branch, resolved.version
+                );
                 println!("Type:   {}", resolved.prompt_type);
                 println!("Node:   {}", resolved.node_id);
                 if !resolved.lineage.is_empty() {
@@ -163,12 +167,14 @@ fn http_base(server: &str) -> String {
 async fn performance(args: PromptPerformanceArgs, server: &str) -> Result<()> {
     let base = http_base(server);
     let client = reqwest::Client::new();
-    let url = format!("{}/prompts/{}/performance?limit={}", base, args.slug, args.limit);
-    let resp = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e))?;
+    let url = format!(
+        "{}/prompts/{}/performance?limit={}",
+        base, args.slug, args.limit
+    );
+    let resp =
+        client.get(&url).send().await.map_err(|e| {
+            anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e)
+        })?;
 
     if !resp.status().is_success() {
         let body: serde_json::Value = resp.json().await?;
@@ -185,10 +191,22 @@ async fn performance(args: PromptPerformanceArgs, server: &str) -> Result<()> {
     }
 
     println!("Performance for prompt '{}':", args.slug);
-    println!("  Observations: {}", data["observation_count"].as_u64().unwrap_or(0));
-    println!("  Avg score:    {:.3}", data["avg_score"].as_f64().unwrap_or(0.0));
-    println!("  Avg sentiment:{:.3}", data["avg_sentiment"].as_f64().unwrap_or(0.0));
-    println!("  Avg corrs:    {:.1}", data["avg_correction_count"].as_f64().unwrap_or(0.0));
+    println!(
+        "  Observations: {}",
+        data["observation_count"].as_u64().unwrap_or(0)
+    );
+    println!(
+        "  Avg score:    {:.3}",
+        data["avg_score"].as_f64().unwrap_or(0.0)
+    );
+    println!(
+        "  Avg sentiment:{:.3}",
+        data["avg_sentiment"].as_f64().unwrap_or(0.0)
+    );
+    println!(
+        "  Avg corrs:    {:.1}",
+        data["avg_correction_count"].as_f64().unwrap_or(0.0)
+    );
 
     if let Some(outcomes) = data["task_outcomes"].as_object() {
         println!("  Outcomes:");
@@ -202,7 +220,10 @@ async fn performance(args: PromptPerformanceArgs, server: &str) -> Result<()> {
     if let Some(obs) = data["observations"].as_array() {
         if !obs.is_empty() {
             println!();
-            println!("{:<8}  {:<10}  {:<8}  {}", "SCORE", "OUTCOME", "CORRS", "TIMESTAMP");
+            println!(
+                "{:<8}  {:<10}  {:<8}  TIMESTAMP",
+                "SCORE", "OUTCOME", "CORRS"
+            );
             println!("{}", "─".repeat(55));
             for o in obs {
                 println!(
@@ -230,12 +251,10 @@ async fn deploy(args: PromptDeployArgs, server: &str) -> Result<()> {
         "agent_name": args.agent_name,
         "baseline_sample_size": args.baseline_sample_size,
     });
-    let resp = client
-        .post(&url)
-        .json(&payload)
-        .send()
-        .await
-        .map_err(|e| anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e))?;
+    let resp =
+        client.post(&url).json(&payload).send().await.map_err(|e| {
+            anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e)
+        })?;
 
     if !resp.status().is_success() {
         let body: serde_json::Value = resp.json().await?;
@@ -250,14 +269,37 @@ async fn deploy(args: PromptDeployArgs, server: &str) -> Result<()> {
         return Ok(());
     }
 
-    println!("Deployment recorded for '{}'@{}/v{}:", args.slug, args.branch, data["version"].as_u64().unwrap_or(0));
-    println!("  Deployment node: {}", data["deployment_node_id"].as_str().unwrap_or("-"));
-    println!("  Prompt node:     {}", data["prompt_node_id"].as_str().unwrap_or("-"));
-    println!("  Baseline corr:   {:.3}", data["baseline_correction_rate"].as_f64().unwrap_or(0.0));
-    println!("  Baseline senti:  {:.3}", data["baseline_sentiment"].as_f64().unwrap_or(0.0));
-    println!("  Baseline sample: {}", data["baseline_sample_size"].as_u64().unwrap_or(0));
+    println!(
+        "Deployment recorded for '{}'@{}/v{}:",
+        args.slug,
+        args.branch,
+        data["version"].as_u64().unwrap_or(0)
+    );
+    println!(
+        "  Deployment node: {}",
+        data["deployment_node_id"].as_str().unwrap_or("-")
+    );
+    println!(
+        "  Prompt node:     {}",
+        data["prompt_node_id"].as_str().unwrap_or("-")
+    );
+    println!(
+        "  Baseline corr:   {:.3}",
+        data["baseline_correction_rate"].as_f64().unwrap_or(0.0)
+    );
+    println!(
+        "  Baseline senti:  {:.3}",
+        data["baseline_sentiment"].as_f64().unwrap_or(0.0)
+    );
+    println!(
+        "  Baseline sample: {}",
+        data["baseline_sample_size"].as_u64().unwrap_or(0)
+    );
     println!();
-    println!("Monitoring window active. Use `cortex prompt rollback-status {}` to check.", args.slug);
+    println!(
+        "Monitoring window active. Use `cortex prompt rollback-status {}` to check.",
+        args.slug
+    );
     Ok(())
 }
 
@@ -266,12 +308,14 @@ async fn deploy(args: PromptDeployArgs, server: &str) -> Result<()> {
 async fn rollback_status(args: PromptRollbackStatusArgs, server: &str) -> Result<()> {
     let base = http_base(server);
     let client = reqwest::Client::new();
-    let url = format!("{}/prompts/{}/rollback-status?branch={}", base, args.slug, args.branch);
-    let resp = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e))?;
+    let url = format!(
+        "{}/prompts/{}/rollback-status?branch={}",
+        base, args.slug, args.branch
+    );
+    let resp =
+        client.get(&url).send().await.map_err(|e| {
+            anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e)
+        })?;
 
     if !resp.status().is_success() {
         let body: serde_json::Value = resp.json().await?;
@@ -288,9 +332,18 @@ async fn rollback_status(args: PromptRollbackStatusArgs, server: &str) -> Result
 
     let quarantined = data["is_quarantined"].as_bool().unwrap_or(false);
     println!("Rollback status for '{}'@{}:", args.slug, args.branch);
-    println!("  Current version: v{}", data["current_version"].as_u64().unwrap_or(0));
-    println!("  Quarantined:     {}", if quarantined { "YES" } else { "no" });
-    println!("  Rollback count:  {}", data["rollback_count"].as_u64().unwrap_or(0));
+    println!(
+        "  Current version: v{}",
+        data["current_version"].as_u64().unwrap_or(0)
+    );
+    println!(
+        "  Quarantined:     {}",
+        if quarantined { "YES" } else { "no" }
+    );
+    println!(
+        "  Rollback count:  {}",
+        data["rollback_count"].as_u64().unwrap_or(0)
+    );
     if let Some(expires) = data["cooldown_expires_at"].as_str() {
         println!("  Cooldown until:  {}", expires);
     }
@@ -298,12 +351,33 @@ async fn rollback_status(args: PromptRollbackStatusArgs, server: &str) -> Result
     if let Some(dep) = data["active_deployment"].as_object() {
         println!();
         println!("  Active monitoring window:");
-        println!("    Observations: {}/{}", dep["n_observed"].as_u64().unwrap_or(0), dep["monitoring_window"].as_u64().unwrap_or(0));
-        println!("    Agent:        {}", dep["agent_name"].as_str().unwrap_or("-"));
-        println!("    Deployed at:  {}", dep["deployed_at"].as_str().unwrap_or("-"));
-        println!("    Mean corr:    {:.3}  (baseline {:.3})", dep["mean_correction"].as_f64().unwrap_or(0.0), dep["baseline_correction_rate"].as_f64().unwrap_or(0.0));
-        println!("    Mean senti:   {:.3}  (baseline {:.3})", dep["mean_sentiment"].as_f64().unwrap_or(0.0), dep["baseline_sentiment"].as_f64().unwrap_or(0.0));
-        println!("    Consec neg:   {}", dep["consecutive_negative"].as_u64().unwrap_or(0));
+        println!(
+            "    Observations: {}/{}",
+            dep["n_observed"].as_u64().unwrap_or(0),
+            dep["monitoring_window"].as_u64().unwrap_or(0)
+        );
+        println!(
+            "    Agent:        {}",
+            dep["agent_name"].as_str().unwrap_or("-")
+        );
+        println!(
+            "    Deployed at:  {}",
+            dep["deployed_at"].as_str().unwrap_or("-")
+        );
+        println!(
+            "    Mean corr:    {:.3}  (baseline {:.3})",
+            dep["mean_correction"].as_f64().unwrap_or(0.0),
+            dep["baseline_correction_rate"].as_f64().unwrap_or(0.0)
+        );
+        println!(
+            "    Mean senti:   {:.3}  (baseline {:.3})",
+            dep["mean_sentiment"].as_f64().unwrap_or(0.0),
+            dep["baseline_sentiment"].as_f64().unwrap_or(0.0)
+        );
+        println!(
+            "    Consec neg:   {}",
+            dep["consecutive_negative"].as_u64().unwrap_or(0)
+        );
     } else {
         println!("  Active monitoring: none");
     }
@@ -312,7 +386,7 @@ async fn rollback_status(args: PromptRollbackStatusArgs, server: &str) -> Result
         if !rollbacks.is_empty() {
             println!();
             println!("  Recent rollbacks:");
-            println!("  {:<8}  {:<8}  {:<30}  {}", "FROM", "TO", "TRIGGER", "TIMESTAMP");
+            println!("  {:<8}  {:<8}  {:<30}  TIMESTAMP", "FROM", "TO", "TRIGGER");
             println!("  {}", "─".repeat(75));
             for r in rollbacks {
                 println!(
@@ -336,12 +410,10 @@ async fn unquarantine(args: PromptUnquarantineArgs, server: &str) -> Result<()> 
     let client = reqwest::Client::new();
     let url = format!("{}/prompts/{}/unquarantine", base, args.slug);
     let payload = serde_json::json!({ "branch": args.branch });
-    let resp = client
-        .post(&url)
-        .json(&payload)
-        .send()
-        .await
-        .map_err(|e| anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e))?;
+    let resp =
+        client.post(&url).json(&payload).send().await.map_err(|e| {
+            anyhow::anyhow!("HTTP request failed: {}. Is `cortex serve` running?", e)
+        })?;
 
     if !resp.status().is_success() {
         let body: serde_json::Value = resp.json().await?;
@@ -419,12 +491,10 @@ fn default_branch() -> String {
 }
 
 async fn migrate(args: PromptMigrateArgs, config: &CortexConfig) -> Result<()> {
-    let raw = std::fs::read_to_string(&args.file).map_err(|e| {
-        anyhow::anyhow!("Cannot read migration file {:?}: {}", args.file, e)
-    })?;
-    let migration: MigrationFile = serde_json::from_str(&raw).map_err(|e| {
-        anyhow::anyhow!("Invalid migration JSON: {}", e)
-    })?;
+    let raw = std::fs::read_to_string(&args.file)
+        .map_err(|e| anyhow::anyhow!("Cannot read migration file {:?}: {}", args.file, e))?;
+    let migration: MigrationFile =
+        serde_json::from_str(&raw).map_err(|e| anyhow::anyhow!("Invalid migration JSON: {}", e))?;
 
     if args.dry_run {
         println!(
@@ -455,8 +525,11 @@ async fn migrate(args: PromptMigrateArgs, config: &CortexConfig) -> Result<()> {
     let mut skipped = 0usize;
 
     // Build a map from slug → MigrationPrompt for metadata lookup.
-    let prompt_meta: HashMap<&str, &MigrationPrompt> =
-        migration.prompts.iter().map(|p| (p.slug.as_str(), p)).collect();
+    let prompt_meta: HashMap<&str, &MigrationPrompt> = migration
+        .prompts
+        .iter()
+        .map(|p| (p.slug.as_str(), p))
+        .collect();
 
     // Process all (slug, branch) groups in order.
     let mut keys: Vec<(String, String)> = versions_by_slug.keys().cloned().collect();
@@ -472,7 +545,9 @@ async fn migrate(args: PromptMigrateArgs, config: &CortexConfig) -> Result<()> {
                 .prompt_type
                 .clone()
                 .or_else(|| {
-                    prompt_meta.get(slug.as_str()).map(|p| p.prompt_type.clone())
+                    prompt_meta
+                        .get(slug.as_str())
+                        .map(|p| p.prompt_type.clone())
                 })
                 .unwrap_or_else(|| "unknown".to_string());
 
@@ -482,9 +557,9 @@ async fn migrate(args: PromptMigrateArgs, config: &CortexConfig) -> Result<()> {
                     metadata.entry(k.clone()).or_insert(v.clone());
                 }
                 if let Some(name) = &meta.name {
-                    metadata.entry("name".to_string()).or_insert_with(|| {
-                        serde_json::Value::String(name.clone())
-                    });
+                    metadata
+                        .entry("name".to_string())
+                        .or_insert_with(|| serde_json::Value::String(name.clone()));
                 }
             }
 
@@ -547,7 +622,10 @@ async fn migrate(args: PromptMigrateArgs, config: &CortexConfig) -> Result<()> {
     }
 
     // Link inheritance edges.
-    println!("\nLinking {} inheritance edges...", migration.inheritance.len());
+    println!(
+        "\nLinking {} inheritance edges...",
+        migration.inheritance.len()
+    );
     let mut linked = 0usize;
 
     for link in &migration.inheritance {
@@ -576,11 +654,20 @@ async fn migrate(args: PromptMigrateArgs, config: &CortexConfig) -> Result<()> {
                     linked += 1;
                     println!("  linked {} → {}", link.child_slug, link.parent_slug);
                 } else {
-                    println!("  skipped {} → {} (already linked)", link.child_slug, link.parent_slug);
+                    println!(
+                        "  skipped {} → {} (already linked)",
+                        link.child_slug, link.parent_slug
+                    );
                 }
             }
-            (None, _) => println!("  skip: child '{}@{}' not found", link.child_slug, child_branch),
-            (_, None) => println!("  skip: parent '{}@{}' not found", link.parent_slug, parent_branch),
+            (None, _) => println!(
+                "  skip: child '{}@{}' not found",
+                link.child_slug, child_branch
+            ),
+            (_, None) => println!(
+                "  skip: parent '{}@{}' not found",
+                link.parent_slug, parent_branch
+            ),
         }
     }
 

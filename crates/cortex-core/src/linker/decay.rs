@@ -110,7 +110,7 @@ impl<S: Storage> DecayEngine<S> {
 
         let updated_edges: Vec<Edge> = outgoing
             .into_iter()
-            .chain(incoming.into_iter())
+            .chain(incoming)
             .map(|mut edge| {
                 edge.updated_at = now;
                 edge

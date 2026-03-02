@@ -14,8 +14,10 @@ pub mod types;
 pub mod vector;
 
 pub use api::{Cortex, LibraryConfig};
-pub use gate::{GateCheck, GateRejection, GateResult, KindOverrideConfig, WriteGate, WriteGateConfig};
 pub use error::{CortexError, Result};
+pub use gate::{
+    GateCheck, GateRejection, GateResult, KindOverrideConfig, WriteGate, WriteGateConfig,
+};
 pub use graph::{
     GraphEngine, GraphEngineImpl, Path, PathRequest, PathResult, Subgraph, TraversalBudget,
     TraversalDirection, TraversalRequest, TraversalStrategy,
@@ -26,8 +28,8 @@ pub use linker::{
     Resolution, SimilarityLinkRule, StructuralRule,
 };
 pub use policies::{
-    AuditAction, AuditEntry, AuditFilter, AuditLog, RetentionConfig, RetentionEngine,
-    RetentionMaxNodes,
+    AuditAction, AuditEntry, AuditFilter, AuditLog, KindRetention, RetentionConfig,
+    RetentionEngine, RetentionMaxNodes,
 };
 pub use storage::{NodeFilter, RedbStorage, Storage, StorageStats, CURRENT_SCHEMA_VERSION};
 pub use types::*;

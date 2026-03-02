@@ -261,8 +261,7 @@ impl WarrenEvent {
 /// Parse NATS subject to determine event type
 pub fn parse_subject(subject: &async_nats::Subject) -> Option<&str> {
     let s = subject.as_str();
-    if s.starts_with("warren.") {
-        let rest = &s[7..];
+    if let Some(rest) = s.strip_prefix("warren.") {
         if rest.is_empty() {
             None
         } else {

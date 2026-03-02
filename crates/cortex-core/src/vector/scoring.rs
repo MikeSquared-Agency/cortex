@@ -105,12 +105,10 @@ pub fn apply_score_decay(
         .unwrap_or(config.daily_rate);
 
     let effective_days = days_idle.min(config.max_age_days);
-    let temporal_factor = (-kind_rate * effective_days)
-        .exp()
-        .max(config.min_factor) as f32;
+    let temporal_factor = (-kind_rate * effective_days).exp().max(config.min_factor) as f32;
 
-    let echo_factor = (1.0 + node.access_count as f64 * config.echo_weight)
-        .min(config.echo_cap) as f32;
+    let echo_factor =
+        (1.0 + node.access_count as f64 * config.echo_weight).min(config.echo_cap) as f32;
 
     raw_score * (1.0 - recency_bias) + raw_score * temporal_factor * echo_factor * recency_bias
 }
@@ -160,7 +158,11 @@ mod tests {
         // temporal = exp(0) = 1.0, echo = 1.0 (access_count = 0)
         // final = 0.8 * 0.85 + 0.8 * 1.0 * 1.0 * 0.15 = 0.68 + 0.12 = 0.80
         let result = apply_score_decay(&node, 0.8, &config, config.recency_weight);
-        assert!((result - 0.8).abs() < 0.01, "fresh node should score ~0.8, got {}", result);
+        assert!(
+            (result - 0.8).abs() < 0.01,
+            "fresh node should score ~0.8, got {}",
+            result
+        );
     }
 
     #[test]
@@ -174,7 +176,12 @@ mod tests {
         // temporal = exp(-0.01 * 100) = exp(-1) ≈ 0.368
         let result = apply_score_decay(&node, 0.8, &config, config.recency_weight);
         let no_decay = 0.8;
-        assert!(result < no_decay, "stale node should score less than raw: {} < {}", result, no_decay);
+        assert!(
+            result < no_decay,
+            "stale node should score less than raw: {} < {}",
+            result,
+            no_decay
+        );
     }
 
     #[test]

@@ -24,14 +24,17 @@ impl Eq for DijkstraState {}
 
 impl PartialOrd for DijkstraState {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        // Lower cost = higher priority (min-heap)
-        other.cost.partial_cmp(&self.cost)
+        Some(self.cmp(other))
     }
 }
 
 impl Ord for DijkstraState {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap_or(Ordering::Equal)
+        // Lower cost = higher priority (min-heap)
+        other
+            .cost
+            .partial_cmp(&self.cost)
+            .unwrap_or(Ordering::Equal)
     }
 }
 

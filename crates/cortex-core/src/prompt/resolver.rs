@@ -99,15 +99,12 @@ impl<S: Storage> PromptResolver<S> {
                     if !visited.insert(parent_id) {
                         break; // cycle guard: insert returns false when already present
                     }
-                    let parent = self
-                        .storage
-                        .get_node(parent_id)?
-                        .ok_or_else(|| {
-                            CortexError::Validation(format!(
-                                "Inherited prompt node {} not found",
-                                parent_id
-                            ))
-                        })?;
+                    let parent = self.storage.get_node(parent_id)?.ok_or_else(|| {
+                        CortexError::Validation(format!(
+                            "Inherited prompt node {} not found",
+                            parent_id
+                        ))
+                    })?;
                     ancestor_nodes.push(parent);
                     current_id = parent_id;
                 }
@@ -181,7 +178,12 @@ impl<S: Storage> PromptResolver<S> {
     }
 
     /// Create the first version of a new prompt.
-    pub fn create_prompt(&self, content: PromptContent, branch: &str, author: &str) -> Result<NodeId> {
+    pub fn create_prompt(
+        &self,
+        content: PromptContent,
+        branch: &str,
+        author: &str,
+    ) -> Result<NodeId> {
         if !self.find_versions(&content.slug, Some(branch))?.is_empty() {
             return Err(CortexError::Validation(format!(
                 "Prompt '{}' on branch '{}' already exists. Use create_version to add a new version.",
@@ -209,10 +211,7 @@ impl<S: Storage> PromptResolver<S> {
             ))
         })?;
 
-        let head_version = self
-            .parse_content(&head)
-            .map(|c| c.version)
-            .unwrap_or(1);
+        let head_version = self.parse_content(&head).map(|c| c.version).unwrap_or(1);
 
         let mut fixed_content = content;
         fixed_content.slug = slug.to_string();
@@ -351,7 +350,13 @@ impl<S: Storage> PromptResolver<S> {
     /// The `branch` and `version` parameters are embedded into the serialised
     /// body so they can be read back later without touching node metadata
     /// (which uses bincode and cannot round-trip `serde_json::Value`).
-    fn build_node(&self, content: &PromptContent, branch: &str, version: u32, author: &str) -> Result<Node> {
+    fn build_node(
+        &self,
+        content: &PromptContent,
+        branch: &str,
+        version: u32,
+        author: &str,
+    ) -> Result<Node> {
         let mut full_content = content.clone();
         full_content.branch = branch.to_string();
         full_content.version = version;
@@ -452,7 +457,9 @@ mod tests {
     fn find_head_single_version() {
         let (storage, _dir) = setup();
         let r = PromptResolver::new(storage);
-        let id = r.create_prompt(simple_content("p", "persona", &[]), "main", "t").unwrap();
+        let id = r
+            .create_prompt(simple_content("p", "persona", &[]), "main", "t")
+            .unwrap();
         let head = r.find_head("p", "main").unwrap().unwrap();
         assert_eq!(head.id, id);
     }
@@ -462,9 +469,24 @@ mod tests {
         let (storage, _dir) = setup();
         let r = PromptResolver::new(storage);
 
-        r.create_prompt(simple_content("p", "persona", &[("k", "v1")]), "main", "t").unwrap();
-        let v2 = r.create_version("p", "main", simple_content("p", "persona", &[("k", "v2")]), "t").unwrap();
-        let v3 = r.create_version("p", "main", simple_content("p", "persona", &[("k", "v3")]), "t").unwrap();
+        r.create_prompt(simple_content("p", "persona", &[("k", "v1")]), "main", "t")
+            .unwrap();
+        let v2 = r
+            .create_version(
+                "p",
+                "main",
+                simple_content("p", "persona", &[("k", "v2")]),
+                "t",
+            )
+            .unwrap();
+        let v3 = r
+            .create_version(
+                "p",
+                "main",
+                simple_content("p", "persona", &[("k", "v3")]),
+                "t",
+            )
+            .unwrap();
 
         let head = r.find_head("p", "main").unwrap().unwrap();
         assert_eq!(head.id, v3, "HEAD should be v3, the latest");
@@ -482,7 +504,8 @@ mod tests {
     fn find_head_missing_branch_returns_none() {
         let (storage, _dir) = setup();
         let r = PromptResolver::new(storage);
-        r.create_prompt(simple_content("p", "persona", &[]), "main", "t").unwrap();
+        r.create_prompt(simple_content("p", "persona", &[]), "main", "t")
+            .unwrap();
         assert!(r.find_head("p", "dev").unwrap().is_none());
     }
 
@@ -493,8 +516,11 @@ mod tests {
         let (storage, _dir) = setup();
         let r = PromptResolver::new(storage.clone());
 
-        r.create_prompt(simple_content("p", "persona", &[]), "main", "t").unwrap();
-        let v2_id = r.create_version("p", "main", simple_content("p", "persona", &[]), "t").unwrap();
+        r.create_prompt(simple_content("p", "persona", &[]), "main", "t")
+            .unwrap();
+        let v2_id = r
+            .create_version("p", "main", simple_content("p", "persona", &[]), "t")
+            .unwrap();
 
         let v2 = storage.get_node(v2_id).unwrap().unwrap();
         let parsed = r.parse_content(&v2).unwrap();
@@ -507,12 +533,18 @@ mod tests {
         let (storage, _dir) = setup();
         let r = PromptResolver::new(storage.clone());
 
-        let v1_id = r.create_prompt(simple_content("p", "persona", &[]), "main", "t").unwrap();
-        let v2_id = r.create_version("p", "main", simple_content("p", "persona", &[]), "t").unwrap();
+        let v1_id = r
+            .create_prompt(simple_content("p", "persona", &[]), "main", "t")
+            .unwrap();
+        let v2_id = r
+            .create_version("p", "main", simple_content("p", "persona", &[]), "t")
+            .unwrap();
 
         let edges = storage.edges_from(v2_id).unwrap();
         assert!(
-            edges.iter().any(|e| e.relation == supersedes() && e.to == v1_id),
+            edges
+                .iter()
+                .any(|e| e.relation == supersedes() && e.to == v1_id),
             "v2 must have a supersedes edge pointing to v1"
         );
     }
@@ -522,7 +554,12 @@ mod tests {
         let (storage, _dir) = setup();
         let r = PromptResolver::new(storage);
         let err = r
-            .create_version("missing", "main", simple_content("missing", "persona", &[]), "t")
+            .create_version(
+                "missing",
+                "main",
+                simple_content("missing", "persona", &[]),
+                "t",
+            )
             .unwrap_err();
         assert!(err.to_string().contains("not found"), "{err}");
     }
@@ -534,7 +571,12 @@ mod tests {
         let (storage, _dir) = setup();
         let r = PromptResolver::new(storage.clone());
 
-        r.create_prompt(simple_content("p", "persona", &[("id", "base")]), "main", "t").unwrap();
+        r.create_prompt(
+            simple_content("p", "persona", &[("id", "base")]),
+            "main",
+            "t",
+        )
+        .unwrap();
         let dev_id = r.create_branch("p", "main", "dev", None, "t").unwrap();
 
         let dev_node = storage.get_node(dev_id).unwrap().unwrap();
@@ -548,12 +590,16 @@ mod tests {
         let (storage, _dir) = setup();
         let r = PromptResolver::new(storage.clone());
 
-        let main_id = r.create_prompt(simple_content("p", "persona", &[]), "main", "t").unwrap();
+        let main_id = r
+            .create_prompt(simple_content("p", "persona", &[]), "main", "t")
+            .unwrap();
         let dev_id = r.create_branch("p", "main", "dev", None, "t").unwrap();
 
         let edges = storage.edges_from(dev_id).unwrap();
         assert!(
-            edges.iter().any(|e| e.relation == branched_from() && e.to == main_id),
+            edges
+                .iter()
+                .any(|e| e.relation == branched_from() && e.to == main_id),
             "dev branch must have branched_from edge to main HEAD"
         );
     }
@@ -563,15 +609,28 @@ mod tests {
         let (storage, _dir) = setup();
         let r = PromptResolver::new(storage.clone());
 
-        let v1_id = r.create_prompt(simple_content("p", "persona", &[("k", "v1")]), "main", "t").unwrap();
-        let _v2_id = r.create_version("p", "main", simple_content("p", "persona", &[("k", "v2")]), "t").unwrap();
+        let v1_id = r
+            .create_prompt(simple_content("p", "persona", &[("k", "v1")]), "main", "t")
+            .unwrap();
+        let _v2_id = r
+            .create_version(
+                "p",
+                "main",
+                simple_content("p", "persona", &[("k", "v2")]),
+                "t",
+            )
+            .unwrap();
 
         // Branch from v1 specifically, not HEAD (v2)
-        let branch_id = r.create_branch("p", "main", "hotfix", Some(1), "t").unwrap();
+        let branch_id = r
+            .create_branch("p", "main", "hotfix", Some(1), "t")
+            .unwrap();
 
         let edges = storage.edges_from(branch_id).unwrap();
         assert!(
-            edges.iter().any(|e| e.relation == branched_from() && e.to == v1_id),
+            edges
+                .iter()
+                .any(|e| e.relation == branched_from() && e.to == v1_id),
             "hotfix must branch from v1, not v2"
         );
     }
@@ -583,9 +642,23 @@ mod tests {
         let (storage, _dir) = setup();
         let r = PromptResolver::new(storage);
 
-        r.create_prompt(simple_content("a", "persona", &[]), "main", "t").unwrap();
-        r.create_version("a", "main", simple_content("a", "persona", &[("k", "v2")]), "t").unwrap();
-        let v3 = r.create_version("a", "main", simple_content("a", "persona", &[("k", "v3")]), "t").unwrap();
+        r.create_prompt(simple_content("a", "persona", &[]), "main", "t")
+            .unwrap();
+        r.create_version(
+            "a",
+            "main",
+            simple_content("a", "persona", &[("k", "v2")]),
+            "t",
+        )
+        .unwrap();
+        let v3 = r
+            .create_version(
+                "a",
+                "main",
+                simple_content("a", "persona", &[("k", "v3")]),
+                "t",
+            )
+            .unwrap();
 
         let list = r.list_all_prompts().unwrap();
         assert_eq!(list.len(), 1);
@@ -599,9 +672,12 @@ mod tests {
         let (storage, _dir) = setup();
         let r = PromptResolver::new(storage);
 
-        r.create_prompt(simple_content("kai", "persona", &[]), "main", "t").unwrap();
-        r.create_prompt(simple_content("kai", "persona", &[]), "dev", "t").unwrap();
-        r.create_prompt(simple_content("duty", "persona", &[]), "main", "t").unwrap();
+        r.create_prompt(simple_content("kai", "persona", &[]), "main", "t")
+            .unwrap();
+        r.create_prompt(simple_content("kai", "persona", &[]), "dev", "t")
+            .unwrap();
+        r.create_prompt(simple_content("duty", "persona", &[]), "main", "t")
+            .unwrap();
 
         let list = r.list_all_prompts().unwrap();
         assert_eq!(list.len(), 3);
@@ -628,9 +704,12 @@ mod tests {
         let (storage, _dir) = setup();
         let r = PromptResolver::new(storage);
 
-        r.create_prompt(simple_content("p", "persona", &[]), "main", "t").unwrap();
-        r.create_version("p", "main", simple_content("p", "persona", &[]), "t").unwrap();
-        r.create_version("p", "main", simple_content("p", "persona", &[]), "t").unwrap();
+        r.create_prompt(simple_content("p", "persona", &[]), "main", "t")
+            .unwrap();
+        r.create_version("p", "main", simple_content("p", "persona", &[]), "t")
+            .unwrap();
+        r.create_version("p", "main", simple_content("p", "persona", &[]), "t")
+            .unwrap();
 
         let versions = r.list_versions("p", "main").unwrap();
         assert_eq!(versions.len(), 3);
@@ -655,9 +734,12 @@ mod tests {
         let (storage, _dir) = setup();
         let r = PromptResolver::new(storage);
 
-        r.create_prompt(simple_content("p", "persona", &[]), "main", "t").unwrap();
-        r.create_version("p", "main", simple_content("p", "persona", &[]), "t").unwrap();
-        r.create_version("p", "main", simple_content("p", "persona", &[]), "t").unwrap();
+        r.create_prompt(simple_content("p", "persona", &[]), "main", "t")
+            .unwrap();
+        r.create_version("p", "main", simple_content("p", "persona", &[]), "t")
+            .unwrap();
+        r.create_version("p", "main", simple_content("p", "persona", &[]), "t")
+            .unwrap();
 
         let versions = r.list_versions("p", "main").unwrap();
         let nums: Vec<u32> = versions.iter().map(|v| v.version).collect();
@@ -671,8 +753,17 @@ mod tests {
         let (storage, _dir) = setup();
         let r = PromptResolver::new(storage.clone());
 
-        let v1 = r.create_prompt(simple_content("p", "persona", &[("k", "v1")]), "main", "t").unwrap();
-        let v2 = r.create_version("p", "main", simple_content("p", "persona", &[("k", "v2")]), "t").unwrap();
+        let v1 = r
+            .create_prompt(simple_content("p", "persona", &[("k", "v1")]), "main", "t")
+            .unwrap();
+        let v2 = r
+            .create_version(
+                "p",
+                "main",
+                simple_content("p", "persona", &[("k", "v2")]),
+                "t",
+            )
+            .unwrap();
 
         assert_eq!(r.get_version("p", "main", 1).unwrap().unwrap().id, v1);
         assert_eq!(r.get_version("p", "main", 2).unwrap().unwrap().id, v2);
@@ -687,7 +778,9 @@ mod tests {
             parent_id,
             inherits_from(),
             1.0,
-            EdgeProvenance::Manual { created_by: "test".into() },
+            EdgeProvenance::Manual {
+                created_by: "test".into(),
+            },
         );
         storage.put_edge(&edge).unwrap();
     }
@@ -698,7 +791,11 @@ mod tests {
         let r = PromptResolver::new(storage);
 
         let id = r
-            .create_prompt(simple_content("p", "persona", &[("role", "assistant")]), "main", "t")
+            .create_prompt(
+                simple_content("p", "persona", &[("role", "assistant")]),
+                "main",
+                "t",
+            )
             .unwrap();
         let node = r.find_head("p", "main").unwrap().unwrap();
         let resolved = r.resolve(&node).unwrap();
@@ -721,7 +818,11 @@ mod tests {
 
         // Parent: base-template with two sections
         r.create_prompt(
-            simple_content("base", "template", &[("tone", "formal"), ("language", "en")]),
+            simple_content(
+                "base",
+                "template",
+                &[("tone", "formal"), ("language", "en")],
+            ),
             "main",
             "t",
         )
@@ -741,8 +842,16 @@ mod tests {
         let resolved = r.resolve(&kai_node).unwrap();
 
         // Language comes from base; tone overridden by kai.
-        assert_eq!(resolved.content["language"].as_str(), Some("en"), "inherited from base");
-        assert_eq!(resolved.content["tone"].as_str(), Some("friendly"), "overridden by kai");
+        assert_eq!(
+            resolved.content["language"].as_str(),
+            Some("en"),
+            "inherited from base"
+        );
+        assert_eq!(
+            resolved.content["tone"].as_str(),
+            Some("friendly"),
+            "overridden by kai"
+        );
         assert_eq!(resolved.lineage, vec!["base", "kai"]);
     }
 
@@ -751,9 +860,24 @@ mod tests {
         let (storage, _dir) = setup();
         let r = PromptResolver::new(storage.clone());
 
-        r.create_prompt(simple_content("root", "template", &[("a", "root-a"), ("b", "root-b")]), "main", "t").unwrap();
-        r.create_prompt(simple_content("mid", "template", &[("b", "mid-b"), ("c", "mid-c")]), "main", "t").unwrap();
-        r.create_prompt(simple_content("leaf", "persona", &[("c", "leaf-c"), ("d", "leaf-d")]), "main", "t").unwrap();
+        r.create_prompt(
+            simple_content("root", "template", &[("a", "root-a"), ("b", "root-b")]),
+            "main",
+            "t",
+        )
+        .unwrap();
+        r.create_prompt(
+            simple_content("mid", "template", &[("b", "mid-b"), ("c", "mid-c")]),
+            "main",
+            "t",
+        )
+        .unwrap();
+        r.create_prompt(
+            simple_content("leaf", "persona", &[("c", "leaf-c"), ("d", "leaf-d")]),
+            "main",
+            "t",
+        )
+        .unwrap();
 
         let root = r.find_head("root", "main").unwrap().unwrap();
         let mid = r.find_head("mid", "main").unwrap().unwrap();
@@ -763,10 +887,26 @@ mod tests {
 
         let resolved = r.resolve(&leaf).unwrap();
 
-        assert_eq!(resolved.content["a"].as_str(), Some("root-a"), "a from root");
-        assert_eq!(resolved.content["b"].as_str(), Some("mid-b"), "b overridden by mid");
-        assert_eq!(resolved.content["c"].as_str(), Some("leaf-c"), "c overridden by leaf");
-        assert_eq!(resolved.content["d"].as_str(), Some("leaf-d"), "d only in leaf");
+        assert_eq!(
+            resolved.content["a"].as_str(),
+            Some("root-a"),
+            "a from root"
+        );
+        assert_eq!(
+            resolved.content["b"].as_str(),
+            Some("mid-b"),
+            "b overridden by mid"
+        );
+        assert_eq!(
+            resolved.content["c"].as_str(),
+            Some("leaf-c"),
+            "c overridden by leaf"
+        );
+        assert_eq!(
+            resolved.content["d"].as_str(),
+            Some("leaf-d"),
+            "d only in leaf"
+        );
         assert_eq!(resolved.lineage, vec!["root", "mid", "leaf"]);
     }
 
@@ -776,8 +916,10 @@ mod tests {
         let (storage, _dir) = setup();
         let r = PromptResolver::new(storage.clone());
 
-        r.create_prompt(simple_content("a", "persona", &[("k", "va")]), "main", "t").unwrap();
-        r.create_prompt(simple_content("b", "persona", &[("k", "vb")]), "main", "t").unwrap();
+        r.create_prompt(simple_content("a", "persona", &[("k", "va")]), "main", "t")
+            .unwrap();
+        r.create_prompt(simple_content("b", "persona", &[("k", "vb")]), "main", "t")
+            .unwrap();
 
         let a = r.find_head("a", "main").unwrap().unwrap();
         let b = r.find_head("b", "main").unwrap().unwrap();
@@ -802,9 +944,12 @@ mod tests {
             prompt_type: "persona".into(),
             branch: "main".into(),
             version: 1,
-            sections: [("role".to_string(), serde_json::Value::String("assistant".into()))]
-                .into_iter()
-                .collect(),
+            sections: [(
+                "role".to_string(),
+                serde_json::Value::String("assistant".into()),
+            )]
+            .into_iter()
+            .collect(),
             metadata: HashMap::new(),
             override_sections: HashMap::new(),
         };
@@ -828,7 +973,8 @@ mod tests {
         let (storage, _dir) = setup();
         let r = PromptResolver::new(storage);
 
-        r.create_prompt(simple_content("p", "persona", &[]), "main", "t").unwrap();
+        r.create_prompt(simple_content("p", "persona", &[]), "main", "t")
+            .unwrap();
         let versions = r.find_versions("p", Some("main")).unwrap();
         let superseded = r.build_superseded_set(&versions).unwrap();
 
@@ -840,14 +986,21 @@ mod tests {
         let (storage, _dir) = setup();
         let r = PromptResolver::new(storage);
 
-        r.create_prompt(simple_content("p", "persona", &[]), "main", "t").unwrap();
-        r.create_version("p", "main", simple_content("p", "persona", &[]), "t").unwrap();
-        let v3_id = r.create_version("p", "main", simple_content("p", "persona", &[]), "t").unwrap();
+        r.create_prompt(simple_content("p", "persona", &[]), "main", "t")
+            .unwrap();
+        r.create_version("p", "main", simple_content("p", "persona", &[]), "t")
+            .unwrap();
+        let v3_id = r
+            .create_version("p", "main", simple_content("p", "persona", &[]), "t")
+            .unwrap();
 
         let versions = r.find_versions("p", Some("main")).unwrap();
         let superseded = r.build_superseded_set(&versions).unwrap();
 
         assert_eq!(superseded.len(), 2, "v1 and v2 are superseded");
-        assert!(!superseded.contains(&v3_id), "HEAD (v3) must not be in the superseded set");
+        assert!(
+            !superseded.contains(&v3_id),
+            "HEAD (v3) must not be in the superseded set"
+        );
     }
 }

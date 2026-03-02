@@ -1,6 +1,6 @@
 mod model;
-pub mod rollback;
 mod resolver;
+pub mod rollback;
 pub mod selection;
 
 pub use model::{PromptContent, PromptInfo, PromptVersionInfo, ResolvedPrompt};

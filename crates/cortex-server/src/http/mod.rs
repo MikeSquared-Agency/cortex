@@ -48,6 +48,10 @@ pub type HttpBriefingEngine = BriefingEngine<
     Arc<GraphEngineImpl<RedbStorage>>,
 >;
 
+/// Concrete auto-linker type shared across HTTP handlers
+pub type HttpAutoLinker =
+    cortex_core::AutoLinker<RedbStorage, FastEmbedService, HnswIndex, GraphEngineImpl<RedbStorage>>;
+
 /// Shared application state
 #[derive(Clone)]
 pub struct AppState {
@@ -55,16 +59,7 @@ pub struct AppState {
     pub graph_engine: Arc<cortex_core::GraphEngineImpl<cortex_core::RedbStorage>>,
     pub vector_index: Arc<std::sync::RwLock<cortex_core::HnswIndex>>,
     pub embedding_service: Arc<cortex_core::FastEmbedService>,
-    pub auto_linker: Arc<
-        std::sync::RwLock<
-            cortex_core::AutoLinker<
-                cortex_core::RedbStorage,
-                cortex_core::FastEmbedService,
-                cortex_core::HnswIndex,
-                cortex_core::GraphEngineImpl<cortex_core::RedbStorage>,
-            >,
-        >,
-    >,
+    pub auto_linker: Arc<std::sync::RwLock<HttpAutoLinker>>,
     pub graph_version: Arc<AtomicU64>,
     pub briefing_engine: Arc<HttpBriefingEngine>,
     pub metrics: Arc<CortexMetrics>,

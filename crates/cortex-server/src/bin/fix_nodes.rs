@@ -4,7 +4,6 @@
 /// sets `last_accessed_at = DateTime::UNIX_EPOCH`, and re-serializes with the new layout.
 ///
 /// Usage: fix_nodes [path-to-cortex.redb]
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -54,7 +53,10 @@ fn main() -> anyhow::Result<()> {
     if !backup.exists() {
         println!("Backing up {} → {}", db_path.display(), backup.display());
         std::fs::copy(&db_path, &backup)?;
-        println!("Backup written ({} bytes)", std::fs::metadata(&backup)?.len());
+        println!(
+            "Backup written ({} bytes)",
+            std::fs::metadata(&backup)?.len()
+        );
     } else {
         println!("Backup already exists at {}, skipping.", backup.display());
     }
