@@ -20,16 +20,16 @@ type ServerBriefingEngine = BriefingEngine<
     Arc<GraphEngineImpl<RedbStorage>>,
 >;
 
+/// Concrete auto-linker type used by the server
+type ServerAutoLinker =
+    AutoLinker<RedbStorage, FastEmbedService, HnswIndex, GraphEngineImpl<RedbStorage>>;
+
 pub struct CortexServiceImpl {
     storage: Arc<RedbStorage>,
     graph_engine: Arc<GraphEngineImpl<RedbStorage>>,
     vector_index: Arc<StdRwLock<HnswIndex>>,
     embedding_service: Arc<FastEmbedService>,
-    auto_linker: Arc<
-        StdRwLock<
-            AutoLinker<RedbStorage, FastEmbedService, HnswIndex, GraphEngineImpl<RedbStorage>>,
-        >,
-    >,
+    auto_linker: Arc<StdRwLock<ServerAutoLinker>>,
     graph_version: Arc<AtomicU64>,
     briefing_engine: Arc<ServerBriefingEngine>,
     start_time: Instant,
@@ -41,11 +41,7 @@ impl CortexServiceImpl {
         graph_engine: Arc<GraphEngineImpl<RedbStorage>>,
         vector_index: Arc<StdRwLock<HnswIndex>>,
         embedding_service: Arc<FastEmbedService>,
-        auto_linker: Arc<
-            StdRwLock<
-                AutoLinker<RedbStorage, FastEmbedService, HnswIndex, GraphEngineImpl<RedbStorage>>,
-            >,
-        >,
+        auto_linker: Arc<StdRwLock<ServerAutoLinker>>,
         graph_version: Arc<AtomicU64>,
         briefing_engine: Arc<ServerBriefingEngine>,
     ) -> Self {

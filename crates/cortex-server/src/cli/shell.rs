@@ -3,11 +3,7 @@ use anyhow::Result;
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 
-pub async fn run(
-    config: CortexConfig,
-    server: &str,
-    config_path: &std::path::PathBuf,
-) -> Result<()> {
+pub async fn run(config: CortexConfig, server: &str, config_path: &std::path::Path) -> Result<()> {
     let mut rl = DefaultEditor::new()?;
 
     println!();
@@ -87,7 +83,7 @@ async fn dispatch(
     cli: super::Cli,
     config: CortexConfig,
     server: &str,
-    config_path: &std::path::PathBuf,
+    config_path: &std::path::Path,
 ) -> Result<()> {
     use super::Commands;
     match cli.command {

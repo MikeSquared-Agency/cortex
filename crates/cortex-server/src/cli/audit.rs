@@ -45,10 +45,7 @@ pub async fn run(args: AuditArgs, config: CortexConfig) -> Result<()> {
             println!("{}", serde_json::to_string_pretty(&entries)?);
         }
         _ => {
-            println!(
-                "{:<24}  {:<20}  {:<36}  {}",
-                "TIME", "ACTION", "TARGET", "ACTOR"
-            );
+            println!("{:<24}  {:<20}  {:<36}  ACTOR", "TIME", "ACTION", "TARGET");
             println!("{}", "─".repeat(90));
             for entry in &entries {
                 println!(

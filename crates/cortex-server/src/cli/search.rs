@@ -42,8 +42,8 @@ pub async fn run(args: SearchArgs, server: &str) -> Result<()> {
             println!("{}", serde_json::to_string_pretty(&results)?);
         } else {
             println!(
-                "{:>4}  {:<6}  {:<6}  {:<6}  {:<12}  {}",
-                "RANK", "COMB", "VEC", "GRAPH", "KIND", "TITLE"
+                "{:>4}  {:<6}  {:<6}  {:<6}  {:<12}  TITLE",
+                "RANK", "COMB", "VEC", "GRAPH", "KIND"
             );
             println!("{}", "─".repeat(80));
             for (i, r) in resp.results.iter().enumerate() {
@@ -93,8 +93,8 @@ pub async fn run(args: SearchArgs, server: &str) -> Result<()> {
             println!("{}", serde_json::to_string_pretty(&results)?);
         } else {
             println!(
-                "{:>4}  {:<6}  {:<12}  {:<36}  {}",
-                "RANK", "SCORE", "KIND", "ID", "TITLE"
+                "{:>4}  {:<6}  {:<12}  {:<36}  TITLE",
+                "RANK", "SCORE", "KIND", "ID"
             );
             println!("{}", "─".repeat(90));
             for (i, r) in resp.results.iter().enumerate() {

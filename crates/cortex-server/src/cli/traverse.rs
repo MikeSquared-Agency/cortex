@@ -119,20 +119,18 @@ pub async fn run_path(args: PathArgs, server: &str) -> Result<()> {
             })
             .collect();
         println!("{}", serde_json::to_string_pretty(&paths)?);
+    } else if resp.paths.is_empty() {
+        println!("No path found between the two nodes.");
     } else {
-        if resp.paths.is_empty() {
-            println!("No path found between the two nodes.");
-        } else {
-            println!("Found {} path(s):", resp.paths.len());
-            for (i, path) in resp.paths.iter().enumerate() {
-                println!(
-                    "  Path {}: {} hops, weight {:.2}",
-                    i + 1,
-                    path.length,
-                    path.total_weight
-                );
-                println!("    {}", path.node_ids.join(" → "));
-            }
+        println!("Found {} path(s):", resp.paths.len());
+        for (i, path) in resp.paths.iter().enumerate() {
+            println!(
+                "  Path {}: {} hops, weight {:.2}",
+                i + 1,
+                path.length,
+                path.total_weight
+            );
+            println!("    {}", path.node_ids.join(" → "));
         }
     }
 

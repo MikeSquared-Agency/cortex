@@ -518,7 +518,7 @@ impl RedbStorage {
 impl Storage for RedbStorage {
     fn put_node(&self, node: &Node) -> Result<()> {
         // Validate node
-        node.validate().map_err(|e| CortexError::Validation(e))?;
+        node.validate().map_err(CortexError::Validation)?;
 
         let write_txn = self.db.begin_write()?;
 
@@ -605,7 +605,7 @@ impl Storage for RedbStorage {
 
     fn hard_delete_node(&self, id: NodeId) -> Result<()> {
         // Retrieve the node (may be soft-deleted)
-        let node = match {
+        let lookup = {
             let read_txn = self.db.begin_read()?;
             let table = read_txn.open_table(NODES)?;
             let id_bytes = Self::uuid_to_bytes(&id);
@@ -613,7 +613,8 @@ impl Storage for RedbStorage {
                 .get(&id_bytes)?
                 .map(|v| Self::deserialize_node(v.value()))
                 .transpose()?
-        } {
+        };
+        let node = match lookup {
             Some(n) => n,
             None => return Ok(()), // already gone
         };
@@ -758,7 +759,7 @@ impl Storage for RedbStorage {
 
     fn put_edge(&self, edge: &Edge) -> Result<()> {
         // Validate edge
-        edge.validate().map_err(|e| CortexError::Validation(e))?;
+        edge.validate().map_err(CortexError::Validation)?;
 
         let from_bytes = Self::uuid_to_bytes(&edge.from);
         let to_bytes = Self::uuid_to_bytes(&edge.to);
@@ -957,7 +958,7 @@ impl Storage for RedbStorage {
     fn put_nodes_batch(&self, nodes: &[Node]) -> Result<()> {
         // Validate all nodes first
         for node in nodes {
-            node.validate().map_err(|e| CortexError::Validation(e))?;
+            node.validate().map_err(CortexError::Validation)?;
         }
 
         let write_txn = self.db.begin_write()?;
@@ -994,7 +995,7 @@ impl Storage for RedbStorage {
     fn put_edges_batch(&self, edges: &[Edge]) -> Result<()> {
         // Validate all edges first
         for edge in edges {
-            edge.validate().map_err(|e| CortexError::Validation(e))?;
+            edge.validate().map_err(CortexError::Validation)?;
         }
 
         let write_txn = self.db.begin_write()?;

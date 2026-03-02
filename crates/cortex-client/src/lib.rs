@@ -29,9 +29,9 @@
 //! ```
 use cortex_proto::cortex::v1::{
     cortex_service_client::CortexServiceClient, BriefingRequest, CreateEdgeRequest,
-    CreateNodeRequest, EdgeResponse, GetNodeRequest, HybridResultEntry, HybridSearchRequest,
-    NodeResponse, SearchResponse, SimilaritySearchRequest, StatsRequest, StatsResponse,
-    SubgraphResponse, TraverseRequest,
+    CreateNodeRequest, GetNodeRequest, HybridResultEntry, HybridSearchRequest, NodeResponse,
+    SearchResponse, SimilaritySearchRequest, StatsRequest, StatsResponse, SubgraphResponse,
+    TraverseRequest,
 };
 use tonic::transport::Channel;
 
@@ -155,7 +155,6 @@ impl CortexClient {
                 to_id: to_id.into(),
                 relation: relation.into(),
                 weight: 1.0,
-                ..Default::default()
             })
             .await?;
         Ok(resp.into_inner().id)

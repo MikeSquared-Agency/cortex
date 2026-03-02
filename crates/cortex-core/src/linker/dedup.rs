@@ -38,7 +38,6 @@ pub struct DedupResult {
 }
 
 /// Scanner for detecting and handling duplicate nodes
-
 #[allow(dead_code)]
 pub struct DedupScanner<S: Storage, V: VectorIndex, G: GraphEngine> {
     storage: Arc<S>,
@@ -113,7 +112,7 @@ impl<S: Storage, V: VectorIndex, G: GraphEngine> DedupScanner<S, V, G> {
                 };
 
                 // Determine action
-                let suggestion = self.determine_action(&node, &other, result.score)?;
+                let suggestion = self.determine_action(node, &other, result.score)?;
 
                 duplicates.push(DuplicatePair {
                     node_a: node.id,

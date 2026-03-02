@@ -52,8 +52,8 @@ async fn list(args: PromptListArgs, config: &CortexConfig) -> Result<()> {
         "json" => println!("{}", serde_json::to_string_pretty(&prompts)?),
         _ => {
             println!(
-                "{:<30}  {:<12}  {:<14}  {:<5}  {}",
-                "SLUG", "TYPE", "BRANCH", "VER", "NODE ID"
+                "{:<30}  {:<12}  {:<14}  {:<5}  NODE ID",
+                "SLUG", "TYPE", "BRANCH", "VER"
             );
             println!("{}", "─".repeat(100));
             for p in &prompts {
@@ -221,8 +221,8 @@ async fn performance(args: PromptPerformanceArgs, server: &str) -> Result<()> {
         if !obs.is_empty() {
             println!();
             println!(
-                "{:<8}  {:<10}  {:<8}  {}",
-                "SCORE", "OUTCOME", "CORRS", "TIMESTAMP"
+                "{:<8}  {:<10}  {:<8}  TIMESTAMP",
+                "SCORE", "OUTCOME", "CORRS"
             );
             println!("{}", "─".repeat(55));
             for o in obs {
@@ -386,10 +386,7 @@ async fn rollback_status(args: PromptRollbackStatusArgs, server: &str) -> Result
         if !rollbacks.is_empty() {
             println!();
             println!("  Recent rollbacks:");
-            println!(
-                "  {:<8}  {:<8}  {:<30}  {}",
-                "FROM", "TO", "TRIGGER", "TIMESTAMP"
-            );
+            println!("  {:<8}  {:<8}  {:<30}  TIMESTAMP", "FROM", "TO", "TRIGGER");
             println!("  {}", "─".repeat(75));
             for r in rollbacks {
                 println!(

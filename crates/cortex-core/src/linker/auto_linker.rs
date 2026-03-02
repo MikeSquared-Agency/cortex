@@ -88,8 +88,8 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
         match storage.get_metadata(CURSOR_KEY)? {
             Some(bytes) => {
                 let timestamp: i64 = bincode::deserialize(&bytes)
-                    .map_err(|e| crate::error::CortexError::Serialization(e))?;
-                Ok(DateTime::from_timestamp(timestamp, 0).unwrap_or_else(|| Utc::now()))
+                    .map_err(crate::error::CortexError::Serialization)?;
+                Ok(DateTime::from_timestamp(timestamp, 0).unwrap_or_else(Utc::now))
             }
             None => {
                 // Default: 24 hours ago
@@ -101,16 +101,17 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
     /// Save cursor to persistent storage
     fn save_cursor(&self) -> Result<()> {
         let timestamp = self.cursor.timestamp();
-        let bytes = bincode::serialize(&timestamp)
-            .map_err(|e| crate::error::CortexError::Serialization(e))?;
+        let bytes =
+            bincode::serialize(&timestamp).map_err(crate::error::CortexError::Serialization)?;
         self.storage.put_metadata(CURSOR_KEY, &bytes)
     }
 
     /// Load cycle count from persistent storage
     fn load_cycle_count(storage: &Arc<S>) -> Result<u64> {
         match storage.get_metadata(CYCLE_COUNT_KEY)? {
-            Some(bytes) => bincode::deserialize(&bytes)
-                .map_err(|e| crate::error::CortexError::Serialization(e)),
+            Some(bytes) => {
+                bincode::deserialize(&bytes).map_err(crate::error::CortexError::Serialization)
+            }
             None => Ok(0),
         }
     }
@@ -118,7 +119,7 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
     /// Save cycle count to persistent storage
     fn save_cycle_count(&self) -> Result<()> {
         let bytes = bincode::serialize(&self.cycle_count)
-            .map_err(|e| crate::error::CortexError::Serialization(e))?;
+            .map_err(crate::error::CortexError::Serialization)?;
         self.storage.put_metadata(CYCLE_COUNT_KEY, &bytes)
     }
 
@@ -161,12 +162,12 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
 
         // Always persist current values so next cycle can compare
         let threshold_bytes = bincode::serialize(&current_threshold)
-            .map_err(|e| crate::error::CortexError::Serialization(e))?;
+            .map_err(crate::error::CortexError::Serialization)?;
         self.storage
             .put_metadata(LAST_THRESHOLD_KEY, &threshold_bytes)?;
 
-        let model_bytes = bincode::serialize(current_model)
-            .map_err(|e| crate::error::CortexError::Serialization(e))?;
+        let model_bytes =
+            bincode::serialize(current_model).map_err(crate::error::CortexError::Serialization)?;
         self.storage.put_metadata(LAST_MODEL_KEY, &model_bytes)?;
 
         Ok(())
@@ -185,7 +186,11 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
         // 1. Scan for new/updated nodes since cursor
         let new_nodes = self.get_nodes_since_cursor()?;
 
-        if new_nodes.is_empty() && self.cycle_count % self.config.decay_every_n_cycles != 0 {
+        if new_nodes.is_empty()
+            && !self
+                .cycle_count
+                .is_multiple_of(self.config.decay_every_n_cycles)
+        {
             // Nothing to do this cycle
             self.metrics.set_cycle_duration(start.elapsed());
             return Ok(());
@@ -291,14 +296,20 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
         }
 
         // 4. Decay pass (periodic)
-        if self.cycle_count % self.config.decay_every_n_cycles == 0 {
+        if self
+            .cycle_count
+            .is_multiple_of(self.config.decay_every_n_cycles)
+        {
             let (pruned, deleted) = self.decay_engine.apply_decay(now)?;
             self.metrics.add_edges_pruned(pruned);
             self.metrics.add_edges_deleted(deleted);
         }
 
         // 5. Dedup scan (periodic)
-        if self.cycle_count % self.config.dedup_every_n_cycles == 0 {
+        if self
+            .cycle_count
+            .is_multiple_of(self.config.dedup_every_n_cycles)
+        {
             let dedup_scanner = DedupScanner::new(
                 self.storage.clone(),
                 self.vector_index.clone(),

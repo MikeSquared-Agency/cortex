@@ -380,13 +380,13 @@ pub async fn record_observation(
         observation_type: "performance".to_string(),
         metrics: ObsMetrics {
             correction_count: body.correction_count,
-            sentiment_score: sentiment_score,
+            sentiment_score,
             task_completed: task_outcome == "success",
             task_outcome: task_outcome.clone(),
             observation_score: obs_score,
             token_cost: body.token_cost,
             response_time_ms: body.response_time_ms,
-            user_satisfaction: user_satisfaction,
+            user_satisfaction,
         },
         context: ObsContext {
             task_type,

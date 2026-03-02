@@ -273,7 +273,7 @@ impl<S: Storage> RollbackMonitor<S> {
             .filter(|e| e.relation == deployment_rel)
             .filter_map(|e| self.storage.get_node(e.from).ok().flatten())
             .filter(|n| n.kind == kinds::event())
-            .filter(|n| is_active_deployment(n))
+            .filter(is_active_deployment)
             .collect();
 
         if deployment_nodes.is_empty() {

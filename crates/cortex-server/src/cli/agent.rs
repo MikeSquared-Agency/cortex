@@ -55,7 +55,7 @@ async fn list(_args: AgentListArgs, base: &str) -> Result<()> {
         return Ok(());
     }
 
-    println!("{:<36}  {:<20}  {}", "ID", "NAME", "TAGS");
+    println!("{:<36}  {:<20}  TAGS", "ID", "NAME");
     println!("{}", "─".repeat(70));
     for node in &nodes {
         let id = node["id"].as_str().unwrap_or("-");
@@ -99,8 +99,8 @@ async fn show(args: AgentShowArgs, base: &str) -> Result<()> {
 
     println!("Prompts bound to agent '{}':", args.name);
     println!(
-        "{:<6}  {:<30}  {:<36}  {}",
-        "WEIGHT", "SLUG", "NODE ID", "EDGE ID"
+        "{:<6}  {:<30}  {:<36}  EDGE ID",
+        "WEIGHT", "SLUG", "NODE ID"
     );
     println!("{}", "─".repeat(90));
     for b in &bindings {
@@ -253,7 +253,7 @@ async fn select(args: AgentSelectArgs, base: &str) -> Result<()> {
         if let Some(all) = data["all_variants"].as_array() {
             if all.len() > 1 {
                 println!();
-                println!("{:<30}  {:<8}  {:<8}  {}", "SLUG", "EDGE", "CTX", "TOTAL");
+                println!("{:<30}  {:<8}  {:<8}  TOTAL", "SLUG", "EDGE", "CTX");
                 println!("{}", "─".repeat(60));
                 for v in all {
                     println!(
@@ -304,8 +304,8 @@ async fn history(args: AgentHistoryArgs, base: &str) -> Result<()> {
     }
 
     println!(
-        "{:<10}  {:<30}  {:<8}  {:<10}  {}",
-        "TYPE", "VARIANT", "SCORE", "OUTCOME", "TIMESTAMP"
+        "{:<10}  {:<30}  {:<8}  {:<10}  TIMESTAMP",
+        "TYPE", "VARIANT", "SCORE", "OUTCOME"
     );
     println!("{}", "─".repeat(80));
     for item in &items {
