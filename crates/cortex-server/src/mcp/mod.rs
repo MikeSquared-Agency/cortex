@@ -715,7 +715,6 @@ fn tool_relate(cortex: &Cortex, args: &Value) -> Result<String> {
     }))?)
 }
 
-
 fn tool_observe(cortex: &Cortex, args: &Value) -> Result<String> {
     let agent_name = args["agent_name"]
         .as_str()
@@ -729,19 +728,24 @@ fn tool_observe(cortex: &Cortex, args: &Value) -> Result<String> {
     let variant_id: NodeId = Uuid::parse_str(variant_id_str)
         .map_err(|_| anyhow::anyhow!("Invalid variant_id: not a UUID"))?;
 
-    let sentiment_score = args.get("sentiment_score")
+    let sentiment_score = args
+        .get("sentiment_score")
         .and_then(|v| v.as_f64())
         .unwrap_or(0.5) as f32;
-    let correction_count = args.get("correction_count")
+    let correction_count = args
+        .get("correction_count")
         .and_then(|v| v.as_u64())
         .unwrap_or(0) as u32;
-    let task_outcome = args.get("task_outcome")
+    let task_outcome = args
+        .get("task_outcome")
         .and_then(|v| v.as_str())
         .unwrap_or("unknown");
-    let task_type = args.get("task_type")
+    let task_type = args
+        .get("task_type")
         .and_then(|v| v.as_str())
         .unwrap_or("casual");
-    let token_cost = args.get("token_cost")
+    let token_cost = args
+        .get("token_cost")
         .and_then(|v| v.as_u64())
         .map(|v| v as u32);
 
@@ -759,18 +763,46 @@ fn tool_observe(cortex: &Cortex, args: &Value) -> Result<String> {
         cortex_core::kinds::defaults::observation(),
         format!("{}: Performance for {}", task_outcome, variant_slug),
         obs_body,
-        Source { agent: agent_name.to_string(), session: None, channel: None },
+        Source {
+            agent: agent_name.to_string(),
+            session: None,
+            channel: None,
+        },
         obs_score,
     );
-    obs_node.data.metadata.insert("observation_type".into(), json!("performance"));
-    obs_node.data.metadata.insert("variant_id".into(), json!(variant_id_str));
-    obs_node.data.metadata.insert("variant_slug".into(), json!(variant_slug));
-    obs_node.data.metadata.insert("sentiment_score".into(), json!(sentiment_score));
-    obs_node.data.metadata.insert("correction_count".into(), json!(correction_count));
-    obs_node.data.metadata.insert("task_outcome".into(), json!(task_outcome));
-    obs_node.data.metadata.insert("observation_score".into(), json!(obs_score));
+    obs_node
+        .data
+        .metadata
+        .insert("observation_type".into(), json!("performance"));
+    obs_node
+        .data
+        .metadata
+        .insert("variant_id".into(), json!(variant_id_str));
+    obs_node
+        .data
+        .metadata
+        .insert("variant_slug".into(), json!(variant_slug));
+    obs_node
+        .data
+        .metadata
+        .insert("sentiment_score".into(), json!(sentiment_score));
+    obs_node
+        .data
+        .metadata
+        .insert("correction_count".into(), json!(correction_count));
+    obs_node
+        .data
+        .metadata
+        .insert("task_outcome".into(), json!(task_outcome));
+    obs_node
+        .data
+        .metadata
+        .insert("observation_score".into(), json!(obs_score));
     if let Some(tc) = token_cost {
-        obs_node.data.metadata.insert("token_cost".into(), json!(tc));
+        obs_node
+            .data
+            .metadata
+            .insert("token_cost".into(), json!(tc));
     }
 
     let obs_id = obs_node.id;
@@ -778,14 +810,18 @@ fn tool_observe(cortex: &Cortex, args: &Value) -> Result<String> {
 
     // Link: agent --performed--> observation (best-effort — skip if agent node not found)
     let agent_kind = cortex_core::kinds::defaults::agent();
-    if let Ok(agents) = cortex.list_nodes(cortex_core::storage::NodeFilter::new().with_kinds(vec![agent_kind])) {
+    if let Ok(agents) =
+        cortex.list_nodes(cortex_core::storage::NodeFilter::new().with_kinds(vec![agent_kind]))
+    {
         if let Some(agent) = agents.into_iter().find(|n| n.data.title == agent_name) {
             let _ = cortex.create_edge(Edge::new(
                 agent.id,
                 obs_id,
                 cortex_core::relations::defaults::performed(),
                 1.0,
-                EdgeProvenance::Manual { created_by: "mcp".into() },
+                EdgeProvenance::Manual {
+                    created_by: "mcp".into(),
+                },
             ));
         }
     }
@@ -796,7 +832,9 @@ fn tool_observe(cortex: &Cortex, args: &Value) -> Result<String> {
         variant_id,
         cortex_core::relations::defaults::informed_by(),
         1.0,
-        EdgeProvenance::Manual { created_by: "mcp".into() },
+        EdgeProvenance::Manual {
+            created_by: "mcp".into(),
+        },
     ));
 
     Ok(serde_json::to_string(&json!({
@@ -1224,7 +1262,10 @@ async fn remote_tool_call(
             }))
         }
         "cortex_observe" => {
-            let agent_name = args.get("agent_name").and_then(|v| v.as_str()).unwrap_or("");
+            let agent_name = args
+                .get("agent_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             let resp: Value = http
                 .post(format!("{}/agents/{}/observe", base_url, agent_name))
                 .json(&args)

@@ -101,13 +101,25 @@ impl CortexMetrics {
         );
 
         let node_count: Gauge = Gauge::default();
-        registry.register("cortex_node_count", "Total number of nodes", node_count.clone());
+        registry.register(
+            "cortex_node_count",
+            "Total number of nodes",
+            node_count.clone(),
+        );
 
         let edge_count: Gauge = Gauge::default();
-        registry.register("cortex_edge_count", "Total number of edges", edge_count.clone());
+        registry.register(
+            "cortex_edge_count",
+            "Total number of edges",
+            edge_count.clone(),
+        );
 
         let db_size: Gauge = Gauge::default();
-        registry.register("cortex_db_size_bytes", "Database file size in bytes", db_size.clone());
+        registry.register(
+            "cortex_db_size_bytes",
+            "Database file size in bytes",
+            db_size.clone(),
+        );
 
         // Linker counters
         let linker_cycles: Counter = Counter::default();
@@ -174,8 +186,7 @@ impl CortexMetrics {
             linker_last_cycle_edges.clone(),
         );
 
-        let linker_cycle_duration =
-            Histogram::new([0.05_f64, 0.1, 0.5, 1.0, 5.0].into_iter());
+        let linker_cycle_duration = Histogram::new([0.05_f64, 0.1, 0.5, 1.0, 5.0].into_iter());
         registry.register(
             "cortex_linker_cycle_duration_seconds",
             "Auto-linker cycle duration in seconds",

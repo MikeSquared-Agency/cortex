@@ -485,17 +485,20 @@ impl RedbStorage {
             found
         };
 
-        let edge_id = edge_id.ok_or_else(|| CortexError::Validation(
-            format!("No edge found from {} to {} with relation {}", from, to, relation),
-        ))?;
+        let edge_id = edge_id.ok_or_else(|| {
+            CortexError::Validation(format!(
+                "No edge found from {} to {} with relation {}",
+                from, to, relation
+            ))
+        })?;
 
         // Read, modify, write — still in the same transaction
         let edge_id_bytes = Self::uuid_to_bytes(&edge_id);
         let new_weight = {
             let mut edges_table = write_txn.open_table(EDGES)?;
-            let bytes = edges_table.get(&edge_id_bytes)?.ok_or_else(|| {
-                CortexError::EdgeNotFound(edge_id)
-            })?;
+            let bytes = edges_table
+                .get(&edge_id_bytes)?
+                .ok_or_else(|| CortexError::EdgeNotFound(edge_id))?;
             let mut edge: Edge = Self::deserialize_edge(bytes.value())?;
             drop(bytes);
             let old_w = edge.weight;

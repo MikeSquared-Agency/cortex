@@ -18,7 +18,10 @@ fn main() -> anyhow::Result<()> {
     let backup = path.with_extension("redb.bak");
     println!("Backing up {} → {}", path.display(), backup.display());
     std::fs::copy(&path, &backup)?;
-    println!("Backup written ({} bytes)", std::fs::metadata(&backup)?.len());
+    println!(
+        "Backup written ({} bytes)",
+        std::fs::metadata(&backup)?.len()
+    );
 
     // Attempt to open with repair callback enabled
     println!("Opening database with repair enabled...");

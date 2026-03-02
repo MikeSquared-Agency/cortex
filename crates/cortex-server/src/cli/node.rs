@@ -206,12 +206,10 @@ async fn stats(args: NodeStatsArgs, server: &str) -> Result<()> {
 fn fmt_timestamp(ts: Option<&prost_types::Timestamp>) -> String {
     match ts {
         None => "—".to_string(),
-        Some(t) => {
-            match chrono::DateTime::from_timestamp(t.seconds, t.nanos as u32) {
-                Some(dt) => dt.format("%Y-%m-%d %H:%M UTC").to_string(),
-                None => "invalid".to_string(),
-            }
-        }
+        Some(t) => match chrono::DateTime::from_timestamp(t.seconds, t.nanos as u32) {
+            Some(dt) => dt.format("%Y-%m-%d %H:%M UTC").to_string(),
+            None => "invalid".to_string(),
+        },
     }
 }
 
@@ -232,9 +230,6 @@ pub fn print_node_detail(n: &NodeResponse) {
     println!("Tags:       {}", n.tags.join(", "));
     println!("Source:     {}", n.source_agent);
     println!("Access:     {}", n.access_count);
-    println!(
-        "Last seen:  {}",
-        fmt_timestamp(n.last_accessed_at.as_ref())
-    );
+    println!("Last seen:  {}", fmt_timestamp(n.last_accessed_at.as_ref()));
     println!("Embedding:  {}", if n.has_embedding { "yes" } else { "no" });
 }

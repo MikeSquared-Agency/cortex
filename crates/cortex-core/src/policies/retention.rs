@@ -23,7 +23,9 @@ pub struct KindRetention {
 }
 
 /// Allow bare integers in TOML by implementing a custom deserializer.
-fn deserialize_by_kind<'de, D>(deserializer: D) -> std::result::Result<HashMap<String, KindRetention>, D::Error>
+fn deserialize_by_kind<'de, D>(
+    deserializer: D,
+) -> std::result::Result<HashMap<String, KindRetention>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -43,12 +45,18 @@ where
         fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
             f.write_str("a map of kind → ttl_days (u64) or { ttl_days, min_score }")
         }
-        fn visit_map<M: MapAccess<'de>>(self, mut map: M) -> std::result::Result<Self::Value, M::Error> {
+        fn visit_map<M: MapAccess<'de>>(
+            self,
+            mut map: M,
+        ) -> std::result::Result<Self::Value, M::Error> {
             let mut result = HashMap::new();
             while let Some((key, value)) = map.next_entry::<String, KindRetentionOrU64>()? {
                 let kr = match value {
                     KindRetentionOrU64::Full(kr) => kr,
-                    KindRetentionOrU64::Days(d) => KindRetention { ttl_days: d, min_score: None },
+                    KindRetentionOrU64::Days(d) => KindRetention {
+                        ttl_days: d,
+                        min_score: None,
+                    },
                 };
                 result.insert(key, kr);
             }
@@ -103,12 +111,20 @@ pub struct RetentionEngine {
 
 impl RetentionEngine {
     pub fn new(config: RetentionConfig, score_decay_config: ScoreDecayConfig) -> Self {
-        Self { config, score_decay_config }
+        Self {
+            config,
+            score_decay_config,
+        }
     }
 
     /// Check whether a single node is eligible for conditional deletion.
     /// All conditions must be true for the node to be deletable.
-    fn should_delete<S: Storage>(&self, node: &Node, kind_retention: &KindRetention, storage: &S) -> Result<bool> {
+    fn should_delete<S: Storage>(
+        &self,
+        node: &Node,
+        kind_retention: &KindRetention,
+        storage: &S,
+    ) -> Result<bool> {
         let now = Utc::now();
 
         // 1. Age exceeds TTL
@@ -379,8 +395,20 @@ mod tests {
         storage.put_node(&dec).unwrap();
 
         let mut by_kind = HashMap::new();
-        by_kind.insert("observation".to_string(), KindRetention { ttl_days: 30, min_score: None });
-        by_kind.insert("decision".to_string(), KindRetention { ttl_days: 0, min_score: None });
+        by_kind.insert(
+            "observation".to_string(),
+            KindRetention {
+                ttl_days: 30,
+                min_score: None,
+            },
+        );
+        by_kind.insert(
+            "decision".to_string(),
+            KindRetention {
+                ttl_days: 0,
+                min_score: None,
+            },
+        );
 
         let config = RetentionConfig {
             by_kind,
@@ -466,7 +494,13 @@ mod tests {
         storage.put_node(&node).unwrap();
 
         let mut by_kind = HashMap::new();
-        by_kind.insert("observation".to_string(), KindRetention { ttl_days: 30, min_score: None });
+        by_kind.insert(
+            "observation".to_string(),
+            KindRetention {
+                ttl_days: 30,
+                min_score: None,
+            },
+        );
 
         let config = RetentionConfig {
             by_kind,
@@ -506,7 +540,13 @@ mod tests {
         storage.put_edge(&edge).unwrap();
 
         let mut by_kind = HashMap::new();
-        by_kind.insert("observation".to_string(), KindRetention { ttl_days: 30, min_score: None });
+        by_kind.insert(
+            "observation".to_string(),
+            KindRetention {
+                ttl_days: 30,
+                min_score: None,
+            },
+        );
 
         let config = RetentionConfig {
             by_kind,
@@ -533,10 +573,13 @@ mod tests {
         storage.put_node(&node).unwrap();
 
         let mut by_kind = HashMap::new();
-        by_kind.insert("observation".to_string(), KindRetention {
-            ttl_days: 30,
-            min_score: Some(0.5),
-        });
+        by_kind.insert(
+            "observation".to_string(),
+            KindRetention {
+                ttl_days: 30,
+                min_score: Some(0.5),
+            },
+        );
 
         let config = RetentionConfig {
             by_kind,
@@ -579,7 +622,13 @@ mod tests {
         assert_eq!(storage.edges_from(doomed.id).unwrap().len(), 1);
 
         let mut by_kind = HashMap::new();
-        by_kind.insert("observation".to_string(), KindRetention { ttl_days: 30, min_score: None });
+        by_kind.insert(
+            "observation".to_string(),
+            KindRetention {
+                ttl_days: 30,
+                min_score: None,
+            },
+        );
 
         let config = RetentionConfig {
             by_kind,
@@ -611,10 +660,13 @@ mod tests {
         storage.put_node(&node).unwrap();
 
         let mut by_kind = HashMap::new();
-        by_kind.insert("event".to_string(), KindRetention {
-            ttl_days: 30,
-            min_score: None, // no score gate
-        });
+        by_kind.insert(
+            "event".to_string(),
+            KindRetention {
+                ttl_days: 30,
+                min_score: None, // no score gate
+            },
+        );
 
         let config = RetentionConfig {
             by_kind,
@@ -641,10 +693,13 @@ mod tests {
         storage.put_node(&node).unwrap();
 
         let mut by_kind = HashMap::new();
-        by_kind.insert("observation".to_string(), KindRetention {
-            ttl_days: 30,
-            min_score: Some(0.05), // very low bar, but echo boost should keep it above
-        });
+        by_kind.insert(
+            "observation".to_string(),
+            KindRetention {
+                ttl_days: 30,
+                min_score: Some(0.05), // very low bar, but echo boost should keep it above
+            },
+        );
 
         let config = RetentionConfig {
             by_kind,
@@ -654,6 +709,9 @@ mod tests {
         };
         let engine = RetentionEngine::new(config, default_score_decay());
         let deleted = engine.sweep(storage.as_ref()).unwrap();
-        assert_eq!(deleted, 0, "High-score node should survive with min_score gate");
+        assert_eq!(
+            deleted, 0,
+            "High-score node should survive with min_score gate"
+        );
     }
 }

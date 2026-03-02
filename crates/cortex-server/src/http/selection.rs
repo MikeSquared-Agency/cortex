@@ -221,11 +221,15 @@ pub async fn variant_history(
 
             // variant_slug: body JSON prompt_slug takes priority, then metadata.
             // variant_id: UUID lives in metadata only (#24 body JSON omits it).
-            let variant_slug = ex
-                .prompt_slug
-                .or_else(|| meta.get("variant_slug").and_then(|v| v.as_str()).map(|s| s.to_string()));
-            let variant_id =
-                meta.get("variant_id").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let variant_slug = ex.prompt_slug.or_else(|| {
+                meta.get("variant_slug")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            });
+            let variant_id = meta
+                .get("variant_id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
 
             serde_json::json!({
                 "id": obs.id.to_string(),
@@ -417,22 +421,22 @@ pub async fn record_observation(
         "observation_type".into(),
         serde_json::Value::String("performance".into()),
     );
-    obs_node
-        .data
-        .metadata
-        .insert("variant_id".into(), serde_json::Value::String(body.variant_id.clone()));
-    obs_node
-        .data
-        .metadata
-        .insert("variant_slug".into(), serde_json::Value::String(body.variant_slug.clone()));
+    obs_node.data.metadata.insert(
+        "variant_id".into(),
+        serde_json::Value::String(body.variant_id.clone()),
+    );
+    obs_node.data.metadata.insert(
+        "variant_slug".into(),
+        serde_json::Value::String(body.variant_slug.clone()),
+    );
     obs_node
         .data
         .metadata
         .insert("sentiment_score".into(), serde_json::json!(sentiment_score));
-    obs_node
-        .data
-        .metadata
-        .insert("correction_count".into(), serde_json::json!(body.correction_count));
+    obs_node.data.metadata.insert(
+        "correction_count".into(),
+        serde_json::json!(body.correction_count),
+    );
     obs_node.data.metadata.insert(
         "task_outcome".into(),
         serde_json::Value::String(task_outcome.clone()),
@@ -467,7 +471,9 @@ pub async fn record_observation(
             to: obs_node.id,
             relation: rels::performed(),
             weight: 1.0,
-            provenance: EdgeProvenance::Manual { created_by: name.clone() },
+            provenance: EdgeProvenance::Manual {
+                created_by: name.clone(),
+            },
             created_at: now,
             updated_at: now,
         },
@@ -477,7 +483,9 @@ pub async fn record_observation(
             to: variant_uuid,
             relation: rels::informed_by(),
             weight: 1.0,
-            provenance: EdgeProvenance::Manual { created_by: name.clone() },
+            provenance: EdgeProvenance::Manual {
+                created_by: name.clone(),
+            },
             created_at: now,
             updated_at: now,
         },
@@ -487,7 +495,9 @@ pub async fn record_observation(
             to: variant_uuid,
             relation: rels::observed_with(),
             weight: obs_score,
-            provenance: EdgeProvenance::Manual { created_by: name.clone() },
+            provenance: EdgeProvenance::Manual {
+                created_by: name.clone(),
+            },
             created_at: now,
             updated_at: now,
         },
@@ -497,7 +507,9 @@ pub async fn record_observation(
             to: agent.id,
             relation: rels::observed_by(),
             weight: 1.0,
-            provenance: EdgeProvenance::Manual { created_by: name.clone() },
+            provenance: EdgeProvenance::Manual {
+                created_by: name.clone(),
+            },
             created_at: now,
             updated_at: now,
         },
@@ -506,12 +518,12 @@ pub async fn record_observation(
 
     // Atomically update the uses edge weight (single write transaction)
     let uses_rel = rels::uses();
-    let (old_weight, new_weight) = state.storage.update_edge_weight_atomic(
-        agent.id,
-        variant_uuid,
-        &uses_rel,
-        |w| sel::update_edge_weight(w, obs_score),
-    )?;
+    let (old_weight, new_weight) =
+        state
+            .storage
+            .update_edge_weight_atomic(agent.id, variant_uuid, &uses_rel, |w| {
+                sel::update_edge_weight(w, obs_score)
+            })?;
 
     // Determine if this is a variant swap
     let current_active = agent
@@ -549,7 +561,11 @@ pub async fn record_observation(
                     kinds::observation(),
                     format!("obs:{}:{}", name, now.to_rfc3339()),
                     swap_body_json,
-                    Source { agent: name.clone(), session: None, channel: None },
+                    Source {
+                        agent: name.clone(),
+                        session: None,
+                        channel: None,
+                    },
                     0.5,
                 );
                 swap_obs.data.metadata.insert(
@@ -584,7 +600,9 @@ pub async fn record_observation(
                     to: swap_obs.id,
                     relation: rels::performed(),
                     weight: 1.0,
-                    provenance: EdgeProvenance::Manual { created_by: name.clone() },
+                    provenance: EdgeProvenance::Manual {
+                        created_by: name.clone(),
+                    },
                     created_at: now,
                     updated_at: now,
                 })?;
@@ -610,15 +628,19 @@ pub async fn record_observation(
     // ── Rollback monitor check (issue #23) ─────────────────────────────────
     // Normalise correction_count to a rate (0–1) assuming 5 corrections = rate 1.0.
     let correction_rate = (body.correction_count as f32 / 5.0).min(1.0);
-    let rollback_result = RollbackMonitor::new(
-        state.storage.clone(),
-        state.rollback_config.clone(),
-    )
-    .process_observation(obs_node.id, variant_uuid, correction_rate, sentiment_score, obs_score)
-    .unwrap_or_else(|e| {
-        log::warn!("rollback monitor error for variant {}: {}", variant_uuid, e);
-        None
-    });
+    let rollback_result =
+        RollbackMonitor::new(state.storage.clone(), state.rollback_config.clone())
+            .process_observation(
+                obs_node.id,
+                variant_uuid,
+                correction_rate,
+                sentiment_score,
+                obs_score,
+            )
+            .unwrap_or_else(|e| {
+                log::warn!("rollback monitor error for variant {}: {}", variant_uuid, e);
+                None
+            });
 
     let rollback_info = rollback_result.as_ref().map(|r| {
         serde_json::json!({
@@ -834,8 +856,16 @@ fn aggregate_observations(obs_list: &[Node]) -> PerfAggregates {
     PerfAggregates {
         total_count,
         avg_score: if total_count > 0 { sum_score / n } else { 0.0 },
-        avg_sentiment: if total_count > 0 { sum_sentiment / n } else { 0.0 },
-        avg_corrections: if total_count > 0 { sum_corrections as f64 / n } else { 0.0 },
+        avg_sentiment: if total_count > 0 {
+            sum_sentiment / n
+        } else {
+            0.0
+        },
+        avg_corrections: if total_count > 0 {
+            sum_corrections as f64 / n
+        } else {
+            0.0
+        },
         avg_token_cost: if token_cost_count > 0 {
             Some(sum_token_cost as f64 / token_cost_count as f64)
         } else {
@@ -1026,7 +1056,11 @@ mod tests {
             kinds::observation(),
             "test observation".to_string(),
             body.to_string(),
-            Source { agent: "test".to_string(), session: None, channel: None },
+            Source {
+                agent: "test".to_string(),
+                session: None,
+                channel: None,
+            },
             1.0,
         )
     }

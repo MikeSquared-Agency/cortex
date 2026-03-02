@@ -185,8 +185,12 @@ impl<S: Storage> RollbackMonitor<S> {
         agent_name: &str,
         baseline_obs: Vec<(f32, f32)>,
     ) -> Result<NodeId> {
-        let (baseline_correction, baseline_stddev_correction, baseline_sentiment, baseline_stddev_sentiment) =
-            compute_baseline_stats(&baseline_obs);
+        let (
+            baseline_correction,
+            baseline_stddev_correction,
+            baseline_sentiment,
+            baseline_stddev_sentiment,
+        ) = compute_baseline_stats(&baseline_obs);
 
         let body = serde_json::json!({
             "event_type": "deployment",
@@ -214,7 +218,11 @@ impl<S: Storage> RollbackMonitor<S> {
             kinds::event(),
             format!("deployment:{}/{}/v{}", slug, branch, version),
             body.to_string(),
-            Source { agent: agent_name.to_string(), session: None, channel: None },
+            Source {
+                agent: agent_name.to_string(),
+                session: None,
+                channel: None,
+            },
             1.0,
         );
         self.storage.put_node(&deployment_node)?;
@@ -225,7 +233,9 @@ impl<S: Storage> RollbackMonitor<S> {
             prompt_node_id,
             rels::deployed(),
             1.0,
-            EdgeProvenance::Manual { created_by: agent_name.to_string() },
+            EdgeProvenance::Manual {
+                created_by: agent_name.to_string(),
+            },
         ))?;
 
         Ok(deployment_node.id)
@@ -277,26 +287,27 @@ impl<S: Storage> RollbackMonitor<S> {
         let body: serde_json::Value = serde_json::from_str(&deployment_node.data.body)
             .map_err(|e| crate::CortexError::Validation(format!("bad deployment body: {}", e)))?;
 
-        let monitoring_window =
-            body["monitoring_window"].as_u64().unwrap_or(self.config.monitoring_window as u64) as u32;
+        let monitoring_window = body["monitoring_window"]
+            .as_u64()
+            .unwrap_or(self.config.monitoring_window as u64) as u32;
         let n_prev = body["n_observed"].as_u64().unwrap_or(0) as u32;
 
-        let baseline_correction =
-            body["baseline_correction_rate"].as_f64().unwrap_or(0.15) as f32;
+        let baseline_correction = body["baseline_correction_rate"].as_f64().unwrap_or(0.15) as f32;
         let baseline_stddev_correction =
             body["baseline_stddev_correction"].as_f64().unwrap_or(0.05) as f32;
         let baseline_sentiment = body["baseline_sentiment"].as_f64().unwrap_or(0.5) as f32;
         let baseline_stddev_sentiment =
             body["baseline_stddev_sentiment"].as_f64().unwrap_or(0.1) as f32;
 
-        let prev_mean_correction =
-            body["mean_correction"].as_f64().unwrap_or(baseline_correction as f64) as f32;
+        let prev_mean_correction = body["mean_correction"]
+            .as_f64()
+            .unwrap_or(baseline_correction as f64) as f32;
         let prev_m2_correction = body["m2_correction"].as_f64().unwrap_or(0.0) as f32;
-        let prev_mean_sentiment =
-            body["mean_sentiment"].as_f64().unwrap_or(baseline_sentiment as f64) as f32;
+        let prev_mean_sentiment = body["mean_sentiment"]
+            .as_f64()
+            .unwrap_or(baseline_sentiment as f64) as f32;
         let prev_m2_sentiment = body["m2_sentiment"].as_f64().unwrap_or(0.0) as f32;
-        let prev_consecutive_negative =
-            body["consecutive_negative"].as_u64().unwrap_or(0) as u32;
+        let prev_consecutive_negative = body["consecutive_negative"].as_u64().unwrap_or(0) as u32;
 
         // Welford online update for incremental mean + M2
         let n = n_prev + 1;
@@ -308,10 +319,17 @@ impl<S: Storage> RollbackMonitor<S> {
         let mean_sentiment = prev_mean_sentiment + delta_s / n as f32;
         let m2_sentiment = prev_m2_sentiment + delta_s * (sentiment - mean_sentiment);
 
-        let consecutive_negative =
-            if obs_score < 0.4 { prev_consecutive_negative + 1 } else { 0 };
+        let consecutive_negative = if obs_score < 0.4 {
+            prev_consecutive_negative + 1
+        } else {
+            0
+        };
 
-        let new_status = if n >= monitoring_window { "stable" } else { "monitoring" };
+        let new_status = if n >= monitoring_window {
+            "stable"
+        } else {
+            "monitoring"
+        };
 
         // Link observation to deployment event for audit trail.
         self.storage.put_edge(&Edge::new(
@@ -319,7 +337,9 @@ impl<S: Storage> RollbackMonitor<S> {
             deployment_node.id,
             rels::observed_with(),
             1.0,
-            EdgeProvenance::AutoStructural { rule: "rollback_monitor".into() },
+            EdgeProvenance::AutoStructural {
+                rule: "rollback_monitor".into(),
+            },
         ))?;
 
         // Persist updated stats into deployment node body.
@@ -372,7 +392,9 @@ impl<S: Storage> RollbackMonitor<S> {
         let correction_increase = mean_correction - baseline_correction;
 
         if consecutive_negative >= self.config.consecutive_negative_limit {
-            let trigger = RollbackTrigger::ConsecutiveNegative { count: consecutive_negative };
+            let trigger = RollbackTrigger::ConsecutiveNegative {
+                count: consecutive_negative,
+            };
             return self
                 .execute_rollback(deployment_node, prompt_node_id, trigger, &body)
                 .map(Some);
@@ -401,8 +423,9 @@ impl<S: Storage> RollbackMonitor<S> {
         }
 
         if correction_increase > self.config.absolute_correction_increase {
-            let trigger =
-                RollbackTrigger::AbsoluteCorrectionIncrease { increase: correction_increase };
+            let trigger = RollbackTrigger::AbsoluteCorrectionIncrease {
+                increase: correction_increase,
+            };
             return self
                 .execute_rollback(deployment_node, prompt_node_id, trigger, &body)
                 .map(Some);
@@ -577,8 +600,7 @@ impl<S: Storage> RollbackMonitor<S> {
         .min(168) as u32;
         let cooldown_expires_at = Utc::now() + Duration::hours(cooldown_hours as i64);
 
-        let is_quarantined =
-            rollback_count >= self.config.max_rollbacks_before_quarantine;
+        let is_quarantined = rollback_count >= self.config.max_rollbacks_before_quarantine;
 
         log::warn!(
             "prompt rollback: {}/{} v{} → v{} (trigger: {}, rollback #{}, cooldown: {}h, quarantined: {})",
@@ -604,9 +626,16 @@ impl<S: Storage> RollbackMonitor<S> {
 
         let mut rollback_node = Node::new(
             kinds::event(),
-            format!("rollback:{}/{}/v{}->v{}", slug, branch, from_version, to_version),
+            format!(
+                "rollback:{}/{}/v{}->v{}",
+                slug, branch, from_version, to_version
+            ),
             rollback_body.to_string(),
-            Source { agent: "rollback_monitor".to_string(), session: None, channel: None },
+            Source {
+                agent: "rollback_monitor".to_string(),
+                session: None,
+                channel: None,
+            },
             1.0,
         );
         rollback_node.data.tags.push("rollback".to_string());
@@ -618,7 +647,9 @@ impl<S: Storage> RollbackMonitor<S> {
             prompt_node_id,
             rels::rolled_back(),
             1.0,
-            EdgeProvenance::AutoStructural { rule: "rollback_monitor".into() },
+            EdgeProvenance::AutoStructural {
+                rule: "rollback_monitor".into(),
+            },
         ))?;
         // rollback --rolled_back_to--> to_version
         self.storage.put_edge(&Edge::new(
@@ -626,12 +657,18 @@ impl<S: Storage> RollbackMonitor<S> {
             to_node_id,
             rels::rolled_back_to(),
             1.0,
-            EdgeProvenance::AutoStructural { rule: "rollback_monitor".into() },
+            EdgeProvenance::AutoStructural {
+                rule: "rollback_monitor".into(),
+            },
         ))?;
 
         // Tag the rolled-back version.
         if let Ok(Some(mut prompt_node)) = self.storage.get_node(prompt_node_id) {
-            if !prompt_node.data.tags.contains(&"auto-rolled-back".to_string()) {
+            if !prompt_node
+                .data
+                .tags
+                .contains(&"auto-rolled-back".to_string())
+            {
                 prompt_node.data.tags.push("auto-rolled-back".to_string());
             }
             if is_quarantined && !prompt_node.data.tags.contains(&"quarantined".to_string()) {
@@ -643,12 +680,13 @@ impl<S: Storage> RollbackMonitor<S> {
 
         // Update deployment event status (take by value — no clone needed).
         let mut updated_dep = deployment_node;
-        if let Ok(mut dep_body) =
-            serde_json::from_str::<serde_json::Value>(&updated_dep.data.body)
+        if let Ok(mut dep_body) = serde_json::from_str::<serde_json::Value>(&updated_dep.data.body)
         {
-            dep_body["status"] = serde_json::json!(
-                if is_quarantined { "quarantined" } else { "rolled_back" }
-            );
+            dep_body["status"] = serde_json::json!(if is_quarantined {
+                "quarantined"
+            } else {
+                "rolled_back"
+            });
             updated_dep.data.body = dep_body.to_string();
         }
         updated_dep.updated_at = Utc::now();
@@ -780,7 +818,12 @@ pub fn compute_baseline_stats(obs: &[(f32, f32)]) -> (f32, f32, f32, f32) {
     let var_c = obs.iter().map(|(c, _)| (c - mean_c).powi(2)).sum::<f32>() / n;
     let var_s = obs.iter().map(|(_, s)| (s - mean_s).powi(2)).sum::<f32>() / n;
     // Floor stddev at 0.01 to avoid division-by-zero in σ calculations.
-    (mean_c, var_c.sqrt().max(0.01), mean_s, var_s.sqrt().max(0.01))
+    (
+        mean_c,
+        var_c.sqrt().max(0.01),
+        mean_s,
+        var_s.sqrt().max(0.01),
+    )
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
@@ -854,9 +897,8 @@ mod tests {
         // Verify cooldown formula: base * 2^(count-1), capped at 168h.
         // With base=1 the shift is capped at 2^7=128 (never reaches 168).
         let base: u64 = 1;
-        let compute = |count: u32| -> u32 {
-            (base * (1u64 << (count as u64 - 1).min(7))).min(168) as u32
-        };
+        let compute =
+            |count: u32| -> u32 { (base * (1u64 << (count as u64 - 1).min(7))).min(168) as u32 };
         assert_eq!(compute(1), 1);
         assert_eq!(compute(2), 2);
         assert_eq!(compute(3), 4);
@@ -866,9 +908,8 @@ mod tests {
 
         // With base=2 the cap kicks in at count>=8 (2*128=256 > 168).
         let base2: u64 = 2;
-        let compute2 = |count: u32| -> u32 {
-            (base2 * (1u64 << (count as u64 - 1).min(7))).min(168) as u32
-        };
+        let compute2 =
+            |count: u32| -> u32 { (base2 * (1u64 << (count as u64 - 1).min(7))).min(168) as u32 };
         assert_eq!(compute2(1), 2);
         assert_eq!(compute2(2), 4);
         assert_eq!(compute2(7), 128);
@@ -885,7 +926,10 @@ mod tests {
         (storage, tmp)
     }
 
-    fn make_monitor(storage: Arc<RedbStorage>, cfg: RollbackConfig) -> RollbackMonitor<RedbStorage> {
+    fn make_monitor(
+        storage: Arc<RedbStorage>,
+        cfg: RollbackConfig,
+    ) -> RollbackMonitor<RedbStorage> {
         RollbackMonitor::new(storage, cfg)
     }
 
@@ -922,7 +966,9 @@ mod tests {
             metadata: Default::default(),
             override_sections: Default::default(),
         };
-        let v2_id = resolver.create_version(slug, "main", v2_content, "test").unwrap();
+        let v2_id = resolver
+            .create_version(slug, "main", v2_content, "test")
+            .unwrap();
 
         (v1_id, v2_id)
     }
@@ -934,7 +980,11 @@ mod tests {
             kinds::observation(),
             "test observation".to_string(),
             r#"{"observation_type":"performance"}"#.to_string(),
-            Source { agent: "test".to_string(), session: None, channel: None },
+            Source {
+                agent: "test".to_string(),
+                session: None,
+                channel: None,
+            },
             1.0,
         );
         storage.put_node(&obs).unwrap();
@@ -957,8 +1007,7 @@ mod tests {
 
         // Deployment node must exist.
         let dep_node = storage.get_node(dep_id).unwrap().unwrap();
-        let body: serde_json::Value =
-            serde_json::from_str(&dep_node.data.body).unwrap();
+        let body: serde_json::Value = serde_json::from_str(&dep_node.data.body).unwrap();
         assert_eq!(body["event_type"].as_str(), Some("deployment"));
         assert_eq!(body["slug"].as_str(), Some("greet"));
         assert_eq!(body["status"].as_str(), Some("monitoring"));
@@ -967,7 +1016,9 @@ mod tests {
         // deployed edge must exist.
         let edges = storage.edges_from(dep_id).unwrap();
         assert!(
-            edges.iter().any(|e| e.to == v2_id && e.relation == rels::deployed()),
+            edges
+                .iter()
+                .any(|e| e.to == v2_id && e.relation == rels::deployed()),
             "expected deployed edge"
         );
     }
@@ -994,9 +1045,13 @@ mod tests {
         // Feed good observations — low correction, high sentiment.
         for _ in 0..8 {
             let obs_id = make_obs_node(&storage);
-            let result =
-                monitor.process_observation(obs_id, v2_id, 0.1, 0.85, 0.9).unwrap();
-            assert!(result.is_none(), "good observations should not trigger rollback");
+            let result = monitor
+                .process_observation(obs_id, v2_id, 0.1, 0.85, 0.9)
+                .unwrap();
+            assert!(
+                result.is_none(),
+                "good observations should not trigger rollback"
+            );
         }
     }
 
@@ -1022,18 +1077,27 @@ mod tests {
         // Two sub-threshold observations — no rollback yet.
         for _ in 0..2 {
             let obs_id = make_obs_node(&storage);
-            let result =
-                monitor.process_observation(obs_id, v2_id, 0.9, 0.2, 0.1).unwrap();
+            let result = monitor
+                .process_observation(obs_id, v2_id, 0.9, 0.2, 0.1)
+                .unwrap();
             assert!(result.is_none());
         }
 
         // Third consecutive negative — rollback fires.
         let obs_id = make_obs_node(&storage);
-        let result = monitor.process_observation(obs_id, v2_id, 0.9, 0.2, 0.1).unwrap();
-        assert!(result.is_some(), "third consecutive negative must trigger rollback");
+        let result = monitor
+            .process_observation(obs_id, v2_id, 0.9, 0.2, 0.1)
+            .unwrap();
+        assert!(
+            result.is_some(),
+            "third consecutive negative must trigger rollback"
+        );
 
         let rb = result.unwrap();
-        assert!(matches!(rb.trigger, RollbackTrigger::ConsecutiveNegative { .. }));
+        assert!(matches!(
+            rb.trigger,
+            RollbackTrigger::ConsecutiveNegative { .. }
+        ));
         assert_eq!(rb.rollback_count, 1);
         assert_eq!(rb.from_node_id, v2_id);
     }
@@ -1073,9 +1137,15 @@ mod tests {
             }
         }
 
-        assert!(rollback_result.is_some(), "high correction sigma should trigger rollback");
+        assert!(
+            rollback_result.is_some(),
+            "high correction sigma should trigger rollback"
+        );
         let rb = rollback_result.unwrap();
-        assert!(matches!(rb.trigger, RollbackTrigger::CorrectionRateSigma { .. }));
+        assert!(matches!(
+            rb.trigger,
+            RollbackTrigger::CorrectionRateSigma { .. }
+        ));
     }
 
     #[test]
@@ -1101,12 +1171,16 @@ mod tests {
         // Trigger first rollback via consecutive negatives.
         for _ in 0..3 {
             let obs_id = make_obs_node(&storage);
-            monitor.process_observation(obs_id, v2_id, 0.9, 0.2, 0.1).unwrap();
+            monitor
+                .process_observation(obs_id, v2_id, 0.9, 0.2, 0.1)
+                .unwrap();
         }
 
         // Now cooldown should be active — subsequent observations must return None.
         let obs_id = make_obs_node(&storage);
-        let result = monitor.process_observation(obs_id, v2_id, 0.9, 0.2, 0.1).unwrap();
+        let result = monitor
+            .process_observation(obs_id, v2_id, 0.9, 0.2, 0.1)
+            .unwrap();
         assert!(
             result.is_none(),
             "second rollback must be suppressed by cooldown"
@@ -1131,14 +1205,23 @@ mod tests {
 
         let (_v1_id, v2_id) = create_prompt_chain(&storage, "quarantine-prompt");
         monitor
-            .record_deployment("quarantine-prompt", "main", 2, v2_id, "kai", vec![(0.1, 0.8)])
+            .record_deployment(
+                "quarantine-prompt",
+                "main",
+                2,
+                v2_id,
+                "kai",
+                vec![(0.1, 0.8)],
+            )
             .unwrap();
 
         // Trigger rollback.
         let mut rb_result = None;
         for _ in 0..3 {
             let obs_id = make_obs_node(&storage);
-            let res = monitor.process_observation(obs_id, v2_id, 0.9, 0.2, 0.1).unwrap();
+            let res = monitor
+                .process_observation(obs_id, v2_id, 0.9, 0.2, 0.1)
+                .unwrap();
             if res.is_some() {
                 rb_result = res;
                 break;
@@ -1174,13 +1257,22 @@ mod tests {
         let monitor = make_monitor(storage.clone(), cfg);
         let (_v1_id, v2_id) = create_prompt_chain(&storage, "unquarantine-prompt");
         monitor
-            .record_deployment("unquarantine-prompt", "main", 2, v2_id, "kai", vec![(0.1, 0.8)])
+            .record_deployment(
+                "unquarantine-prompt",
+                "main",
+                2,
+                v2_id,
+                "kai",
+                vec![(0.1, 0.8)],
+            )
             .unwrap();
 
         // Trigger quarantine.
         for _ in 0..3 {
             let obs_id = make_obs_node(&storage);
-            monitor.process_observation(obs_id, v2_id, 0.9, 0.2, 0.1).unwrap();
+            monitor
+                .process_observation(obs_id, v2_id, 0.9, 0.2, 0.1)
+                .unwrap();
         }
 
         let prompt_node = storage.get_node(v2_id).unwrap().unwrap();
@@ -1216,7 +1308,10 @@ mod tests {
             .unwrap();
 
         // Status before any rollback.
-        let status = monitor.get_status("status-prompt", "main").unwrap().unwrap();
+        let status = monitor
+            .get_status("status-prompt", "main")
+            .unwrap()
+            .unwrap();
         assert_eq!(status.rollback_count, 0);
         assert!(status.cooldown_expires_at.is_none());
         assert!(!status.is_quarantined);
@@ -1224,14 +1319,22 @@ mod tests {
         // Trigger a rollback.
         for _ in 0..3 {
             let obs_id = make_obs_node(&storage);
-            monitor.process_observation(obs_id, v2_id, 0.9, 0.2, 0.1).unwrap();
+            monitor
+                .process_observation(obs_id, v2_id, 0.9, 0.2, 0.1)
+                .unwrap();
         }
 
         // Status after rollback — must show count=1 and a cooldown window.
-        let status = monitor.get_status("status-prompt", "main").unwrap().unwrap();
+        let status = monitor
+            .get_status("status-prompt", "main")
+            .unwrap()
+            .unwrap();
         assert_eq!(status.rollback_count, 1);
         assert!(
-            status.cooldown_expires_at.map(|t| t > Utc::now()).unwrap_or(false),
+            status
+                .cooldown_expires_at
+                .map(|t| t > Utc::now())
+                .unwrap_or(false),
             "cooldown_expires_at must be in the future"
         );
         assert_eq!(status.recent_rollbacks.len(), 1);
@@ -1260,13 +1363,14 @@ mod tests {
         // Feed 5 good observations to exhaust the window.
         for _ in 0..5 {
             let obs_id = make_obs_node(&storage);
-            monitor.process_observation(obs_id, v2_id, 0.1, 0.9, 0.95).unwrap();
+            monitor
+                .process_observation(obs_id, v2_id, 0.1, 0.9, 0.95)
+                .unwrap();
         }
 
         // Deployment node should be marked stable.
         let dep_node = storage.get_node(dep_id).unwrap().unwrap();
-        let body: serde_json::Value =
-            serde_json::from_str(&dep_node.data.body).unwrap();
+        let body: serde_json::Value = serde_json::from_str(&dep_node.data.body).unwrap();
         assert_eq!(
             body["status"].as_str(),
             Some("stable"),
@@ -1286,7 +1390,11 @@ mod tests {
             kinds::event(),
             "some-other-event".to_string(),
             r#"{"event_type":"deployment","slug":"x","branch":"main"}"#.to_string(),
-            Source { agent: "sys".to_string(), session: None, channel: None },
+            Source {
+                agent: "sys".to_string(),
+                session: None,
+                channel: None,
+            },
             1.0,
         );
         storage.put_node(&decoy).unwrap();
@@ -1303,7 +1411,11 @@ mod tests {
         storage.put_node(&rb_event).unwrap();
 
         let events = monitor.list_rollback_events("x", "main").unwrap();
-        assert_eq!(events.len(), 1, "only the tagged rollback event should be returned");
+        assert_eq!(
+            events.len(),
+            1,
+            "only the tagged rollback event should be returned"
+        );
         assert_eq!(events[0].id, rb_event.id);
     }
 }

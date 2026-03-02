@@ -14,8 +14,10 @@ pub mod types;
 pub mod vector;
 
 pub use api::{Cortex, LibraryConfig};
-pub use gate::{GateCheck, GateRejection, GateResult, KindOverrideConfig, WriteGate, WriteGateConfig};
 pub use error::{CortexError, Result};
+pub use gate::{
+    GateCheck, GateRejection, GateResult, KindOverrideConfig, WriteGate, WriteGateConfig,
+};
 pub use graph::{
     GraphEngine, GraphEngineImpl, Path, PathRequest, PathResult, Subgraph, TraversalBudget,
     TraversalDirection, TraversalRequest, TraversalStrategy,

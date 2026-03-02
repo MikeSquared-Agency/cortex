@@ -95,7 +95,14 @@ impl ContextSignals {
         m.insert("energy_high".into(), self.energy);
         // Task-type one-hot
         for tt in ["coding", "planning", "casual", "crisis", "reflection"] {
-            m.insert(format!("task_{tt}"), if tt.eq_ignore_ascii_case(&self.task_type) { 1.0 } else { 0.0 });
+            m.insert(
+                format!("task_{tt}"),
+                if tt.eq_ignore_ascii_case(&self.task_type) {
+                    1.0
+                } else {
+                    0.0
+                },
+            );
         }
         m
     }
@@ -194,7 +201,10 @@ mod tests {
 
     #[test]
     fn get_signal_sentiment_keys() {
-        let s = ContextSignals { sentiment: 0.8, ..Default::default() };
+        let s = ContextSignals {
+            sentiment: 0.8,
+            ..Default::default()
+        };
         assert!((s.get_signal("user_pleased") - 0.8).abs() < f32::EPSILON);
         assert!((s.get_signal("sentiment_high") - 0.8).abs() < f32::EPSILON);
         assert!((s.get_signal("user_frustrated") - 0.2).abs() < 1e-6);
@@ -215,14 +225,25 @@ mod tests {
 
     #[test]
     fn get_signal_task_type_active_is_one() {
-        let s = ContextSignals { task_type: "coding".into(), ..Default::default() };
+        let s = ContextSignals {
+            task_type: "coding".into(),
+            ..Default::default()
+        };
         assert!((s.get_signal("task_coding") - 1.0).abs() < f32::EPSILON);
     }
 
     #[test]
     fn get_signal_task_type_inactive_is_zero() {
-        let s = ContextSignals { task_type: "coding".into(), ..Default::default() };
-        for inactive in ["task_planning", "task_casual", "task_crisis", "task_reflection"] {
+        let s = ContextSignals {
+            task_type: "coding".into(),
+            ..Default::default()
+        };
+        for inactive in [
+            "task_planning",
+            "task_casual",
+            "task_crisis",
+            "task_reflection",
+        ] {
             assert_eq!(s.get_signal(inactive), 0.0, "expected 0 for {inactive}");
         }
     }
@@ -230,9 +251,15 @@ mod tests {
     #[test]
     fn get_signal_task_type_case_insensitive() {
         // Clients may send "CODING" or "Coding" — should still match
-        let s = ContextSignals { task_type: "CODING".into(), ..Default::default() };
+        let s = ContextSignals {
+            task_type: "CODING".into(),
+            ..Default::default()
+        };
         assert!((s.get_signal("task_coding") - 1.0).abs() < f32::EPSILON);
-        let s2 = ContextSignals { task_type: "coding".into(), ..Default::default() };
+        let s2 = ContextSignals {
+            task_type: "coding".into(),
+            ..Default::default()
+        };
         assert!((s2.get_signal("task_CODING") - 1.0).abs() < f32::EPSILON);
     }
 
@@ -245,7 +272,10 @@ mod tests {
 
     #[test]
     fn get_signal_unknown_task_prefix_returns_zero() {
-        let s = ContextSignals { task_type: "coding".into(), ..Default::default() };
+        let s = ContextSignals {
+            task_type: "coding".into(),
+            ..Default::default()
+        };
         // "task_debugging" is not a known type and doesn't match task_type
         assert_eq!(s.get_signal("task_debugging"), 0.0);
     }
@@ -291,12 +321,21 @@ mod tests {
     fn context_fit_negative_weight_penalises() {
         // Variant that dislikes high-energy users: "energy_high": -0.8
         let cw = serde_json::json!({ "energy_high": -0.8 });
-        let high_energy = ContextSignals { energy: 1.0, ..Default::default() };
-        let low_energy = ContextSignals { energy: 0.0, ..Default::default() };
+        let high_energy = ContextSignals {
+            energy: 1.0,
+            ..Default::default()
+        };
+        let low_energy = ContextSignals {
+            energy: 0.0,
+            ..Default::default()
+        };
 
         // High energy: dot = -0.8 * 1.0 = -0.8 / abs_sum 0.8 = -1.0 → clamped to 0.0
         let fit_high = context_fit(Some(&cw), &high_energy).unwrap();
-        assert!(fit_high < 0.01, "high-energy should be penalised, got {fit_high}");
+        assert!(
+            fit_high < 0.01,
+            "high-energy should be penalised, got {fit_high}"
+        );
 
         // Low energy: dot = -0.8 * 0.0 = 0 / 0.8 = 0.0
         let fit_low = context_fit(Some(&cw), &low_energy).unwrap();
@@ -339,7 +378,10 @@ mod tests {
         let edge_weight = 0.6;
         let expected = (BLEND * edge_weight + (1.0 - BLEND) * fit).clamp(0.0, 1.0);
         let actual = score_variant(edge_weight, Some(&cw), &signals);
-        assert!((actual - expected).abs() < 1e-6, "got {actual}, expected {expected}");
+        assert!(
+            (actual - expected).abs() < 1e-6,
+            "got {actual}, expected {expected}"
+        );
     }
 
     #[test]
@@ -361,13 +403,19 @@ mod tests {
 
         let matched = score_variant(0.5, Some(&cw_match), &signals);
         let mismatched = score_variant(0.5, Some(&cw_mismatch), &signals);
-        assert!(matched > mismatched, "matched={matched:.3} should beat mismatched={mismatched:.3}");
+        assert!(
+            matched > mismatched,
+            "matched={matched:.3} should beat mismatched={mismatched:.3}"
+        );
     }
 
     #[test]
     fn score_variant_clamps_to_unit_interval() {
         // Edge weight = 1.0 and perfect context fit = 1.0 should stay at 1.0
-        let signals = ContextSignals { energy: 1.0, ..Default::default() };
+        let signals = ContextSignals {
+            energy: 1.0,
+            ..Default::default()
+        };
         let cw = serde_json::json!({ "energy_high": 1.0 });
         let score = score_variant(1.0, Some(&cw), &signals);
         assert!(score <= 1.0 && score >= 0.0, "out of range: {score}");
@@ -401,7 +449,10 @@ mod tests {
         // Same as failure (0.0 task_success)
         let s_unknown = observation_score(0.5, 0, "unknown");
         let s_failure = observation_score(0.5, 0, "failure");
-        assert!((s_unknown - s_failure).abs() < f32::EPSILON, "unknown should == failure");
+        assert!(
+            (s_unknown - s_failure).abs() < f32::EPSILON,
+            "unknown should == failure"
+        );
     }
 
     #[test]
@@ -409,7 +460,10 @@ mod tests {
         // 10 or more corrections → penalty = 1.0, correction term = 0
         let s10 = observation_score(0.5, 10, "success");
         let s20 = observation_score(0.5, 20, "success");
-        assert!((s10 - s20).abs() < f32::EPSILON, "saturation should produce identical scores");
+        assert!(
+            (s10 - s20).abs() < f32::EPSILON,
+            "saturation should produce identical scores"
+        );
     }
 
     #[test]
@@ -479,16 +533,27 @@ mod tests {
 
     #[test]
     fn to_signal_map_active_task_is_one() {
-        let s = ContextSignals { task_type: "crisis".into(), ..Default::default() };
+        let s = ContextSignals {
+            task_type: "crisis".into(),
+            ..Default::default()
+        };
         let m = s.to_signal_map();
         assert_eq!(m["task_crisis"], 1.0);
     }
 
     #[test]
     fn to_signal_map_inactive_tasks_are_zero() {
-        let s = ContextSignals { task_type: "crisis".into(), ..Default::default() };
+        let s = ContextSignals {
+            task_type: "crisis".into(),
+            ..Default::default()
+        };
         let m = s.to_signal_map();
-        for k in ["task_coding", "task_planning", "task_casual", "task_reflection"] {
+        for k in [
+            "task_coding",
+            "task_planning",
+            "task_casual",
+            "task_reflection",
+        ] {
             assert_eq!(m[k], 0.0, "{k} should be 0.0");
         }
     }

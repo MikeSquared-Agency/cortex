@@ -167,8 +167,7 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
 
         let model_bytes = bincode::serialize(current_model)
             .map_err(|e| crate::error::CortexError::Serialization(e))?;
-        self.storage
-            .put_metadata(LAST_MODEL_KEY, &model_bytes)?;
+        self.storage.put_metadata(LAST_MODEL_KEY, &model_bytes)?;
 
         Ok(())
     }
@@ -666,8 +665,7 @@ mod tests {
         let vector_index = Arc::new(RwLock::new(HnswIndex::new(384)));
         let graph_engine = Arc::new(GraphEngineImpl::new(storage.clone()));
 
-        let config = AutoLinkerConfig::new()
-            .with_embedding_model("BAAI/bge-small-en-v1.5".into());
+        let config = AutoLinkerConfig::new().with_embedding_model("BAAI/bge-small-en-v1.5".into());
 
         let mut linker = AutoLinker::new(
             storage.clone(),
@@ -683,8 +681,8 @@ mod tests {
         let advanced_ts = linker.cursor.timestamp();
 
         // New linker with different model
-        let new_config = AutoLinkerConfig::new()
-            .with_embedding_model("BAAI/bge-large-en-v1.5".into());
+        let new_config =
+            AutoLinkerConfig::new().with_embedding_model("BAAI/bge-large-en-v1.5".into());
 
         let mut linker2 = AutoLinker::new(
             storage.clone(),

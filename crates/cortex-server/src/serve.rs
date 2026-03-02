@@ -48,7 +48,10 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
         }
         info!("Bearer token auth: enabled");
     } else {
-        warn!("Auth disabled — Cortex is open to all connections on {}", config.server.http_addr);
+        warn!(
+            "Auth disabled — Cortex is open to all connections on {}",
+            config.server.http_addr
+        );
     }
 
     // Encryption at rest: decrypt to a temp file before opening with redb
@@ -192,7 +195,8 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
                     pm.linker_edges_pruned.inc_by(m.edges_pruned);
                     pm.linker_edges_deleted.inc_by(m.edges_deleted);
                     pm.linker_duplicates_found.inc_by(m.duplicates_found);
-                    pm.linker_contradictions_found.inc_by(m.contradictions_found);
+                    pm.linker_contradictions_found
+                        .inc_by(m.contradictions_found);
                     pm.linker_backlog.set(m.backlog_size as i64);
                     pm.linker_last_cycle_nodes.set(m.nodes_processed as i64);
                     pm.linker_last_cycle_edges.set(m.edges_created as i64);
@@ -298,7 +302,11 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
                         return Ok(req);
                     }
                     let expected = grpc_auth_token.as_deref().unwrap_or("");
-                    match req.metadata().get("authorization").and_then(|v| v.to_str().ok()) {
+                    match req
+                        .metadata()
+                        .get("authorization")
+                        .and_then(|v| v.to_str().ok())
+                    {
                         Some(t) if t == expected => Ok(req),
                         _ => Err(tonic::Status::unauthenticated("Invalid or missing token")),
                     }

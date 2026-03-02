@@ -107,8 +107,7 @@ pub async fn deploy_prompt(
     baseline_obs.truncate(body.baseline_sample_size);
     let sample_size = baseline_obs.len();
 
-    let (baseline_correction, _, baseline_sentiment, _) =
-        compute_baseline_stats(&baseline_obs);
+    let (baseline_correction, _, baseline_sentiment, _) = compute_baseline_stats(&baseline_obs);
 
     let monitor = RollbackMonitor::new(state.storage.clone(), state.rollback_config.clone());
 

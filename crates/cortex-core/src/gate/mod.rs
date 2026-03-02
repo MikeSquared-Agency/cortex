@@ -108,7 +108,9 @@ impl WriteGate {
                     title.len(),
                     config.min_title_length
                 ),
-                suggestion: "Use a descriptive title that identifies the specific knowledge being stored".to_string(),
+                suggestion:
+                    "Use a descriptive title that identifies the specific knowledge being stored"
+                        .to_string(),
                 existing_node: None,
                 existing_title: None,
             });
@@ -145,8 +147,8 @@ impl WriteGate {
             return GateResult::Reject(GateRejection {
                 check: GateCheck::Substance,
                 reason: "Body is a bare URL with no context".to_string(),
-                suggestion:
-                    "Add a description of what this URL contains or why it matters".to_string(),
+                suggestion: "Add a description of what this URL contains or why it matters"
+                    .to_string(),
                 existing_node: None,
                 existing_title: None,
             });
@@ -354,13 +356,9 @@ impl WriteGate {
                     if same_kind && same_agent {
                         return GateResult::Reject(GateRejection {
                             check: GateCheck::Conflict,
-                            reason: format!(
-                                "Near-duplicate found (similarity: {:.2})",
-                                score
-                            ),
-                            suggestion:
-                                "Update the existing node instead of creating a duplicate"
-                                    .to_string(),
+                            reason: format!("Near-duplicate found (similarity: {:.2})", score),
+                            suggestion: "Update the existing node instead of creating a duplicate"
+                                .to_string(),
                             existing_node: Some(existing.id.to_string()),
                             existing_title: Some(existing.data.title.clone()),
                         });
@@ -432,26 +430,21 @@ fn is_just_timestamp(s: &str) -> bool {
 fn has_unresolved_pronouns(title: &str, body: &str) -> bool {
     let body_lower = body.trim_start().to_lowercase();
     let ambiguous_starts = ["he ", "she ", "they ", "it "];
-    if !ambiguous_starts
-        .iter()
-        .any(|p| body_lower.starts_with(p))
-    {
+    if !ambiguous_starts.iter().any(|p| body_lower.starts_with(p)) {
         return false;
     }
 
     // The title resolves the reference if it starts with or contains a proper
     // noun (heuristic: capitalised word that isn't a common article/pronoun).
     let stopwords = [
-        "The", "A", "An", "This", "That", "These", "Those", "He", "She", "They", "It", "In",
-        "On", "At", "For", "With",
+        "The", "A", "An", "This", "That", "These", "Those", "He", "She", "They", "It", "In", "On",
+        "At", "For", "With",
     ];
-    let title_has_proper_noun = title
-        .split_whitespace()
-        .any(|w| {
-            w.chars().next().map(|c| c.is_uppercase()).unwrap_or(false)
-                && !stopwords.contains(&w)
-                && w.len() > 2
-        });
+    let title_has_proper_noun = title.split_whitespace().any(|w| {
+        w.chars().next().map(|c| c.is_uppercase()).unwrap_or(false)
+            && !stopwords.contains(&w)
+            && w.len() > 2
+    });
 
     !title_has_proper_noun
 }
@@ -710,7 +703,9 @@ mod tests {
     #[test]
     fn is_pure_url_detection() {
         assert!(is_pure_url("https://example.com/path"));
-        assert!(!is_pure_url("https://example.com see this page for details"));
+        assert!(!is_pure_url(
+            "https://example.com see this page for details"
+        ));
         assert!(!is_pure_url("not a url at all"));
     }
 
@@ -719,6 +714,8 @@ mod tests {
         assert!(is_just_timestamp("2024-01-15"));
         assert!(is_just_timestamp("2024-01-15T12:30:00"));
         assert!(is_just_timestamp("1700000000"));
-        assert!(!is_just_timestamp("2024-01-15 was when the incident occurred"));
+        assert!(!is_just_timestamp(
+            "2024-01-15 was when the incident occurred"
+        ));
     }
 }

@@ -154,18 +154,16 @@ pub async fn get_version(
         ))),
         Some(node) => match resolver.parse_content(&node) {
             Err(e) => Ok(bad_request(e.to_string())),
-            Ok(content) => {
-                Ok(Json(JsonResponse::ok(serde_json::json!({
-                    "slug": content.slug,
-                    "type": content.prompt_type,
-                    "version": content.version,
-                    "branch": content.branch,
-                    "raw_content": content,
-                    "node_id": node.id.to_string(),
-                    "created_at": node.created_at.to_rfc3339(),
-                })))
-                .into_response())
-            }
+            Ok(content) => Ok(Json(JsonResponse::ok(serde_json::json!({
+                "slug": content.slug,
+                "type": content.prompt_type,
+                "version": content.version,
+                "branch": content.branch,
+                "raw_content": content,
+                "node_id": node.id.to_string(),
+                "created_at": node.created_at.to_rfc3339(),
+            })))
+            .into_response()),
         },
     }
 }
@@ -233,7 +231,13 @@ pub async fn create_branch(
     let from_branch = body.from_branch.as_deref().unwrap_or("main");
     let author = body.author.as_deref().unwrap_or("http").to_string();
 
-    match resolver.create_branch(&slug, from_branch, &body.new_branch, body.base_version, &author) {
+    match resolver.create_branch(
+        &slug,
+        from_branch,
+        &body.new_branch,
+        body.base_version,
+        &author,
+    ) {
         Ok(node_id) => Ok(Json(JsonResponse::ok(serde_json::json!({
             "node_id": node_id.to_string(),
             "slug": slug,

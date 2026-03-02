@@ -100,7 +100,13 @@ pub async fn run() -> Result<()> {
         observability: ObservabilityConfig::default(),
         retention: {
             let mut r = RetentionConfig::default();
-            r.by_kind.insert("observation".to_string(), cortex_core::KindRetention { ttl_days: 90, min_score: None });
+            r.by_kind.insert(
+                "observation".to_string(),
+                cortex_core::KindRetention {
+                    ttl_days: 90,
+                    min_score: None,
+                },
+            );
             r
         },
         security: SecurityConfig::default(),
