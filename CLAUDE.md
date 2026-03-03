@@ -105,3 +105,15 @@ format changes without these steps being followed.
 - Partial `cortex.toml` is fine — unset fields use defaults
 - `cortex-core` must have zero network dependencies — put network stuff in `cortex-server` or adapters
 - Node kinds and relations are lowercase strings with hyphens/underscores only
+
+## Using Cortex as an agent (MCP / HTTP)
+
+If you're an agent that needs to **use** Cortex (read/write knowledge, get briefings,
+search the graph), read the navigation skill: `docs/skills/cortex-navigation.md`
+
+It covers MCP tools (primary interface), HTTP API (advanced), write gate behaviour,
+and best practices for keeping the graph clean.
+
+Start every session with: `cortex_briefing(agent_id="YOUR_AGENT_ID", compact=true)`
+
+The rest of this CLAUDE.md is for developers working on the Cortex codebase itself.
