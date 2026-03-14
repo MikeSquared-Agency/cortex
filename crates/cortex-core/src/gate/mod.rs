@@ -1,3 +1,5 @@
+pub mod schema;
+
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
@@ -53,6 +55,7 @@ pub enum GateCheck {
     Substance,
     Specificity,
     Conflict,
+    Schema,
 }
 
 impl std::fmt::Display for GateCheck {
@@ -61,6 +64,7 @@ impl std::fmt::Display for GateCheck {
             GateCheck::Substance => write!(f, "substance"),
             GateCheck::Specificity => write!(f, "specificity"),
             GateCheck::Conflict => write!(f, "conflict"),
+            GateCheck::Schema => write!(f, "schema"),
         }
     }
 }
@@ -380,6 +384,24 @@ impl WriteGate {
         }
 
         GateResult::Pass
+    }
+
+    /// Check 4: Schema — does this node satisfy per-kind schema constraints?
+    pub fn check_schema(node: &Node, validator: &schema::SchemaValidator) -> GateResult {
+        match validator.validate(node) {
+            Ok(()) => GateResult::Pass,
+            Err(violations) => {
+                let reasons: Vec<String> = violations.iter().map(|v| v.to_string()).collect();
+                GateResult::Reject(GateRejection {
+                    check: GateCheck::Schema,
+                    reason: format!("Schema validation failed: {}", reasons.join("; ")),
+                    suggestion:
+                        "Ensure node metadata matches the schema defined for this kind".to_string(),
+                    existing_node: None,
+                    existing_title: None,
+                })
+            }
+        }
     }
 }
 

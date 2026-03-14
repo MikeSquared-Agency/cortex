@@ -15,6 +15,7 @@ pub mod vector;
 
 pub use api::{Cortex, LibraryConfig};
 pub use error::{CortexError, Result};
+pub use gate::schema::{FieldSchema, FieldType, KindSchema, SchemaValidator, SchemaViolation};
 pub use gate::{
     GateCheck, GateRejection, GateResult, KindOverrideConfig, WriteGate, WriteGateConfig,
 };
