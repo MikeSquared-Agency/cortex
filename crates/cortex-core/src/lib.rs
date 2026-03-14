@@ -8,6 +8,7 @@ pub mod kinds;
 pub mod linker;
 pub mod policies;
 pub mod prompt;
+pub mod query;
 pub mod relations;
 pub mod storage;
 pub mod types;
@@ -31,6 +32,7 @@ pub use policies::{
     AuditAction, AuditEntry, AuditFilter, AuditLog, KindRetention, RetentionConfig,
     RetentionEngine, RetentionMaxNodes,
 };
+pub use query::{parse_and_compile as parse_filter, CmpOp, FieldFilter, FilterExpr};
 pub use storage::{NodeFilter, RedbStorage, Storage, StorageStats, CURRENT_SCHEMA_VERSION};
 pub use types::*;
 pub use vector::{
