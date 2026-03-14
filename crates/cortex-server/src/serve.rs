@@ -156,8 +156,14 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
     ));
     info!("Briefing engine ready");
 
-    // Initialize hook registry
-    let hooks = Arc::new(HookRegistry::new());
+    // Initialize event bus for SSE streaming
+    let event_bus = crate::observability::new_event_bus(1024);
+
+    // Initialize hook registry and register the event bus hook
+    let mut hooks = HookRegistry::new();
+    let event_bus_hook = Arc::new(crate::observability::EventBusHook::new(event_bus.clone()));
+    hooks.add(event_bus_hook);
+    let hooks = Arc::new(hooks);
 
     // Initialize prometheus metrics
     let cortex_metrics = Arc::new(CortexMetrics::new());
@@ -340,6 +346,7 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
             webhooks: config.webhooks.clone(),
             score_decay: config.score_decay.clone(),
             write_gate: config.write_gate.clone(),
+            event_bus: event_bus.clone(),
         };
 
         let metrics_for_mw = cortex_metrics.clone();

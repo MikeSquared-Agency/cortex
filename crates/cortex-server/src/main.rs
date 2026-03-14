@@ -7,6 +7,7 @@ mod http;
 mod ingest;
 mod mcp;
 mod migration;
+mod observability;
 mod serve;
 
 #[cfg(feature = "warren")]
