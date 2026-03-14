@@ -1,6 +1,10 @@
+use std::collections::HashMap;
+
 use cortex_core::{AutoLinkerConfig, NodeKind, Relation, SimilarityConfig};
 
 // Re-export from cortex-core so cortex-server code can use them from config
+#[allow(unused_imports)]
+pub use cortex_core::gate::schema::{FieldSchema, FieldType, KindSchema};
 pub use cortex_core::policies::RetentionConfig;
 #[allow(unused_imports)]
 pub use cortex_core::policies::RetentionMaxNodes;
@@ -43,6 +47,8 @@ pub struct CortexConfig {
     pub score_decay: ScoreDecayConfig,
     #[serde(default)]
     pub write_gate: WriteGateConfig,
+    #[serde(default)]
+    pub schemas: HashMap<String, KindSchema>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
