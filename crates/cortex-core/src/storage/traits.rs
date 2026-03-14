@@ -78,4 +78,10 @@ pub trait Storage: Send + Sync {
 
     /// Create a file-level backup/snapshot
     fn snapshot(&self, path: &Path) -> Result<()>;
+
+    /// List all distinct node kinds that exist in storage.
+    /// Returns kinds that have been indexed, including kinds where all nodes may have been soft-deleted.
+    fn list_distinct_kinds(&self) -> Result<Vec<crate::types::NodeKind>> {
+        Ok(vec![])
+    }
 }

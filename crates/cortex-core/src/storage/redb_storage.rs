@@ -1139,6 +1139,24 @@ impl Storage for RedbStorage {
             .map_err(|e| CortexError::Validation(format!("Failed to create snapshot: {}", e)))?;
         Ok(())
     }
+
+    fn list_distinct_kinds(&self) -> Result<Vec<crate::types::NodeKind>> {
+        let read_txn = self.db.begin_read()?;
+        let kind_table = read_txn.open_multimap_table(NODES_BY_KIND)?;
+
+        let mut seen = std::collections::HashSet::new();
+        for entry in kind_table.iter()? {
+            let (key, _value) = entry?;
+            seen.insert(key.value().to_string());
+        }
+
+        let mut kinds: Vec<crate::types::NodeKind> = seen
+            .into_iter()
+            .filter_map(|k| crate::types::NodeKind::new(&k).ok())
+            .collect();
+        kinds.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+        Ok(kinds)
+    }
 }
 
 /// Build a fully-deterministic Node for schema regression tests.
