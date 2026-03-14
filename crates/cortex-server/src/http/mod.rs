@@ -69,6 +69,8 @@ pub struct AppState {
     pub score_decay: cortex_core::ScoreDecayConfig,
     pub write_gate: WriteGateConfig,
     pub event_bus: crate::observability::EventBus,
+    pub schema_validator: cortex_core::SchemaValidator,
+    pub hooks: Arc<cortex_core::HookRegistry>,
 }
 
 /// JSON response wrapper

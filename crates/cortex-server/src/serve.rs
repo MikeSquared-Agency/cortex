@@ -288,6 +288,9 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
 
     // Start gRPC server
     let grpc_task = {
+        let grpc_schema_validator =
+            Arc::new(cortex_core::SchemaValidator::new(config.schemas.clone()));
+
         let grpc_service = crate::grpc::CortexServiceImpl::new(
             storage.clone(),
             graph_engine.clone(),
@@ -297,6 +300,7 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
             graph_version.clone(),
             briefing_engine.clone(),
             hooks.clone(),
+            grpc_schema_validator,
         );
 
         let addr = config.grpc_addr();
@@ -332,6 +336,8 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
 
     // Start HTTP server
     let http_task = {
+        let schema_validator = cortex_core::SchemaValidator::new(config.schemas.clone());
+
         let app_state = crate::http::AppState {
             storage: storage.clone(),
             graph_engine: graph_engine.clone(),
@@ -347,6 +353,8 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
             score_decay: config.score_decay.clone(),
             write_gate: config.write_gate.clone(),
             event_bus: event_bus.clone(),
+            schema_validator,
+            hooks: hooks.clone(),
         };
 
         let metrics_for_mw = cortex_metrics.clone();

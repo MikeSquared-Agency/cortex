@@ -80,6 +80,34 @@ pattern = 0
 # limit = 100000
 # strategy = "oldest_lowest_importance"
 
+# ─── Write Gate ──────────────────────────────────────────
+# Quality checks applied before accepting writes.
+# [write_gate]
+# enabled = true
+# conflict_threshold = 0.85
+# duplicate_threshold = 0.92
+# min_title_length = 10
+# min_body_length = 20
+
+# ─── Schema Validation ──────────────────────────────────
+# Per-kind metadata constraints. Only validated kinds are checked.
+# Kinds without schemas pass freely.
+
+# [schemas.decision]
+# required_fields = ["rationale"]
+#
+# [schemas.decision.fields.rationale]
+# type = "string"
+#
+# [schemas.decision.fields.priority]
+# type = "number"
+# min = 1.0
+# max = 5.0
+#
+# [schemas.decision.fields.status]
+# type = "string"
+# allowed_values = ["proposed", "accepted", "rejected"]
+
 # ─── Security ─────────────────────────────────────────────
 [security]
 encryption = false

@@ -13,6 +13,10 @@ Your agent's memory shouldn't be a text file. It should be a living graph that w
 - **Decay** — unused knowledge fades, important knowledge persists
 - **Briefings** — "what do I need to know?" → tailored context document
 - **Hybrid search** — vector similarity × graph proximity
+- **Query DSL** — filter expressions: `kind:decision AND importance>0.7`
+- **SSE Events** — real-time `GET /events/stream` for graph change notifications
+- **Schema Validation** — per-kind metadata constraints with type checking
+- **Mutation Hooks** — callback system for node/edge write events
 - **Embedded** — single file, no external dependencies
 - **Fast** — Rust, HNSW index, mmap'd storage
 
@@ -126,6 +130,9 @@ let results = cx.search("authentication", 5)?;
 | Local embeddings | ✅ | ❌ | ❌ | ✅ | ❌ |
 | Single binary | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Prompt versioning | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Query DSL | ✅ | ❌ | ❌ | ❌ | ✅ |
+| Real-time events (SSE) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Schema validation | ✅ | ❌ | ❌ | ❌ | ❌ |
 
 **Our moat:** Graph-native memory with auto-linking and decay. Nobody else does this.
 

@@ -207,6 +207,7 @@ Server runs on `http://localhost:9091` by default.
 | GET | `/graph/export` | — | Export full graph |
 | GET | `/auto-linker/status` | — | Auto-linker state |
 | GET | `/briefing/:agent_id` | — | Agent briefing |
+| GET | `/events/stream` | `events` | SSE real-time graph change stream |
 
 ### Writing
 
@@ -277,7 +278,7 @@ POST /auto-linker/trigger
 
 ## Write Gate
 
-The write gate validates nodes before accepting them. It runs three checks in order. If any check fails, the node is rejected with a 422 response containing the reason and a suggestion.
+The write gate validates nodes before accepting them. It runs four checks in order. If any check fails, the node is rejected with a 422 response containing the reason and a suggestion.
 
 ### Check 1: Substance
 
@@ -309,6 +310,16 @@ Does this duplicate or contradict existing knowledge?
 - Cosine similarity > 0.85 with same kind + same agent = **near-duplicate rejection**
 - Cosine similarity > 0.85 with same kind + different agent = **contradiction flag**
 
+### Check 4: Schema
+
+Does this node's metadata satisfy per-kind schema constraints?
+
+- If a `[schemas.<kind>]` is configured, all required_fields must be present in metadata
+- Field types must match (string, number, boolean, array)
+- Numeric fields must satisfy min/max constraints
+- String fields must be in `allowed_values` if defined
+- Kinds without schemas pass freely
+
 ### Bypassing the Gate
 
 To bypass all three checks, include both:
@@ -316,6 +327,79 @@ To bypass all three checks, include both:
 - Header: `x-gate-override: true`
 
 Both are required. Only bypass when you have a legitimate reason (e.g., bulk migration, testing). In normal operation, let the gate do its job — it keeps the graph clean.
+
+---
+
+## Query DSL
+
+Cortex supports a string-based filter DSL that compiles to `NodeFilter`. Use it with the `GET /nodes` endpoint's `filter` parameter or programmatically via `cortex_core::parse_filter()`.
+
+### Syntax
+
+```text
+kind:decision AND importance>0.7
+kind:fact AND agent:kai AND tags:backend,rust
+(kind:decision OR kind:pattern) AND tags:architecture
+created_after:7d AND kind:fact
+NOT deleted:true
+kind:fact AND limit:10
+```
+
+### Supported Fields
+
+| Field | Operators | Example |
+|-------|----------|---------|
+| `kind` | `:` | `kind:decision`, `kind:fact,decision` |
+| `tags` | `:` | `tags:backend,rust` |
+| `agent` | `:` | `agent:kai` |
+| `importance` | `>`, `>=`, `=` | `importance>=0.7` |
+| `created_after` | `:` | `created_after:7d`, `created_after:24h` |
+| `created_before` | `:` | `created_before:30d` |
+| `deleted` | `:` | `deleted:true` |
+| `limit` | `:` | `limit:10` |
+
+### Logical Operators
+
+- `AND` — both conditions must match
+- `OR` — either condition matches (same field type only)
+- `NOT` — negation (only for `deleted` field)
+- Parentheses for grouping: `(kind:fact OR kind:decision) AND tags:arch`
+
+---
+
+## Schema Validation
+
+Per-kind metadata schemas are defined in `cortex.toml` under `[schemas.*]`. When a schema is active for a kind, the write gate validates node metadata at write time (both HTTP and gRPC).
+
+```toml
+[schemas.decision]
+required_fields = ["rationale"]
+
+[schemas.decision.fields.rationale]
+type = "string"
+
+[schemas.decision.fields.priority]
+type = "number"
+min = 1.0
+max = 5.0
+```
+
+If validation fails, the write gate rejects the node with a 422 response containing `gate.check == "schema"` and specific violation details.
+
+Pass metadata when creating nodes:
+
+```json
+POST /nodes
+{
+  "kind": "decision",
+  "title": "Use redb for storage layer",
+  "body": "We decided to use redb for its zero-copy mmap design...",
+  "metadata": {
+    "rationale": "Zero-copy mmap, ACID, no network deps",
+    "priority": 3
+  }
+}
+```
 
 ---
 
@@ -361,3 +445,5 @@ cortex shell                            # Interactive REPL
 | Export the full graph | `GET /graph/export` |
 | Visualise the graph | `GET /viz` |
 | Check system health | `GET /health` |
+| Filter nodes with DSL | `parse_filter("kind:fact AND importance>0.7")` |
+| Stream real-time changes | `GET /events/stream` |

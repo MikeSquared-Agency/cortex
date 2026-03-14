@@ -1,4 +1,5 @@
 use cortex_core::*;
+use std::collections::HashMap;
 use std::sync::{Arc, RwLock as StdRwLock};
 use tempfile::tempdir;
 
@@ -689,4 +690,137 @@ fn test_decay_config_defaults_are_sane() {
     assert!(config.prune_threshold > config.delete_threshold);
     assert!(config.exempt_manual);
     assert!(config.validate().is_ok());
+}
+
+// ── Write Gate Schema Validation ────────────────────────────────────────────
+
+#[test]
+fn test_write_gate_schema_rejection() {
+    // Build a SchemaValidator that requires "rationale" (type: string) for
+    // decision nodes.
+    let mut fields = HashMap::new();
+    fields.insert(
+        "rationale".to_string(),
+        FieldSchema {
+            field_type: Some(FieldType::String),
+            ..Default::default()
+        },
+    );
+    let mut schemas = HashMap::new();
+    schemas.insert(
+        "decision".to_string(),
+        KindSchema {
+            required_fields: vec!["rationale".to_string()],
+            fields,
+        },
+    );
+    let validator = SchemaValidator::new(schemas);
+
+    // Create a decision node with empty metadata (missing the required
+    // "rationale" field).
+    let node = Node::new(
+        NodeKind::new("decision").unwrap(),
+        "Choose the storage backend".to_string(),
+        "We decided to use redb for embedded ACID storage".to_string(),
+        make_source("test"),
+        0.5,
+    );
+
+    let result = WriteGate::check_schema(&node, &validator);
+    match result {
+        GateResult::Reject(rejection) => {
+            assert_eq!(
+                rejection.check,
+                GateCheck::Schema,
+                "Rejection should be a Schema gate check"
+            );
+            assert!(
+                rejection.reason.contains("rationale"),
+                "Rejection reason should mention the missing field: {}",
+                rejection.reason
+            );
+        }
+        GateResult::Pass => {
+            panic!("Expected schema rejection for a decision node missing 'rationale'");
+        }
+    }
+}
+
+#[test]
+fn test_http_schema_422() {
+    // Full HTTP 422 testing requires a running server.  Instead we verify
+    // the same validation pipeline that the HTTP handler delegates to:
+    // SchemaValidator rejects a node whose metadata violates field-type
+    // constraints, and WriteGate::check_schema surfaces the rejection with
+    // a Schema GateCheck variant.
+
+    // Schema: decision nodes need "rationale" (string) and "priority" (number
+    // between 1 and 5).
+    let mut fields = HashMap::new();
+    fields.insert(
+        "rationale".to_string(),
+        FieldSchema {
+            field_type: Some(FieldType::String),
+            ..Default::default()
+        },
+    );
+    fields.insert(
+        "priority".to_string(),
+        FieldSchema {
+            field_type: Some(FieldType::Number),
+            min: Some(1.0),
+            max: Some(5.0),
+            ..Default::default()
+        },
+    );
+    let mut schemas = HashMap::new();
+    schemas.insert(
+        "decision".to_string(),
+        KindSchema {
+            required_fields: vec!["rationale".to_string()],
+            fields,
+        },
+    );
+    let validator = SchemaValidator::new(schemas);
+
+    // Create a decision node whose metadata violates the type constraint:
+    // "priority" is a string ("high") instead of a number.
+    let mut node = Node::new(
+        NodeKind::new("decision").unwrap(),
+        "Choose the storage backend".to_string(),
+        "We decided to use redb for embedded ACID storage".to_string(),
+        make_source("test"),
+        0.5,
+    );
+    node.data.metadata.insert(
+        "rationale".to_string(),
+        serde_json::json!("Performance requirements"),
+    );
+    node.data
+        .metadata
+        .insert("priority".to_string(), serde_json::json!("high"));
+
+    let result = WriteGate::check_schema(&node, &validator);
+    match result {
+        GateResult::Reject(rejection) => {
+            assert_eq!(
+                rejection.check,
+                GateCheck::Schema,
+                "Rejection should be a Schema gate check"
+            );
+            assert!(
+                rejection.reason.contains("priority"),
+                "Rejection reason should mention the violating field: {}",
+                rejection.reason
+            );
+            assert!(
+                rejection.reason.contains("expected type"),
+                "Rejection reason should explain the type mismatch: {}",
+                rejection.reason
+            );
+        }
+        GateResult::Pass => {
+            panic!("Expected schema rejection for a 'priority' field with wrong type");
+        }
+    }
 }

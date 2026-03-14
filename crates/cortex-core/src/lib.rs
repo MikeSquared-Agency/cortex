@@ -21,11 +21,11 @@ pub use gate::schema::{FieldSchema, FieldType, KindSchema, SchemaValidator, Sche
 pub use gate::{
     GateCheck, GateRejection, GateResult, KindOverrideConfig, WriteGate, WriteGateConfig,
 };
-pub use hooks::{HookRegistry, MutationAction, MutationHook};
 pub use graph::{
     GraphEngine, GraphEngineImpl, Path, PathRequest, PathResult, Subgraph, TraversalBudget,
     TraversalDirection, TraversalRequest, TraversalStrategy,
 };
+pub use hooks::{HookRegistry, MutationAction, MutationHook};
 pub use linker::{
     AutoLinker, AutoLinkerConfig, AutoLinkerMetrics, Contradiction, ContradictionDetector,
     DecayConfig, DecayEngine, DedupAction, DedupScanner, DuplicatePair, LinkRule, ProposedEdge,

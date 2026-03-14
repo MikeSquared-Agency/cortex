@@ -9,7 +9,7 @@ Returns server health status.
 ```json
 {
   "healthy": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "uptime_seconds": 3600,
   "stats": {
     "node_count": 1234,
@@ -73,6 +73,67 @@ Trigger an immediate auto-linker cycle.
 ## GET /auto-linker/status
 
 Get auto-linker metrics.
+
+## GET /events/stream
+
+Server-Sent Events (SSE) endpoint for real-time graph change notifications.
+
+### Query Parameters
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `events` | string | all | Comma-separated event types to subscribe to |
+
+### Event Types
+
+- `node.created` — A new node was stored
+- `node.updated` — An existing node was modified
+- `node.deleted` — A node was deleted
+- `edge.created` — A new edge was created
+- `edge.updated` — An existing edge was modified
+- `edge.deleted` — An edge was deleted
+
+### Event Payload
+
+Each SSE event has the event type as the SSE `event:` field and a JSON payload as `data:`:
+
+```json
+{
+  "event_type": "node.created",
+  "timestamp": "2026-03-14T12:00:00+00:00",
+  "data": {
+    "id": "019...",
+    "kind": "decision",
+    "title": "Use redb for storage",
+    "agent": "kai",
+    "importance": 0.8
+  }
+}
+```
+
+### Examples
+
+Subscribe to all events:
+
+```bash
+curl -N http://localhost:9091/events/stream
+```
+
+Subscribe only to node creation events:
+
+```bash
+curl -N "http://localhost:9091/events/stream?events=node.created"
+```
+
+Subscribe to multiple event types:
+
+```bash
+curl -N "http://localhost:9091/events/stream?events=node.created,node.updated,edge.created"
+```
+
+### Keep-Alive
+
+The server sends keep-alive messages every 30 seconds. If a subscriber falls behind, it receives a `warning` event with the number of dropped events.
 
 ---
 

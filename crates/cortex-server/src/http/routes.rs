@@ -13,8 +13,8 @@ use axum::{
     Router,
 };
 use cortex_core::{
-    apply_score_decay, Edge, EdgeProvenance, GateRejection, GateResult, NodeFilter, NodeKind,
-    Relation, Source, WriteGate, *,
+    apply_score_decay, Edge, EdgeProvenance, GateRejection, GateResult, MutationAction, NodeFilter,
+    NodeKind, Relation, Source, WriteGate, *,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -343,6 +343,7 @@ struct CreateNodeBody {
     tags: Option<Vec<String>>,
     importance: Option<f32>,
     source_agent: Option<String>,
+    metadata: Option<HashMap<String, serde_json::Value>>,
 }
 
 #[derive(Deserialize)]
@@ -380,6 +381,9 @@ async fn create_node(
         importance,
     );
     node.data.tags = tags;
+    if let Some(metadata) = body.metadata {
+        node.data.metadata = metadata;
+    }
 
     // ── Write gate ────────────────────────────────────────────────────────────
     let gate_config = &state.write_gate;
@@ -433,6 +437,18 @@ async fn create_node(
             }
         }
 
+        // Check 4: Schema validation
+        if let GateResult::Reject(r) = WriteGate::check_schema(&node, &state.schema_validator) {
+            state
+                .metrics
+                .gate_rejected
+                .get_or_create(&GateCheckLabel {
+                    check: r.check.to_string(),
+                })
+                .inc();
+            return Ok(gate_rejection_response(r));
+        }
+
         // All checks passed — store and index
         state.storage.put_node(&node)?;
         {
@@ -448,6 +464,18 @@ async fn create_node(
             kind_str,
         );
     } else {
+        // Schema check still applies even when gate is skipped
+        if let GateResult::Reject(r) = WriteGate::check_schema(&node, &state.schema_validator) {
+            state
+                .metrics
+                .gate_rejected
+                .get_or_create(&GateCheckLabel {
+                    check: r.check.to_string(),
+                })
+                .inc();
+            return Ok(gate_rejection_response(r));
+        }
+
         // Bypass: generate embedding, store, index without gate checks
         let embedding = state
             .embedding_service
@@ -467,6 +495,8 @@ async fn create_node(
             kind_str,
         );
     }
+
+    state.hooks.notify_node(&node, MutationAction::Created);
 
     Ok(Json(JsonResponse::ok(serde_json::json!({
         "id": node.id.to_string(),
@@ -520,6 +550,7 @@ async fn create_edge(
     };
 
     state.storage.put_edge(&edge)?;
+    state.hooks.notify_edge(&edge, MutationAction::Created);
 
     tracing::info!(
         "[AUDIT] POST /edges agent={} from={} to={} relation={}",
@@ -651,7 +682,13 @@ async fn delete_node(
         .unwrap_or("anonymous");
 
     let node_id: uuid::Uuid = id.parse().map_err(|_| anyhow::anyhow!("Invalid UUID"))?;
+    let node_for_hook = state.storage.get_node(node_id).ok().flatten();
+
     state.storage.delete_node(node_id)?;
+
+    if let Some(node) = node_for_hook {
+        state.hooks.notify_node(&node, MutationAction::Deleted);
+    }
 
     tracing::info!("[AUDIT] DELETE /nodes/{} agent={}", id, agent_id);
 
@@ -665,6 +702,7 @@ struct PatchNodeBody {
     body: Option<String>,
     tags: Option<Vec<String>>,
     importance: Option<f32>,
+    metadata: Option<HashMap<String, serde_json::Value>>,
 }
 
 async fn patch_node(
@@ -694,14 +732,25 @@ async fn patch_node(
     if let Some(importance) = patch.importance {
         node.importance = importance;
     }
+    if let Some(metadata) = patch.metadata {
+        node.data.metadata = metadata;
+    }
     node.updated_at = chrono::Utc::now();
+
+    // Schema validation
+    if let GateResult::Reject(r) = WriteGate::check_schema(&node, &state.schema_validator) {
+        return Ok(gate_rejection_response(r).into_response());
+    }
+
     state.storage.put_node(&node)?;
+    state.hooks.notify_node(&node, MutationAction::Updated);
 
     Ok(Json(JsonResponse::ok(serde_json::json!({
         "id": id,
         "kind": format!("{:?}", node.kind),
         "title": node.data.title,
-    }))))
+    })))
+    .into_response())
 }
 
 async fn get_node(

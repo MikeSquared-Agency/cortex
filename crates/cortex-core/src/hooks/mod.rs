@@ -43,14 +43,18 @@ impl HookRegistry {
     /// Notify all hooks of a node mutation.
     pub fn notify_node(&self, node: &Node, action: MutationAction) {
         for hook in &self.hooks {
-            hook.on_node_mutation(node, action);
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                hook.on_node_mutation(node, action);
+            }));
         }
     }
 
     /// Notify all hooks of an edge mutation.
     pub fn notify_edge(&self, edge: &Edge, action: MutationAction) {
         for hook in &self.hooks {
-            hook.on_edge_mutation(edge, action);
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                hook.on_edge_mutation(edge, action);
+            }));
         }
     }
 
@@ -215,5 +219,86 @@ mod tests {
         assert_eq!(actions[0], MutationAction::Created);
         assert_eq!(actions[1], MutationAction::Updated);
         assert_eq!(actions[2], MutationAction::Deleted);
+    }
+
+    #[test]
+    fn test_cortex_store_fires_hook() {
+        use crate::{Cortex, LibraryConfig};
+
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("test.redb");
+        let mut cortex = Cortex::open(&db_path, LibraryConfig::default()).unwrap();
+
+        let hook = Arc::new(CountingHook::new());
+        cortex.add_hook(hook.clone());
+
+        let node = make_test_node();
+        cortex.store(node).unwrap();
+
+        assert_eq!(hook.node_count.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn test_cortex_create_edge_fires_hook() {
+        use crate::{Cortex, EdgeProvenance, LibraryConfig, Relation};
+
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("test.redb");
+        let mut cortex = Cortex::open(&db_path, LibraryConfig::default()).unwrap();
+
+        let hook = Arc::new(CountingHook::new());
+        cortex.add_hook(hook.clone());
+
+        let node_a = make_test_node();
+        let node_b = make_test_node();
+        let id_a = cortex.store(node_a).unwrap();
+        let id_b = cortex.store(node_b).unwrap();
+
+        let edge = Edge::new(
+            id_a,
+            id_b,
+            Relation::new("related_to").unwrap(),
+            0.8,
+            EdgeProvenance::Manual {
+                created_by: "test".to_string(),
+            },
+        );
+        cortex.create_edge(edge).unwrap();
+
+        // Two node stores + one edge creation
+        assert_eq!(hook.node_count.load(Ordering::Relaxed), 2);
+        assert_eq!(hook.edge_count.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn test_panicking_hook_isolated() {
+        struct PanickingHook;
+
+        impl MutationHook for PanickingHook {
+            fn on_node_mutation(&self, _node: &Node, _action: MutationAction) {
+                panic!("hook panic on purpose");
+            }
+
+            fn on_edge_mutation(&self, _edge: &Edge, _action: MutationAction) {
+                panic!("hook panic on purpose");
+            }
+        }
+
+        let mut registry = HookRegistry::new();
+        // PanickingHook first, CountingHook second
+        registry.add(Arc::new(PanickingHook));
+        let counter = Arc::new(CountingHook::new());
+        registry.add(counter.clone());
+
+        let node = make_test_node();
+        registry.notify_node(&node, MutationAction::Created);
+
+        // catch_unwind isolates the panic, so CountingHook still fires
+        assert_eq!(counter.node_count.load(Ordering::Relaxed), 1);
+
+        let edge = make_test_edge();
+        registry.notify_edge(&edge, MutationAction::Created);
+
+        assert_eq!(counter.edge_count.load(Ordering::Relaxed), 1);
     }
 }
