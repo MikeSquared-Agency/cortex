@@ -27,9 +27,9 @@ pub use graph::{
 };
 pub use hooks::{HookRegistry, MutationAction, MutationHook};
 pub use linker::{
-    AutoLinker, AutoLinkerConfig, AutoLinkerMetrics, Contradiction, ContradictionDetector,
-    DecayConfig, DecayEngine, DedupAction, DedupScanner, DuplicatePair, LinkRule, ProposedEdge,
-    Resolution, SimilarityLinkRule, StructuralRule,
+    AutoLinker, AutoLinkerConfig, AutoLinkerMetrics, ConfigRule, Contradiction,
+    ContradictionDetector, DecayConfig, DecayEngine, DedupAction, DedupScanner, DuplicatePair,
+    LinkRule, ProposedEdge, Resolution, RuleCondition, SimilarityLinkRule, StructuralRule,
 };
 pub use policies::{
     AuditAction, AuditEntry, AuditFilter, AuditLog, KindRetention, RetentionConfig,

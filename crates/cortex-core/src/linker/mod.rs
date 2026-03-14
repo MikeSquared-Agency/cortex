@@ -19,7 +19,7 @@ mod rules;
 mod tests;
 
 pub use auto_linker::AutoLinker;
-pub use config::{AutoLinkerConfig, DecayConfig};
+pub use config::{AutoLinkerConfig, ConfigRule, DecayConfig, RuleCondition};
 pub use decay::DecayEngine;
 pub use dedup::{DedupAction, DedupScanner, DuplicatePair};
 pub use metrics::AutoLinkerMetrics;
