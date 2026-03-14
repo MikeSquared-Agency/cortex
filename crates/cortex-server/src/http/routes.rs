@@ -5,7 +5,10 @@ use super::{
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
-    response::{Html, IntoResponse, Json, Response},
+    response::{
+        sse::{Event as SseEvent, KeepAlive, Sse},
+        Html, IntoResponse, Json, Response,
+    },
     routing::{get, post, put},
     Router,
 };
@@ -109,6 +112,8 @@ pub fn create_router(state: AppState) -> Router {
             get(selection::prompt_performance),
         )
         // Automatic rollback on performance degradation (issue #23)
+        // SSE event stream for real-time graph change notifications
+        .route("/events/stream", get(event_stream))
         .route("/prompts/:slug/deploy", post(rollback::deploy_prompt))
         .route(
             "/prompts/:slug/rollback-status",
@@ -1310,4 +1315,56 @@ async fn resolved_prompt(
         bindings,
         resolved,
     })))
+}
+
+// ── SSE event stream ──────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct EventStreamQuery {
+    /// Comma-separated list of event types to filter, e.g. "node.created,edge.created".
+    /// If omitted, all events are forwarded.
+    events: Option<String>,
+}
+
+async fn event_stream(
+    State(state): State<AppState>,
+    Query(query): Query<EventStreamQuery>,
+) -> Sse<impl futures::stream::Stream<Item = std::result::Result<SseEvent, std::convert::Infallible>>>
+{
+    let mut rx = state.event_bus.subscribe();
+    let filter: Option<Vec<String>> = query
+        .events
+        .map(|e| e.split(',').map(|s| s.trim().to_string()).collect());
+
+    let stream = async_stream::stream! {
+        loop {
+            match rx.recv().await {
+                Ok(event) => {
+                    // Apply optional event-type filter
+                    if let Some(ref filter) = filter {
+                        if !filter.contains(&event.event_type) {
+                            continue;
+                        }
+                    }
+                    if let Ok(data) = serde_json::to_string(&event) {
+                        yield Ok(SseEvent::default().event(event.event_type).data(data));
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    yield Ok(
+                        SseEvent::default()
+                            .event("warning")
+                            .data(format!("Dropped {} events (slow consumer)", n)),
+                    );
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    };
+
+    Sse::new(stream).keep_alive(
+        KeepAlive::default()
+            .interval(std::time::Duration::from_secs(30))
+            .text("keep-alive"),
+    )
 }

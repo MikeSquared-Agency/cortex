@@ -68,6 +68,7 @@ pub struct AppState {
     pub webhooks: Vec<crate::config::WebhookConfig>,
     pub score_decay: cortex_core::ScoreDecayConfig,
     pub write_gate: WriteGateConfig,
+    pub event_bus: crate::observability::EventBus,
 }
 
 /// JSON response wrapper
