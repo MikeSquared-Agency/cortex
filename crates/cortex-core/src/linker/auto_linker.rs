@@ -1,8 +1,8 @@
 use crate::error::Result;
 use crate::graph::GraphEngine;
 use crate::linker::{
-    AutoLinkerConfig, AutoLinkerMetrics, ContradictionDetector, DecayEngine, DedupScanner,
-    LinkRule, ProposedEdge, SimilarityLinkRule, StructuralRule,
+    AutoLinkerConfig, AutoLinkerMetrics, ConfigRule, ContradictionDetector, DecayEngine,
+    DedupScanner, LinkRule, ProposedEdge, SimilarityLinkRule, StructuralRule,
 };
 use crate::storage::{NodeFilter, Storage};
 use crate::types::{EdgeProvenance, Node, NodeId, Relation};
@@ -29,6 +29,8 @@ pub struct AutoLinker<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphE
     cycle_count: u64,
     /// Pre-allocated structural rules (avoids re-creation per node pair)
     structural_rules: Vec<StructuralRule>,
+    /// User-defined config rules from cortex.toml
+    config_rules: Vec<ConfigRule>,
     /// Pre-allocated similarity rule
     similarity_rule: SimilarityLinkRule,
     /// Pre-allocated contradiction detector
@@ -55,14 +57,19 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
         metrics.update_cursor(cursor);
         metrics.cycles = cycle_count;
 
-        let structural_rules = vec![
-            StructuralRule::same_agent(),
-            StructuralRule::temporal_proximity(),
-            StructuralRule::shared_tags(),
-            StructuralRule::decision_to_event(),
-            StructuralRule::observation_to_pattern(),
-            StructuralRule::fact_supersedes(),
-        ];
+        let structural_rules = if config.use_legacy_rules() {
+            vec![
+                StructuralRule::same_agent(),
+                StructuralRule::temporal_proximity(),
+                StructuralRule::shared_tags(),
+                StructuralRule::decision_to_event(),
+                StructuralRule::observation_to_pattern(),
+                StructuralRule::fact_supersedes(),
+            ]
+        } else {
+            Vec::new()
+        };
+        let config_rules = config.rules.clone();
         let similarity_rule = SimilarityLinkRule;
         let contradiction_detector =
             ContradictionDetector::new(config.similarity.contradiction_threshold);
@@ -78,6 +85,7 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
             cursor,
             cycle_count,
             structural_rules,
+            config_rules,
             similarity_rule,
             contradiction_detector,
         })
@@ -406,11 +414,16 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
             edges.push(edge);
         }
 
-        // Structural rules (pre-allocated)
+        // Structural rules (pre-allocated, only if legacy enabled)
         for rule in &self.structural_rules {
             if let Some(edge) = rule.evaluate(node, neighbor, score) {
                 edges.push(edge);
             }
+        }
+
+        // User-defined config rules
+        for rule in &self.config_rules {
+            edges.extend(rule.evaluate(node, neighbor, score));
         }
 
         // Contradiction detection (pre-allocated)

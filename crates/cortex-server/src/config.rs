@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use cortex_core::{AutoLinkerConfig, NodeKind, Relation, SimilarityConfig};
+use cortex_core::{AutoLinkerConfig, ConfigRule, NodeKind, Relation, SimilarityConfig};
 
 // Re-export from cortex-core so cortex-server code can use them from config
 #[allow(unused_imports)]
@@ -134,6 +134,12 @@ pub struct AutoLinkerTomlConfig {
     pub dedup_threshold: f32,
     pub decay_rate_per_day: f32,
     pub max_edges_per_node: usize,
+    /// Whether to run legacy hardcoded structural rules.
+    /// None = auto (true when no rules defined, false when rules exist).
+    pub legacy_rules_enabled: Option<bool>,
+    /// User-defined structural linking rules.
+    #[serde(default)]
+    pub rules: Vec<ConfigRule>,
 }
 
 impl Default for AutoLinkerTomlConfig {
@@ -145,6 +151,8 @@ impl Default for AutoLinkerTomlConfig {
             dedup_threshold: 0.92,
             decay_rate_per_day: 0.01,
             max_edges_per_node: 50,
+            legacy_rules_enabled: None,
+            rules: Vec::new(),
         }
     }
 }
@@ -305,6 +313,12 @@ impl CortexConfig {
                 errors.push(format!("schema.relations: {}", e));
             }
         }
+        // Validate auto-linker rules
+        for rule in &self.auto_linker.rules {
+            if let Err(e) = rule.validate() {
+                errors.push(format!("auto_linker.rules: {}", e));
+            }
+        }
         errors
     }
 
@@ -335,7 +349,7 @@ impl CortexConfig {
     }
 
     pub fn auto_linker_config(&self) -> AutoLinkerConfig {
-        AutoLinkerConfig::new()
+        let mut config = AutoLinkerConfig::new()
             .with_interval(Duration::from_secs(self.auto_linker.interval_seconds))
             .with_similarity(
                 SimilarityConfig::new()
@@ -347,6 +361,13 @@ impl CortexConfig {
                     .with_daily_decay_rate(self.auto_linker.decay_rate_per_day),
             )
             .with_embedding_model(self.embedding.model.clone())
+            .with_rules(self.auto_linker.rules.clone());
+
+        if let Some(enabled) = self.auto_linker.legacy_rules_enabled {
+            config = config.with_legacy_rules_enabled(enabled);
+        }
+
+        config
     }
 }
 
@@ -380,5 +401,72 @@ max = 5.0
     fn test_empty_schemas_default() {
         let config = CortexConfig::default();
         assert!(config.schemas.is_empty());
+    }
+
+    #[test]
+    fn test_auto_linker_rules_deserialization() {
+        let toml_str = r#"
+[auto_linker]
+enabled = true
+legacy_rules_enabled = false
+
+[[auto_linker.rules]]
+name = "experiment-targets-function"
+from_kind = "experiment"
+to_kind = "function"
+relation = "targets"
+weight = 0.8
+condition = { type = "shared_tags", min_shared = 1 }
+
+[[auto_linker.rules]]
+name = "fact-supersedes"
+from_kind = "fact"
+to_kind = "fact"
+relation = "supersedes"
+weight = 0.9
+condition = { type = "newer_than" }
+bidirectional = false
+
+[[auto_linker.rules]]
+name = "similar-functions"
+from_kind = "function"
+to_kind = "function"
+relation = "similar_to"
+weight_from_score = true
+condition = { type = "min_similarity", threshold = 0.85 }
+"#;
+        let config: CortexConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.auto_linker.rules.len(), 3);
+        assert_eq!(config.auto_linker.legacy_rules_enabled, Some(false));
+
+        assert_eq!(config.auto_linker.rules[0].name, "experiment-targets-function");
+        assert_eq!(config.auto_linker.rules[1].relation, "supersedes");
+        assert!(config.auto_linker.rules[2].weight_from_score);
+
+        // Verify it converts to AutoLinkerConfig correctly
+        let linker_config = config.auto_linker_config();
+        assert_eq!(linker_config.rules.len(), 3);
+        assert!(!linker_config.use_legacy_rules());
+    }
+
+    #[test]
+    fn test_auto_linker_no_rules_preserves_legacy() {
+        let toml_str = r#"
+[auto_linker]
+enabled = true
+"#;
+        let config: CortexConfig = toml::from_str(toml_str).unwrap();
+        assert!(config.auto_linker.rules.is_empty());
+        assert_eq!(config.auto_linker.legacy_rules_enabled, None);
+
+        let linker_config = config.auto_linker_config();
+        assert!(linker_config.use_legacy_rules());
+    }
+
+    #[test]
+    fn test_auto_linker_rules_validation() {
+        let config = CortexConfig::default();
+        let errors = config.validate();
+        assert!(errors.is_empty());
     }
 }

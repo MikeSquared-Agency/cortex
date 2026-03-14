@@ -34,6 +34,7 @@ proptest.workspace = true
 criterion.workspace = true
 tempfile = "3.14"
 env_logger.workspace = true
+toml = "0.8"
 
 [[bench]]
 name = "storage"
