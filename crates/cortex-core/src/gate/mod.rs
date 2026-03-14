@@ -395,8 +395,8 @@ impl WriteGate {
                 GateResult::Reject(GateRejection {
                     check: GateCheck::Schema,
                     reason: format!("Schema validation failed: {}", reasons.join("; ")),
-                    suggestion:
-                        "Ensure node metadata matches the schema defined for this kind".to_string(),
+                    suggestion: "Ensure node metadata matches the schema defined for this kind"
+                        .to_string(),
                     existing_node: None,
                     existing_title: None,
                 })

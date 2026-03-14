@@ -652,10 +652,7 @@ pub fn parse(input: &str) -> Result<FilterExpr, ParseError> {
     // Ensure all tokens were consumed
     if parser.pos < parser.tokens.len() {
         return Err(ParseError {
-            message: format!(
-                "Unexpected token: {:?}",
-                parser.tokens[parser.pos].token
-            ),
+            message: format!("Unexpected token: {:?}", parser.tokens[parser.pos].token),
             position: parser.tokens[parser.pos].pos,
         });
     }
@@ -695,12 +692,18 @@ fn collect_into(expr: &FilterExpr, filter: &mut NodeFilter) -> Result<(), Compil
         FilterExpr::Or(left, right) => {
             // OR is only supported when both sides are the same field type (Kind or Tags).
             match (left.as_ref(), right.as_ref()) {
-                (FilterExpr::Field(FieldFilter::Kind(a)), FilterExpr::Field(FieldFilter::Kind(b))) => {
+                (
+                    FilterExpr::Field(FieldFilter::Kind(a)),
+                    FilterExpr::Field(FieldFilter::Kind(b)),
+                ) => {
                     let mut merged = a.clone();
                     merged.extend(b.iter().cloned());
                     apply_field(&FieldFilter::Kind(merged), filter)?;
                 }
-                (FilterExpr::Field(FieldFilter::Tags(a)), FilterExpr::Field(FieldFilter::Tags(b))) => {
+                (
+                    FilterExpr::Field(FieldFilter::Tags(a)),
+                    FilterExpr::Field(FieldFilter::Tags(b)),
+                ) => {
                     let mut merged = a.clone();
                     merged.extend(b.iter().cloned());
                     apply_field(&FieldFilter::Tags(merged), filter)?;
@@ -772,8 +775,7 @@ fn try_collect_kinds(expr: &FilterExpr, out: &mut Vec<String>) -> bool {
 fn apply_field(field: &FieldFilter, filter: &mut NodeFilter) -> Result<(), CompileError> {
     match field {
         FieldFilter::Kind(values) => {
-            let kinds: Result<Vec<NodeKind>, _> =
-                values.iter().map(|v| NodeKind::new(v)).collect();
+            let kinds: Result<Vec<NodeKind>, _> = values.iter().map(|v| NodeKind::new(v)).collect();
             let kinds = kinds.map_err(|e| CompileError {
                 message: format!("Invalid node kind: {}", e),
             })?;
@@ -1162,9 +1164,59 @@ mod tests {
             parse_and_compile("(kind:decision OR kind:pattern) AND tags:architecture").unwrap();
         let kinds = filter.kinds.unwrap();
         assert_eq!(kinds.len(), 2);
+        assert_eq!(filter.tags.unwrap(), vec!["architecture".to_string()]);
+    }
+
+    #[test]
+    fn test_query_roundtrip_kind_filter() {
+        let filter = parse_and_compile("kind:fact").unwrap();
+        let kinds = filter.kinds.unwrap();
+        assert_eq!(kinds.len(), 1);
+        assert_eq!(kinds[0], NodeKind::new("fact").unwrap());
+    }
+
+    #[test]
+    fn test_query_roundtrip_compound_filter() {
+        let filter = parse_and_compile("kind:fact AND agent:kai AND importance>=0.7").unwrap();
+        let kinds = filter.kinds.unwrap();
+        assert_eq!(kinds.len(), 1);
+        assert_eq!(kinds[0], NodeKind::new("fact").unwrap());
+        assert_eq!(filter.source_agent, Some("kai".to_string()));
+        assert_eq!(filter.min_importance, Some(0.7));
+    }
+
+    #[test]
+    fn test_query_roundtrip_or_kinds() {
+        let filter = parse_and_compile("kind:fact OR kind:decision").unwrap();
+        let kinds = filter.kinds.unwrap();
+        assert_eq!(kinds.len(), 2);
+    }
+
+    #[test]
+    fn test_query_roundtrip_with_limit() {
+        let filter = parse_and_compile("kind:fact AND limit:3").unwrap();
+        assert!(filter.kinds.is_some());
+        assert_eq!(filter.limit, Some(3));
+    }
+
+    #[test]
+    fn test_parse_nested_parens() {
+        let expr = parse("((kind:fact))").unwrap();
         assert_eq!(
-            filter.tags.unwrap(),
-            vec!["architecture".to_string()]
+            expr,
+            FilterExpr::Field(FieldFilter::Kind(vec!["fact".to_string()]))
+        );
+    }
+
+    #[test]
+    fn test_parse_invalid_field_clean_error() {
+        let result = parse("bogus:value");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.message.contains("Unknown field"),
+            "Expected error to contain 'Unknown field', got: {}",
+            err.message
         );
     }
 }

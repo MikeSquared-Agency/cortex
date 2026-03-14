@@ -281,10 +281,8 @@ mod tests {
     #[test]
     fn test_type_mismatch() {
         let validator = SchemaValidator::new(make_decision_schema());
-        let node = make_node_with_metadata(
-            "decision",
-            json!({"rationale": "test", "priority": "high"}),
-        );
+        let node =
+            make_node_with_metadata("decision", json!({"rationale": "test", "priority": "high"}));
         let err = validator.validate(&node).unwrap_err();
         assert!(err
             .iter()
@@ -294,10 +292,7 @@ mod tests {
     #[test]
     fn test_numeric_below_min() {
         let validator = SchemaValidator::new(make_decision_schema());
-        let node = make_node_with_metadata(
-            "decision",
-            json!({"rationale": "test", "priority": 0}),
-        );
+        let node = make_node_with_metadata("decision", json!({"rationale": "test", "priority": 0}));
         let err = validator.validate(&node).unwrap_err();
         assert!(err
             .iter()
@@ -307,10 +302,8 @@ mod tests {
     #[test]
     fn test_numeric_above_max() {
         let validator = SchemaValidator::new(make_decision_schema());
-        let node = make_node_with_metadata(
-            "decision",
-            json!({"rationale": "test", "priority": 10}),
-        );
+        let node =
+            make_node_with_metadata("decision", json!({"rationale": "test", "priority": 10}));
         let err = validator.validate(&node).unwrap_err();
         assert!(err
             .iter()
@@ -368,5 +361,85 @@ mod tests {
 
         let with = SchemaValidator::new(make_decision_schema());
         assert!(with.has_schemas());
+    }
+
+    #[test]
+    fn test_multiple_violations_reported() {
+        let mut schemas = HashMap::new();
+        schemas.insert(
+            "decision".to_string(),
+            KindSchema {
+                required_fields: vec!["rationale".to_string(), "reviewer".to_string()],
+                fields: HashMap::new(),
+            },
+        );
+        let validator = SchemaValidator::new(schemas);
+        let node = make_node_with_metadata("decision", json!({}));
+        let err = validator.validate(&node).unwrap_err();
+        assert_eq!(err.len(), 2);
+    }
+
+    #[test]
+    fn test_boolean_field_type() {
+        let mut fields = HashMap::new();
+        fields.insert(
+            "verified".to_string(),
+            FieldSchema {
+                field_type: Some(FieldType::Boolean),
+                ..Default::default()
+            },
+        );
+        let mut schemas = HashMap::new();
+        schemas.insert(
+            "fact".to_string(),
+            KindSchema {
+                required_fields: vec![],
+                fields,
+            },
+        );
+        let validator = SchemaValidator::new(schemas);
+
+        // Valid: boolean value
+        let node = make_node_with_metadata("fact", json!({"verified": true}));
+        assert!(validator.validate(&node).is_ok());
+
+        // Invalid: string instead of boolean
+        let node = make_node_with_metadata("fact", json!({"verified": "yes"}));
+        let err = validator.validate(&node).unwrap_err();
+        assert!(err
+            .iter()
+            .any(|v| v.field == "verified" && v.message.contains("expected type")));
+    }
+
+    #[test]
+    fn test_array_field_type() {
+        let mut fields = HashMap::new();
+        fields.insert(
+            "references".to_string(),
+            FieldSchema {
+                field_type: Some(FieldType::Array),
+                ..Default::default()
+            },
+        );
+        let mut schemas = HashMap::new();
+        schemas.insert(
+            "fact".to_string(),
+            KindSchema {
+                required_fields: vec![],
+                fields,
+            },
+        );
+        let validator = SchemaValidator::new(schemas);
+
+        // Valid: array value
+        let node = make_node_with_metadata("fact", json!({"references": ["a", "b"]}));
+        assert!(validator.validate(&node).is_ok());
+
+        // Invalid: string instead of array
+        let node = make_node_with_metadata("fact", json!({"references": "just-one"}));
+        let err = validator.validate(&node).unwrap_err();
+        assert!(err
+            .iter()
+            .any(|v| v.field == "references" && v.message.contains("expected type")));
     }
 }

@@ -349,3 +349,36 @@ impl CortexConfig {
             .with_embedding_model(self.embedding.model.clone())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_schema_config_deserialization() {
+        let toml_str = r#"
+[schemas.decision]
+required_fields = ["rationale"]
+
+[schemas.decision.fields.priority]
+type = "number"
+min = 1.0
+max = 5.0
+"#;
+        let config: CortexConfig = toml::from_str(toml_str).unwrap();
+        assert!(config.schemas.contains_key("decision"));
+        let schema = &config.schemas["decision"];
+        assert_eq!(schema.required_fields, vec!["rationale".to_string()]);
+        assert!(schema.fields.contains_key("priority"));
+        let priority = &schema.fields["priority"];
+        assert_eq!(priority.field_type, Some(FieldType::Number));
+        assert_eq!(priority.min, Some(1.0));
+        assert_eq!(priority.max, Some(5.0));
+    }
+
+    #[test]
+    fn test_empty_schemas_default() {
+        let config = CortexConfig::default();
+        assert!(config.schemas.is_empty());
+    }
+}

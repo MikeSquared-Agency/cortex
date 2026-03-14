@@ -33,6 +33,7 @@ pub struct CortexServiceImpl {
     graph_version: Arc<AtomicU64>,
     briefing_engine: Arc<ServerBriefingEngine>,
     hooks: Arc<HookRegistry>,
+    schema_validator: Arc<SchemaValidator>,
     start_time: Instant,
 }
 
@@ -47,6 +48,7 @@ impl CortexServiceImpl {
         graph_version: Arc<AtomicU64>,
         briefing_engine: Arc<ServerBriefingEngine>,
         hooks: Arc<HookRegistry>,
+        schema_validator: Arc<SchemaValidator>,
     ) -> Self {
         Self {
             storage,
@@ -57,6 +59,7 @@ impl CortexServiceImpl {
             graph_version,
             briefing_engine,
             hooks,
+            schema_validator,
             start_time: Instant::now(),
         }
     }
@@ -100,6 +103,13 @@ impl CortexService for CortexServiceImpl {
             .map(|(k, v)| (k, serde_json::Value::String(v)))
             .collect();
         node.data.tags = req.tags;
+
+        // Schema validation
+        if let cortex_core::GateResult::Reject(r) =
+            cortex_core::WriteGate::check_schema(&node, &self.schema_validator)
+        {
+            return Err(Status::failed_precondition(r.reason));
+        }
 
         // Generate embedding
         let text = embedding_input(&node);
@@ -192,6 +202,13 @@ impl CortexService for CortexServiceImpl {
         }
         if let Some(importance) = req.importance {
             node.importance = importance;
+        }
+
+        // Schema validation
+        if let cortex_core::GateResult::Reject(r) =
+            cortex_core::WriteGate::check_schema(&node, &self.schema_validator)
+        {
+            return Err(Status::failed_precondition(r.reason));
         }
 
         // Re-generate embedding
