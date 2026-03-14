@@ -309,6 +309,7 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
 
         tokio::spawn(async move {
             info!("Starting gRPC server on {}", addr);
+            #[allow(clippy::result_large_err)]
             let svc = CortexServiceServer::with_interceptor(
                 grpc_service,
                 move |req: tonic::Request<()>| {
