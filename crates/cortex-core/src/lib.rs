@@ -3,6 +3,7 @@ pub mod briefing;
 pub mod error;
 pub mod gate;
 pub mod graph;
+pub mod hooks;
 pub mod ingest;
 pub mod kinds;
 pub mod linker;
@@ -18,6 +19,7 @@ pub use error::{CortexError, Result};
 pub use gate::{
     GateCheck, GateRejection, GateResult, KindOverrideConfig, WriteGate, WriteGateConfig,
 };
+pub use hooks::{HookRegistry, MutationAction, MutationHook};
 pub use graph::{
     GraphEngine, GraphEngineImpl, Path, PathRequest, PathResult, Subgraph, TraversalBudget,
     TraversalDirection, TraversalRequest, TraversalStrategy,

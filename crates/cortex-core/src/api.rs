@@ -42,6 +42,7 @@ pub struct Cortex {
     graph_engine: Arc<GraphEngineImpl<RedbStorage>>,
     #[allow(dead_code)]
     config: LibraryConfig,
+    hooks: crate::hooks::HookRegistry,
 }
 
 impl Cortex {
@@ -76,7 +77,13 @@ impl Cortex {
             index,
             graph_engine,
             config,
+            hooks: crate::hooks::HookRegistry::new(),
         })
+    }
+
+    /// Register a mutation hook. Hooks are called in registration order.
+    pub fn add_hook(&mut self, hook: std::sync::Arc<dyn crate::hooks::MutationHook>) {
+        self.hooks.add(hook);
     }
 
     fn create_embedding_service(model: &str) -> Result<FastEmbedService> {
@@ -101,6 +108,8 @@ impl Cortex {
             .write()
             .map_err(|_| CortexError::Validation("Vector index lock poisoned".into()))?
             .insert(id, &emb)?;
+        self.hooks
+            .notify_node(&node, crate::hooks::MutationAction::Created);
         Ok(id)
     }
 
@@ -133,7 +142,10 @@ impl Cortex {
 
     /// Create an edge between two nodes.
     pub fn create_edge(&self, edge: Edge) -> Result<()> {
-        self.storage.put_edge(&edge)
+        self.storage.put_edge(&edge)?;
+        self.hooks
+            .notify_edge(&edge, crate::hooks::MutationAction::Created);
+        Ok(())
     }
 
     /// Graph traversal from a node (returns neighborhood).

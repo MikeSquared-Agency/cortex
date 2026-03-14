@@ -156,6 +156,9 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
     ));
     info!("Briefing engine ready");
 
+    // Initialize hook registry
+    let hooks = Arc::new(HookRegistry::new());
+
     // Initialize prometheus metrics
     let cortex_metrics = Arc::new(CortexMetrics::new());
     let metrics_require_auth = config.observability.metrics_require_auth;
@@ -287,6 +290,7 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
             auto_linker.clone(),
             graph_version.clone(),
             briefing_engine.clone(),
+            hooks.clone(),
         );
 
         let addr = config.grpc_addr();

@@ -32,10 +32,12 @@ pub struct CortexServiceImpl {
     auto_linker: Arc<StdRwLock<ServerAutoLinker>>,
     graph_version: Arc<AtomicU64>,
     briefing_engine: Arc<ServerBriefingEngine>,
+    hooks: Arc<HookRegistry>,
     start_time: Instant,
 }
 
 impl CortexServiceImpl {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         storage: Arc<RedbStorage>,
         graph_engine: Arc<GraphEngineImpl<RedbStorage>>,
@@ -44,6 +46,7 @@ impl CortexServiceImpl {
         auto_linker: Arc<StdRwLock<ServerAutoLinker>>,
         graph_version: Arc<AtomicU64>,
         briefing_engine: Arc<ServerBriefingEngine>,
+        hooks: Arc<HookRegistry>,
     ) -> Self {
         Self {
             storage,
@@ -53,6 +56,7 @@ impl CortexServiceImpl {
             auto_linker,
             graph_version,
             briefing_engine,
+            hooks,
             start_time: Instant::now(),
         }
     }
@@ -119,6 +123,8 @@ impl CortexService for CortexServiceImpl {
         }
 
         self.bump_version();
+        self.hooks
+            .notify_node(&node, cortex_core::MutationAction::Created);
 
         tracing::info!(
             "[AUDIT] gRPC CreateNode agent={} title={:?} kind={:?}",
@@ -211,6 +217,8 @@ impl CortexService for CortexServiceImpl {
         }
 
         self.bump_version();
+        self.hooks
+            .notify_node(&node, cortex_core::MutationAction::Updated);
 
         let edge_count = self.get_edge_count(node.id);
         Ok(Response::new(node_to_response(&node, edge_count)))
@@ -228,11 +236,17 @@ impl CortexService for CortexServiceImpl {
             .parse::<uuid::Uuid>()
             .map_err(|e| Status::invalid_argument(format!("Invalid UUID: {}", e)))?;
 
+        let node_for_hook = self.storage.get_node(node_id).ok().flatten();
+
         self.storage
             .delete_node(node_id)
             .map_err(|e| Status::internal(e.to_string()))?;
 
         self.bump_version();
+        if let Some(node) = node_for_hook {
+            self.hooks
+                .notify_node(&node, cortex_core::MutationAction::Deleted);
+        }
 
         tracing::info!("[AUDIT] gRPC DeleteNode agent={} id={}", agent_id, req.id);
 
@@ -332,6 +346,8 @@ impl CortexService for CortexServiceImpl {
             .map_err(|e| Status::internal(e.to_string()))?;
 
         self.bump_version();
+        self.hooks
+            .notify_edge(&edge, cortex_core::MutationAction::Created);
 
         tracing::info!(
             "[AUDIT] gRPC CreateEdge agent={} from={} to={} relation={}",
@@ -405,11 +421,17 @@ impl CortexService for CortexServiceImpl {
             .parse::<uuid::Uuid>()
             .map_err(|e| Status::invalid_argument(format!("Invalid UUID: {}", e)))?;
 
+        let edge_for_hook = self.storage.get_edge(edge_id).ok().flatten();
+
         self.storage
             .delete_edge(edge_id)
             .map_err(|e| Status::internal(e.to_string()))?;
 
         self.bump_version();
+        if let Some(edge) = edge_for_hook {
+            self.hooks
+                .notify_edge(&edge, cortex_core::MutationAction::Deleted);
+        }
 
         tracing::info!("[AUDIT] gRPC DeleteEdge agent={} id={}", agent_id, req.id);
 
