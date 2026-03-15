@@ -1,6 +1,6 @@
 use super::cache::BriefingCache;
 use super::renderer::{BriefingRenderer, CompactRenderer, MarkdownRenderer};
-use super::{Briefing, BriefingSection};
+use super::{Briefing, BriefingScope, BriefingSection};
 use crate::error::Result;
 use crate::graph::{GraphEngine, TraversalDirection, TraversalRequest};
 use crate::storage::{NodeFilter, Storage};
@@ -345,6 +345,23 @@ where
         let _ = self.on_briefing_served(&briefing);
 
         Ok(briefing)
+    }
+
+    /// Generate a briefing with an explicit scope.
+    ///
+    /// - `Agent` — identical to `generate(agent_id)`.
+    /// - `Shared` — agent's briefing plus a cross-agent context section.
+    /// - `Unified(agents)` — multi-agent briefing for orchestrators.
+    pub fn generate_with_scope(
+        &self,
+        agent_id: &str,
+        scope: BriefingScope,
+    ) -> Result<Briefing> {
+        match scope {
+            BriefingScope::Agent => self.generate(agent_id),
+            BriefingScope::Shared => self.generate_shared(agent_id),
+            BriefingScope::Unified(ref agent_ids) => self.generate_unified(agent_ids),
+        }
     }
 
     /// Render a briefing to a string. compact=true gives ~4x higher density.
@@ -951,6 +968,331 @@ where
         });
 
         Ok(sections)
+    }
+
+    // ── Scope::Shared ─────────────────────────────────────────────────────
+
+    /// Generate an agent-scoped briefing, then append a cross-agent context
+    /// section showing other agents' knowledge about shared entities.
+    fn generate_shared(&self, agent_id: &str) -> Result<Briefing> {
+        let mut briefing = self.generate(agent_id)?;
+        // `generate` may return a cached result — we always need fresh cross-agent data.
+        briefing.cached = false;
+
+        let seen: HashSet<NodeId> = briefing
+            .sections
+            .iter()
+            .flat_map(|s| s.nodes.iter().map(|n| n.id))
+            .collect();
+
+        let agent_node_id = self.find_agent_node(agent_id)?;
+        let cross = self.generate_cross_agent_context(agent_id, agent_node_id, &seen)?;
+        if !cross.nodes.is_empty() {
+            briefing.nodes_consulted += cross.nodes.len();
+            briefing.sections.push(cross);
+        }
+
+        Ok(briefing)
+    }
+
+    /// Build the "Cross-agent context" section.
+    ///
+    /// Two-hop traversal: agent's recent nodes → referenced entities → other agents' nodes.
+    fn generate_cross_agent_context(
+        &self,
+        agent_id: &str,
+        _agent_node_id: Option<NodeId>,
+        seen: &HashSet<NodeId>,
+    ) -> Result<BriefingSection> {
+        let cutoff =
+            Utc::now() - chrono::Duration::seconds(self.config.recent_window.as_secs() as i64);
+
+        // 1. Collect entity nodes referenced by this agent's recent knowledge
+        let recent_nodes = self.storage.list_nodes(
+            NodeFilter::new()
+                .with_source_agent(agent_id.to_string())
+                .created_after(cutoff)
+                .with_limit(50),
+        )?;
+
+        let mut entity_ids: HashSet<NodeId> = HashSet::new();
+        for node in &recent_nodes {
+            let outbound = self.storage.edges_from(node.id)?;
+            for edge in outbound {
+                if edge.relation.as_str() == "references" {
+                    entity_ids.insert(edge.to);
+                }
+            }
+        }
+
+        if entity_ids.is_empty() {
+            return Ok(BriefingSection {
+                title: "Cross-agent context".to_string(),
+                nodes: vec![],
+            });
+        }
+
+        // 2. From entity nodes, find OTHER agents' knowledge about those entities
+        let mut cross_nodes: Vec<Node> = Vec::new();
+        for entity_id in &entity_ids {
+            let inbound = self.storage.edges_to(*entity_id)?;
+            for edge in inbound {
+                if edge.relation.as_str() == "references" {
+                    if let Ok(Some(node)) = self.storage.get_node(edge.from) {
+                        if node.source.agent != agent_id
+                            && !seen.contains(&node.id)
+                            && !node.deleted
+                        {
+                            cross_nodes.push(node);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Rank and truncate
+        let mut ranked = self.rank(cross_nodes);
+        ranked.truncate(self.config.max_items_per_section);
+
+        Ok(BriefingSection {
+            title: "Cross-agent context".to_string(),
+            nodes: ranked,
+        })
+    }
+
+    // ── Scope::Unified ────────────────────────────────────────────────────
+
+    /// Multi-agent unified briefing for orchestrators.
+    fn generate_unified(&self, agent_ids: &[String]) -> Result<Briefing> {
+        let mut all_sections: Vec<BriefingSection> = Vec::new();
+        let mut seen: HashSet<NodeId> = HashSet::new();
+
+        // 1. For each agent, generate a summary section
+        for agent_id in agent_ids {
+            let agent_node_id = self.find_agent_node(agent_id)?;
+            let summary = self.generate_agent_summary(agent_id, agent_node_id, &seen)?;
+            for n in &summary.nodes {
+                seen.insert(n.id);
+            }
+            if !summary.nodes.is_empty() {
+                all_sections.push(summary);
+            }
+        }
+
+        // 2. Find shared entities (referenced by 2+ of the listed agents)
+        let shared_entities = self.find_shared_entities(agent_ids)?;
+        if !shared_entities.nodes.is_empty() {
+            for n in &shared_entities.nodes {
+                seen.insert(n.id);
+            }
+            all_sections.push(shared_entities);
+        }
+
+        // 3. Contradictions across agents
+        let cross_contradictions = self.find_cross_agent_contradictions(agent_ids, &seen)?;
+        if !cross_contradictions.nodes.is_empty() {
+            all_sections.push(cross_contradictions);
+        }
+
+        // Enforce max_total_items
+        let mut total = 0usize;
+        for section in &mut all_sections {
+            let remaining = self.config.max_total_items.saturating_sub(total);
+            section.nodes.truncate(remaining);
+            total += section.nodes.len();
+        }
+        all_sections.retain(|s| !s.nodes.is_empty());
+
+        let nodes_consulted = all_sections.iter().map(|s| s.nodes.len()).sum();
+
+        Ok(Briefing {
+            agent_id: agent_ids.join(","),
+            generated_at: Utc::now(),
+            nodes_consulted,
+            sections: all_sections,
+            cached: false,
+        })
+    }
+
+    /// Generate a summary section for one agent in a unified briefing.
+    fn generate_agent_summary(
+        &self,
+        agent_id: &str,
+        agent_node_id: Option<NodeId>,
+        seen: &HashSet<NodeId>,
+    ) -> Result<BriefingSection> {
+        let cutoff =
+            Utc::now() - chrono::Duration::seconds(self.config.recent_window.as_secs() as i64);
+
+        let mut nodes: Vec<Node> = Vec::new();
+
+        // Include the agent node itself if present
+        if let Some(aid) = agent_node_id {
+            if let Ok(Some(agent_node)) = self.storage.get_node(aid) {
+                if !seen.contains(&agent_node.id) {
+                    nodes.push(agent_node);
+                }
+            }
+        }
+
+        // Pull the agent's recent high-importance nodes
+        let recent = self.storage.list_nodes(
+            NodeFilter::new()
+                .with_source_agent(agent_id.to_string())
+                .created_after(cutoff)
+                .with_min_importance(self.config.min_importance)
+                .with_limit(self.config.max_items_per_section * 2),
+        )?;
+
+        let candidates: Vec<Node> = recent
+            .into_iter()
+            .filter(|n| !seen.contains(&n.id) && !nodes.iter().any(|e| e.id == n.id))
+            .collect();
+
+        let mut ranked = self.rank(candidates);
+        ranked.truncate(
+            self.config
+                .max_items_per_section
+                .saturating_sub(nodes.len()),
+        );
+        nodes.extend(ranked);
+
+        Ok(BriefingSection {
+            title: format!("Agent: {}", agent_id),
+            nodes,
+        })
+    }
+
+    /// Find entity nodes referenced by 2+ of the listed agents.
+    fn find_shared_entities(&self, agent_ids: &[String]) -> Result<BriefingSection> {
+        // For each agent, collect entity IDs they reference
+        let cutoff =
+            Utc::now() - chrono::Duration::seconds(self.config.recent_window.as_secs() as i64);
+
+        let mut entity_agent_count: HashMap<NodeId, HashSet<String>> = HashMap::new();
+
+        for agent_id in agent_ids {
+            let nodes = self.storage.list_nodes(
+                NodeFilter::new()
+                    .with_source_agent(agent_id.to_string())
+                    .created_after(cutoff)
+                    .with_limit(50),
+            )?;
+
+            for node in &nodes {
+                let outbound = self.storage.edges_from(node.id)?;
+                for edge in outbound {
+                    if edge.relation.as_str() == "references" {
+                        entity_agent_count
+                            .entry(edge.to)
+                            .or_default()
+                            .insert(agent_id.clone());
+                    }
+                }
+            }
+        }
+
+        // Keep only entities referenced by 2+ agents
+        let shared_ids: Vec<NodeId> = entity_agent_count
+            .into_iter()
+            .filter(|(_, agents)| agents.len() >= 2)
+            .map(|(id, _)| id)
+            .collect();
+
+        let mut nodes: Vec<Node> = Vec::new();
+        for id in shared_ids {
+            if let Ok(Some(node)) = self.storage.get_node(id) {
+                if !node.deleted {
+                    nodes.push(node);
+                }
+            }
+        }
+
+        let mut ranked = self.rank(nodes);
+        ranked.truncate(self.config.max_items_per_section);
+
+        Ok(BriefingSection {
+            title: "Shared entities".to_string(),
+            nodes: ranked,
+        })
+    }
+
+    /// Find nodes involved in contradictions across different agents.
+    /// Note: `_seen` is accepted for interface consistency but not used for filtering
+    /// because contradictions should be surfaced even if the nodes already appeared
+    /// in per-agent summary sections.
+    fn find_cross_agent_contradictions(
+        &self,
+        agent_ids: &[String],
+        _seen: &HashSet<NodeId>,
+    ) -> Result<BriefingSection> {
+        if !self.config.include_contradictions {
+            return Ok(BriefingSection {
+                title: "Cross-agent contradictions".to_string(),
+                nodes: vec![],
+            });
+        }
+
+        let agent_set: HashSet<&str> = agent_ids.iter().map(|s| s.as_str()).collect();
+        let cutoff =
+            Utc::now() - chrono::Duration::seconds(self.config.recent_window.as_secs() as i64);
+
+        // Collect recent nodes from all listed agents
+        let mut all_node_ids: HashSet<NodeId> = HashSet::new();
+        for agent_id in agent_ids {
+            let nodes = self.storage.list_nodes(
+                NodeFilter::new()
+                    .with_source_agent(agent_id.to_string())
+                    .created_after(cutoff)
+                    .with_limit(50),
+            )?;
+            for n in &nodes {
+                all_node_ids.insert(n.id);
+            }
+        }
+
+        // Find contradiction edges where the two sides come from different listed agents
+        let mut contradicting_nodes: Vec<Node> = Vec::new();
+        for node_id in &all_node_ids {
+            let outbound = self.storage.edges_from(*node_id)?;
+            for edge in &outbound {
+                if edge.relation.as_str() == "contradicts" {
+                    if let Ok(Some(other)) = self.storage.get_node(edge.to) {
+                        if agent_set.contains(other.source.agent.as_str())
+                            && !other.deleted
+                        {
+                            // Verify they're from *different* agents
+                            if let Ok(Some(this)) = self.storage.get_node(*node_id) {
+                                if this.source.agent != other.source.agent {
+                                    contradicting_nodes.push(other);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Dedup by node ID
+        let mut deduped: Vec<Node> = Vec::new();
+        let mut dedup_seen: HashSet<NodeId> = HashSet::new();
+        for n in contradicting_nodes {
+            if dedup_seen.insert(n.id) {
+                deduped.push(n);
+            }
+        }
+
+        deduped.sort_by(|a, b| {
+            b.importance
+                .partial_cmp(&a.importance)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        deduped.truncate(self.config.max_items_per_section);
+
+        Ok(BriefingSection {
+            title: "Cross-agent contradictions".to_string(),
+            nodes: deduped,
+        })
     }
 }
 #[cfg(test)]
@@ -2305,6 +2647,292 @@ mod tests {
         assert!(
             experiments_sections.is_empty(),
             "Mapped kind should not produce an auto-discovered section"
+        );
+    }
+
+    // ── Spec 15: Briefing scope tests ────────────────────────────────────
+
+    // Test: Agent scope via generate_with_scope is identical to generate()
+    #[test]
+    fn test_agent_scope_identical_to_generate() {
+        let dir = TempDir::new().unwrap();
+        let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
+
+        let agent = make_node(NodeKind::new("agent").unwrap(), "kai", "kai");
+        let fact = make_node(NodeKind::new("fact").unwrap(), "Some fact", "kai");
+        storage.put_node(&agent).unwrap();
+        storage.put_node(&fact).unwrap();
+
+        let (engine, _) = make_engine(storage);
+
+        let b1 = engine.generate("kai").unwrap();
+        // Invalidate cache so we get fresh result
+        let b2 = engine
+            .generate_with_scope("kai", super::super::BriefingScope::Agent)
+            .unwrap();
+
+        assert_eq!(b1.sections.len(), b2.sections.len());
+        assert_eq!(b1.nodes_consulted, b2.nodes_consulted);
+        for (s1, s2) in b1.sections.iter().zip(b2.sections.iter()) {
+            assert_eq!(s1.title, s2.title);
+            assert_eq!(s1.nodes.len(), s2.nodes.len());
+        }
+    }
+
+    // Test: Shared scope includes cross-agent context when entity edges exist
+    #[test]
+    fn test_shared_scope_includes_cross_agent_context() {
+        let dir = TempDir::new().unwrap();
+        let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
+
+        // Two agents: kai and scout
+        let agent_kai = make_node(NodeKind::new("agent").unwrap(), "kai", "kai");
+        let agent_scout = make_node(NodeKind::new("agent").unwrap(), "scout", "scout");
+
+        // An entity node (e.g. a project)
+        let entity = make_node(NodeKind::new("entity").unwrap(), "Project Alpha", "system");
+
+        // Kai's fact references the entity
+        let kai_fact = make_node(NodeKind::new("fact").unwrap(), "Kai's observation", "kai");
+        // Scout's fact also references the entity
+        let scout_fact = make_node(
+            NodeKind::new("fact").unwrap(),
+            "Scout's analysis",
+            "scout",
+        );
+
+        storage.put_node(&agent_kai).unwrap();
+        storage.put_node(&agent_scout).unwrap();
+        storage.put_node(&entity).unwrap();
+        storage.put_node(&kai_fact).unwrap();
+        storage.put_node(&scout_fact).unwrap();
+
+        // kai_fact -> references -> entity
+        storage
+            .put_edge(&manual_edge(
+                kai_fact.id,
+                entity.id,
+                Relation::new("references").unwrap(),
+            ))
+            .unwrap();
+        // scout_fact -> references -> entity
+        storage
+            .put_edge(&manual_edge(
+                scout_fact.id,
+                entity.id,
+                Relation::new("references").unwrap(),
+            ))
+            .unwrap();
+
+        let (engine, _) = make_engine(storage);
+        let briefing = engine
+            .generate_with_scope("kai", super::super::BriefingScope::Shared)
+            .unwrap();
+
+        let cross_section = briefing
+            .sections
+            .iter()
+            .find(|s| s.title == "Cross-agent context");
+
+        assert!(
+            cross_section.is_some(),
+            "Shared scope should include cross-agent context section"
+        );
+        let cross = cross_section.unwrap();
+        assert!(
+            cross
+                .nodes
+                .iter()
+                .any(|n| n.data.title == "Scout's analysis"),
+            "Cross-agent section should include Scout's node"
+        );
+        assert!(
+            !cross
+                .nodes
+                .iter()
+                .any(|n| n.data.title == "Kai's observation"),
+            "Cross-agent section must NOT include the requesting agent's own nodes"
+        );
+    }
+
+    // Test: Shared scope with no entity edges produces no cross-agent section
+    #[test]
+    fn test_shared_scope_empty_entity_graph() {
+        let dir = TempDir::new().unwrap();
+        let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
+
+        let agent = make_node(NodeKind::new("agent").unwrap(), "kai", "kai");
+        let fact = make_node(NodeKind::new("fact").unwrap(), "Standalone fact", "kai");
+        storage.put_node(&agent).unwrap();
+        storage.put_node(&fact).unwrap();
+
+        let (engine, _) = make_engine(storage);
+        let briefing = engine
+            .generate_with_scope("kai", super::super::BriefingScope::Shared)
+            .unwrap();
+
+        let cross_section = briefing
+            .sections
+            .iter()
+            .find(|s| s.title == "Cross-agent context");
+        assert!(
+            cross_section.is_none(),
+            "No cross-agent section when no entity references exist"
+        );
+    }
+
+    // Test: Unified scope produces sections for each agent
+    #[test]
+    fn test_unified_scope_produces_per_agent_sections() {
+        let dir = TempDir::new().unwrap();
+        let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
+
+        let agent_kai = make_node(NodeKind::new("agent").unwrap(), "kai", "kai");
+        let agent_scout = make_node(NodeKind::new("agent").unwrap(), "scout", "scout");
+        let kai_fact = make_node(NodeKind::new("fact").unwrap(), "Kai fact", "kai");
+        let scout_fact = make_node(NodeKind::new("fact").unwrap(), "Scout fact", "scout");
+
+        storage.put_node(&agent_kai).unwrap();
+        storage.put_node(&agent_scout).unwrap();
+        storage.put_node(&kai_fact).unwrap();
+        storage.put_node(&scout_fact).unwrap();
+
+        let (engine, _) = make_engine(storage);
+        let briefing = engine
+            .generate_with_scope(
+                "kai",
+                super::super::BriefingScope::Unified(vec![
+                    "kai".to_string(),
+                    "scout".to_string(),
+                ]),
+            )
+            .unwrap();
+
+        assert_eq!(briefing.agent_id, "kai,scout");
+
+        let kai_section = briefing
+            .sections
+            .iter()
+            .find(|s| s.title == "Agent: kai");
+        let scout_section = briefing
+            .sections
+            .iter()
+            .find(|s| s.title == "Agent: scout");
+
+        assert!(
+            kai_section.is_some(),
+            "Unified briefing should have a section for kai"
+        );
+        assert!(
+            scout_section.is_some(),
+            "Unified briefing should have a section for scout"
+        );
+    }
+
+    // Test: Unified scope includes shared entities section
+    #[test]
+    fn test_unified_scope_shared_entities() {
+        let dir = TempDir::new().unwrap();
+        let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
+
+        let entity = make_node(NodeKind::new("entity").unwrap(), "Shared Resource", "system");
+        let kai_fact = make_node(NodeKind::new("fact").unwrap(), "Kai ref", "kai");
+        let scout_fact = make_node(NodeKind::new("fact").unwrap(), "Scout ref", "scout");
+
+        storage.put_node(&entity).unwrap();
+        storage.put_node(&kai_fact).unwrap();
+        storage.put_node(&scout_fact).unwrap();
+
+        // Both agents reference the same entity
+        storage
+            .put_edge(&manual_edge(
+                kai_fact.id,
+                entity.id,
+                Relation::new("references").unwrap(),
+            ))
+            .unwrap();
+        storage
+            .put_edge(&manual_edge(
+                scout_fact.id,
+                entity.id,
+                Relation::new("references").unwrap(),
+            ))
+            .unwrap();
+
+        let (engine, _) = make_engine(storage);
+        let briefing = engine
+            .generate_with_scope(
+                "kai",
+                super::super::BriefingScope::Unified(vec![
+                    "kai".to_string(),
+                    "scout".to_string(),
+                ]),
+            )
+            .unwrap();
+
+        let shared = briefing
+            .sections
+            .iter()
+            .find(|s| s.title == "Shared entities");
+
+        assert!(
+            shared.is_some(),
+            "Unified briefing should include shared entities section"
+        );
+        assert!(
+            shared
+                .unwrap()
+                .nodes
+                .iter()
+                .any(|n| n.data.title == "Shared Resource"),
+            "Shared entities should include the entity referenced by both agents"
+        );
+    }
+
+    // Test: Unified scope cross-agent contradictions
+    #[test]
+    fn test_unified_scope_cross_agent_contradictions() {
+        let dir = TempDir::new().unwrap();
+        let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
+
+        let kai_fact = make_node(NodeKind::new("fact").unwrap(), "Kai says X", "kai");
+        let scout_fact = make_node(NodeKind::new("fact").unwrap(), "Scout says not-X", "scout");
+
+        storage.put_node(&kai_fact).unwrap();
+        storage.put_node(&scout_fact).unwrap();
+
+        // Cross-agent contradiction
+        storage
+            .put_edge(&manual_edge(
+                kai_fact.id,
+                scout_fact.id,
+                Relation::new("contradicts").unwrap(),
+            ))
+            .unwrap();
+
+        let (engine, _) = make_engine(storage);
+        let briefing = engine
+            .generate_with_scope(
+                "kai",
+                super::super::BriefingScope::Unified(vec![
+                    "kai".to_string(),
+                    "scout".to_string(),
+                ]),
+            )
+            .unwrap();
+
+        let contradictions = briefing
+            .sections
+            .iter()
+            .find(|s| s.title == "Cross-agent contradictions");
+
+        assert!(
+            contradictions.is_some(),
+            "Unified briefing should surface cross-agent contradictions"
+        );
+        assert!(
+            !contradictions.unwrap().nodes.is_empty(),
+            "Contradictions section should not be empty"
         );
     }
 }

@@ -562,6 +562,8 @@ pub struct PathArgs {
 
 #[derive(Args, Debug)]
 pub struct BriefingArgs {
+    /// Agent ID (required unless --agents is used for unified scope)
+    #[arg(default_value = "")]
     pub agent_id: String,
     #[arg(long)]
     pub compact: bool,
@@ -570,6 +572,12 @@ pub struct BriefingArgs {
     pub format: String,
     #[arg(long)]
     pub no_cache: bool,
+    /// Scope: "agent" (default), "shared"
+    #[arg(long, default_value = "agent")]
+    pub scope: String,
+    /// Comma-separated agent IDs for unified scope (e.g. --agents kai,scout,lily)
+    #[arg(long)]
+    pub agents: Option<String>,
 }
 
 // --- Import args ---

@@ -75,6 +75,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/graph/export", get(graph_export))
         .route("/auto-linker/status", get(auto_linker_status))
         .route("/auto-linker/trigger", post(trigger_auto_link))
+        .route("/briefing", get(get_unified_briefing))
         .route("/briefing/:agent_id", get(get_briefing))
         .route("/agents/:name/prompts", get(list_agent_prompts))
         .route(
@@ -1074,6 +1075,8 @@ async fn trigger_auto_link(State(state): State<AppState>) -> AppResult<impl Into
 #[derive(Deserialize)]
 struct BriefingQuery {
     compact: Option<bool>,
+    scope: Option<String>,
+    agents: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -1099,7 +1102,80 @@ async fn get_briefing(
 ) -> AppResult<Json<JsonResponse<BriefingData>>> {
     let compact = query.compact.unwrap_or(false);
 
-    let briefing = state.briefing_engine.generate(&agent_id)?;
+    let scope = match query.scope.as_deref() {
+        Some("shared") => cortex_core::briefing::BriefingScope::Shared,
+        Some("unified") => {
+            let ids = query
+                .agents
+                .as_deref()
+                .unwrap_or(&agent_id)
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            cortex_core::briefing::BriefingScope::Unified(ids)
+        }
+        _ => cortex_core::briefing::BriefingScope::Agent,
+    };
+
+    let briefing = state.briefing_engine.generate_with_scope(&agent_id, scope)?;
+    let rendered = state.briefing_engine.render(&briefing, compact);
+
+    let sections: Vec<BriefingSectionData> = briefing
+        .sections
+        .iter()
+        .map(|s| {
+            let nodes = s
+                .nodes
+                .iter()
+                .map(|n| {
+                    let outgoing = state.storage.edges_from(n.id).unwrap_or_default();
+                    let incoming = state.storage.edges_to(n.id).unwrap_or_default();
+                    NodeData::from_node(n, outgoing.len() + incoming.len())
+                })
+                .collect();
+            BriefingSectionData {
+                title: s.title.clone(),
+                nodes,
+            }
+        })
+        .collect();
+
+    Ok(Json(JsonResponse::ok(BriefingData {
+        agent_id: briefing.agent_id.clone(),
+        generated_at: briefing.generated_at.to_rfc3339(),
+        nodes_consulted: briefing.nodes_consulted,
+        sections,
+        rendered,
+        cached: briefing.cached,
+    })))
+}
+
+/// GET /briefing?agents=kai,scout — unified briefing across multiple agents
+async fn get_unified_briefing(
+    State(state): State<AppState>,
+    Query(query): Query<BriefingQuery>,
+) -> AppResult<Json<JsonResponse<BriefingData>>> {
+    let compact = query.compact.unwrap_or(false);
+
+    let agent_ids: Vec<String> = query
+        .agents
+        .as_deref()
+        .unwrap_or("")
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    if agent_ids.is_empty() {
+        return Err(anyhow::anyhow!("'agents' query parameter is required for /briefing").into());
+    }
+
+    let scope = cortex_core::briefing::BriefingScope::Unified(agent_ids.clone());
+    let primary = agent_ids.first().map(|s| s.as_str()).unwrap_or("default");
+    let briefing = state
+        .briefing_engine
+        .generate_with_scope(primary, scope)?;
     let rendered = state.briefing_engine.render(&briefing, compact);
 
     let sections: Vec<BriefingSectionData> = briefing

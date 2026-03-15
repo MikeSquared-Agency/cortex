@@ -1,5 +1,5 @@
 use crate::grpc::conversions::*;
-use cortex_core::briefing::BriefingEngine;
+use cortex_core::briefing::{BriefingEngine, BriefingScope};
 use cortex_core::*;
 // cortex_core::* imports a 1-arg `Result<T>` alias; re-import std's 2-arg form
 // so that tonic handler return types like `Result<Response<T>, Status>` resolve correctly.
@@ -796,9 +796,15 @@ impl CortexService for CortexServiceImpl {
         let agent_id = &req.agent_id;
         let compact = req.compact;
 
+        let scope = match req.scope.as_str() {
+            "shared" => BriefingScope::Shared,
+            "unified" => BriefingScope::Unified(req.agent_ids.clone()),
+            _ => BriefingScope::Agent,
+        };
+
         let briefing = self
             .briefing_engine
-            .generate(agent_id)
+            .generate_with_scope(agent_id, scope)
             .map_err(|e| Status::internal(e.to_string()))?;
 
         let rendered = self.briefing_engine.render(&briefing, compact);
