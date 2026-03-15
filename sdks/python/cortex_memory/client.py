@@ -71,6 +71,53 @@ class Cortex:
     # Core write operations
     # ------------------------------------------------------------------
 
+    def store_entity(
+        self,
+        title: str,
+        *,
+        entity_type: str = "",
+        aliases: Optional[List[str]] = None,
+        body: str = "",
+        tags: Optional[List[str]] = None,
+        importance: float = 0.5,
+        metadata: Optional[Dict[str, str]] = None,
+        source_agent: str = "",
+    ) -> str:
+        """Store an entity node with well-known metadata conventions.
+
+        Convenience wrapper around :meth:`store` that sets ``kind="entity"``
+        and populates ``entity_type`` and ``aliases`` metadata automatically.
+
+        Args:
+            title: Entity name (e.g. ``"Anthropic"``).
+            entity_type: One of the well-known entity types (``EntityType.*``
+                constants) or a custom string.
+            aliases: Alternative names for entity resolution.
+            body: Extended description. Defaults to *title*.
+            tags: Additional tags.
+            importance: Importance score (0.0-1.0).
+            metadata: Extra metadata (merged with entity_type/aliases).
+            source_agent: Agent that created this node.
+
+        Returns:
+            The new node ID string.
+        """
+        merged: Dict[str, str] = dict(metadata or {})
+        if entity_type:
+            merged["entity_type"] = entity_type
+        if aliases:
+            import json
+            merged["aliases"] = json.dumps(aliases)
+        return self.store(
+            "entity",
+            title,
+            body=body,
+            tags=tags,
+            importance=importance,
+            metadata=merged,
+            source_agent=source_agent,
+        )
+
     def store(
         self,
         kind: str,

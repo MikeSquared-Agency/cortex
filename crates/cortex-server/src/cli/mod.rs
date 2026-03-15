@@ -443,6 +443,9 @@ pub struct NodeCreateArgs {
     /// Read body from stdin
     #[arg(long)]
     pub stdin: bool,
+    /// JSON metadata (e.g. '{"entity_type": "company", "source_url": "https://..."}')
+    #[arg(long)]
+    pub metadata: Option<String>,
     /// When this fact became true (ISO 8601)
     #[arg(long)]
     pub valid_from: Option<String>,
@@ -452,6 +455,9 @@ pub struct NodeCreateArgs {
     /// When to auto-delete this node (ISO 8601)
     #[arg(long)]
     pub expires_at: Option<String>,
+    /// Print warnings if metadata doesn't follow conventions (still creates the node)
+    #[arg(long)]
+    pub check_conventions: bool,
     /// Output format: table (default), json
     #[arg(long, default_value = "table")]
     pub format: String,

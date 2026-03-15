@@ -28,7 +28,60 @@ async fn create(args: NodeCreateArgs, server: &str) -> Result<()> {
         args.body.unwrap_or_else(|| args.title.clone())
     };
 
-    let req = CreateNodeRequest {
+    // Parse --metadata JSON into key-value pairs
+    let metadata: std::collections::HashMap<String, String> = match &args.metadata {
+        Some(json_str) => {
+            let val: serde_json::Value = serde_json::from_str(json_str)
+                .map_err(|e| anyhow::anyhow!("Invalid --metadata JSON: {}", e))?;
+            match val {
+                serde_json::Value::Object(map) => map
+                    .into_iter()
+                    .map(|(k, v)| {
+                        let s = match v {
+                            serde_json::Value::String(s) => s,
+                            other => other.to_string(),
+                        };
+                        (k, s)
+                    })
+                    .collect(),
+                _ => return Err(anyhow::anyhow!("--metadata must be a JSON object")),
+            }
+        }
+        None => std::collections::HashMap::new(),
+    };
+
+    // Check conventions if requested (before creating, but never blocks)
+    if args.check_conventions {
+        use cortex_core::conventions;
+        use cortex_core::types::{Node, NodeKind, Source};
+
+        let kind = NodeKind::new(&args.kind).unwrap_or_else(|_| NodeKind::new("fact").unwrap());
+        let mut node = Node::new(
+            kind,
+            args.title.clone(),
+            body.clone(),
+            Source {
+                agent: "cli".into(),
+                session: None,
+                channel: None,
+            },
+            args.importance,
+        );
+        // Convert string metadata to serde_json::Value for convention checking
+        for (k, v) in &metadata {
+            // Try to parse as JSON first (for arrays, numbers, etc.)
+            let json_val =
+                serde_json::from_str(v).unwrap_or_else(|_| serde_json::Value::String(v.clone()));
+            node.data.metadata.insert(k.clone(), json_val);
+        }
+
+        let warnings = conventions::check_conventions(&node);
+        for w in &warnings {
+            eprintln!("Warning: {}", w);
+        }
+    }
+
+    let mut req = CreateNodeRequest {
         kind: args.kind,
         title: args.title,
         body,
@@ -40,6 +93,7 @@ async fn create(args: NodeCreateArgs, server: &str) -> Result<()> {
         expires_at: parse_optional_timestamp(&args.expires_at)?,
         ..Default::default()
     };
+    req.metadata = metadata;
 
     let resp = client.create_node(req).await?.into_inner();
 

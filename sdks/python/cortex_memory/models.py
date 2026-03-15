@@ -3,6 +3,28 @@ from __future__ import annotations
 from typing import List, Optional
 
 
+class EntityType:
+    """Well-known entity type constants for metadata conventions.
+
+    Use with :meth:`~cortex_memory.Cortex.store_entity`::
+
+        cx.store_entity("Anthropic", entity_type=EntityType.COMPANY)
+
+    Custom entity type strings are also accepted — these are conventions,
+    not constraints.
+    """
+
+    AGENT = "agent"
+    COMPANY = "company"
+    PERSON = "person"
+    TECHNOLOGY = "technology"
+    PROJECT = "project"
+    LOCATION = "location"
+    PRODUCT = "product"
+
+    ALL = (AGENT, COMPANY, PERSON, TECHNOLOGY, PROJECT, LOCATION, PRODUCT)
+
+
 class Node:
     """A knowledge node retrieved from Cortex."""
 

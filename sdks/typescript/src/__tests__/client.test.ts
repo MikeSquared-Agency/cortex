@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { MockCortex } from '../testing';
+import { EntityType } from '../client';
 describe('MockCortex', () => {
   let cx: MockCortex;
 
@@ -229,6 +230,116 @@ describe('MockCortex', () => {
     it('throws when the call WAS made', async () => {
       await cx.store({ kind: 'fact', title: 'Stored fact' });
       expect(() => cx.assertNotStored('fact', 'Stored fact')).toThrow();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // EntityType enum
+  // -----------------------------------------------------------------------
+  describe('EntityType', () => {
+    it('has all well-known values', () => {
+      expect(EntityType.Agent).toBe('agent');
+      expect(EntityType.Company).toBe('company');
+      expect(EntityType.Person).toBe('person');
+      expect(EntityType.Technology).toBe('technology');
+      expect(EntityType.Project).toBe('project');
+      expect(EntityType.Location).toBe('location');
+      expect(EntityType.Product).toBe('product');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // storeEntity()
+  // -----------------------------------------------------------------------
+  describe('storeEntity()', () => {
+    it('returns a non-empty string ID', async () => {
+      const id = await cx.storeEntity({
+        title: 'Anthropic',
+        entityType: EntityType.Company,
+      });
+      expect(typeof id).toBe('string');
+      expect(id.length).toBeGreaterThan(0);
+    });
+
+    it('creates a node with kind "entity"', async () => {
+      await cx.storeEntity({
+        title: 'Anthropic',
+        entityType: EntityType.Company,
+      });
+      expect(() => cx.assertStored('entity', 'Anthropic')).not.toThrow();
+    });
+
+    it('sets entity_type in metadata', async () => {
+      const id = await cx.storeEntity({
+        title: 'Anthropic',
+        entityType: EntityType.Company,
+      });
+      const node = await cx.getNode(id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect((node as any).metadata.entity_type).toBe('company');
+    });
+
+    it('sets aliases in metadata as JSON string', async () => {
+      const id = await cx.storeEntity({
+        title: 'Anthropic',
+        entityType: EntityType.Company,
+        aliases: ['anthropic-ai', 'Anthropic PBC'],
+      });
+      const node = await cx.getNode(id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const aliases = JSON.parse((node as any).metadata.aliases);
+      expect(aliases).toEqual(['anthropic-ai', 'Anthropic PBC']);
+    });
+
+    it('omits aliases when not provided', async () => {
+      const id = await cx.storeEntity({
+        title: 'Anthropic',
+        entityType: EntityType.Company,
+      });
+      const node = await cx.getNode(id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect((node as any).metadata.aliases).toBeUndefined();
+    });
+
+    it('merges extra metadata with entity fields', async () => {
+      const id = await cx.storeEntity({
+        title: 'Anthropic',
+        entityType: EntityType.Company,
+        metadata: { source_url: 'https://anthropic.com' },
+      });
+      const node = await cx.getNode(id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const meta = (node as any).metadata;
+      expect(meta.entity_type).toBe('company');
+      expect(meta.source_url).toBe('https://anthropic.com');
+    });
+
+    it('accepts custom entity type strings', async () => {
+      const id = await cx.storeEntity({
+        title: 'Cortex',
+        entityType: 'framework',
+      });
+      const node = await cx.getNode(id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect((node as any).metadata.entity_type).toBe('framework');
+    });
+
+    it('passes through optional fields', async () => {
+      const id = await cx.storeEntity({
+        title: 'Anthropic',
+        entityType: EntityType.Company,
+        body: 'AI safety company',
+        tags: ['ai', 'safety'],
+        importance: 0.9,
+        source_agent: 'kai',
+      });
+      const node = await cx.getNode(id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const n = node as any;
+      expect(n.body).toBe('AI safety company');
+      expect(n.tags).toEqual(['ai', 'safety']);
+      expect(n.importance).toBe(0.9);
+      expect(n.source_agent).toBe('kai');
     });
   });
 });
