@@ -1,31 +1,31 @@
 # Cortex
 
-**Embedded graph memory for AI agents. One binary. One file. Zero dependencies.**
+**Self-organizing graph memory for AI agents. One binary. Zero dependencies.**
 
-Cortex is a local knowledge graph that stores what your AI agents know, automatically discovers relationships between knowledge, and synthesises context briefings on demand. Think SQLite, but for agent memory.
+Cortex is an embedded temporal graph memory that auto-links knowledge, decays what's irrelevant, detects contradictions, and synthesises context briefings on demand. Think SQLite, but for agent memory.
 
 ## Why Cortex?
 
-Your agent's memory shouldn't be a text file. It should be a living graph that wires itself, forgets what's irrelevant, and tells your agent exactly what it needs to know.
+Your agents each know something. Cortex discovers what they know together.
 
-- **Graph-native** — typed nodes and edges, not just vectors
-- **Auto-linking** — relationships discovered via embedding similarity
-- **Decay** — unused knowledge fades, important knowledge persists
-- **Briefings** — "what do I need to know?" → tailored context document
-- **Hybrid search** — vector similarity × graph proximity
-- **Query DSL** — filter expressions: `kind:decision AND importance>0.7`
-- **SSE Events** — real-time `GET /events/stream` for graph change notifications
-- **Schema Validation** — per-kind metadata constraints with type checking
-- **Mutation Hooks** — callback system for node/edge write events
-- **Embedded** — single file, no external dependencies
-- **Fast** — Rust, HNSW index, mmap'd storage
+Most agent memory systems are glorified key-value stores with a vector index. Cortex is a self-organizing knowledge graph: it wires itself, forgets what's stale, resolves contradictions, computes trust from topology, and tells each agent exactly what it needs to know.
+
+**Self-organizing** -- the auto-linker runs in the background, discovering relationships via embedding similarity, shared entities, temporal proximity, and configurable structural rules. You store facts; Cortex finds the connections.
+
+**Temporal** -- every node carries validity windows (`valid_from`, `valid_until`) and lifecycle expiry (`expires_at`). Query "facts true on January 15th" or "facts that expired before June." Stale knowledge is filtered, not deleted.
+
+**Trust from topology** -- confidence is not a field you set. It's computed from the graph structure: corroboration across agents, contradiction count, source track record, access reinforcement, and freshness. Like PageRank for knowledge.
+
+**Briefing synthesis** -- "what does my agent need to know?" generates a structured context document from the graph. Configurable roles, agent or cross-agent scope, contradiction alerts.
+
+**Embedded** -- single Rust binary, redb storage (ACID, mmap), HNSW vector index. No external dependencies. No server to manage. `cargo install` and go.
 
 ## Quick Start
 
 ### Install
 
 ```bash
-# Linux / macOS — one line, no Rust or protoc needed
+# Linux / macOS -- one line, no Rust or protoc needed
 curl -sSf https://raw.githubusercontent.com/MikeSquared-Agency/cortex/main/install.sh | sh
 
 # Via Cargo
@@ -47,11 +47,21 @@ cortex serve
 # Store some knowledge
 cortex node create --kind fact --title "The API uses JWT auth" --importance 0.7
 
+# Store with temporal validity
+cortex node create --kind fact --title "Rate limit is 1000/min" \
+  --valid-from 2026-01-01T00:00:00Z
+
 # Search
 cortex search "authentication"
 
 # Get a briefing for your agent
 cortex briefing my-agent
+
+# Get a cross-agent briefing
+cortex briefing my-agent --scope shared
+
+# Check trust score for a node
+cortex trust <node-id>
 ```
 
 ### Prompt Management
@@ -93,6 +103,12 @@ cx.store("decision", "Use FastAPI", body="Async + type hints", importance=0.8)
 
 results = cx.search("backend framework")
 print(cx.briefing("my-agent"))
+
+# Cross-agent briefing
+print(cx.briefing("my-agent", scope="shared"))
+
+# Store an entity
+cx.store_entity("Anthropic", entity_type="company", aliases=["anthropic-ai"])
 ```
 
 ### Embedded in Rust
@@ -116,25 +132,43 @@ let results = cx.search("authentication", 5)?;
 - **[Prompt System](docs/concepts/prompt-system.md)**
 - **[Architecture](docs/concepts/architecture.md)**
 
-## Why Not a Vector DB?
+### Concepts
 
-| Feature | Cortex | Mem0 | Zep | Chroma | pgvector |
-|---------|--------|------|-----|--------|----------|
-| Embedded (no server) | ✅ | ❌ | ❌ | ✅ | ❌ |
-| Graph relationships | ✅ native | ❌ | ❌ | ❌ | ❌ |
-| Auto-linking | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Edge decay | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Contradiction detection | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Briefing synthesis | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Hybrid search (vector+graph) | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Local embeddings | ✅ | ❌ | ❌ | ✅ | ❌ |
-| Single binary | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Prompt versioning | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Query DSL | ✅ | ❌ | ❌ | ❌ | ✅ |
-| Real-time events (SSE) | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Schema validation | ✅ | ❌ | ❌ | ❌ | ❌ |
+- **[Self-Organizing Memory](docs/concepts/self-organizing-memory.md)** -- how Cortex discovers what your agents know together
+- **[Graph Model](docs/concepts/graph-model.md)** -- nodes, edges, temporal validity, entities
+- **[Trust Scoring](docs/concepts/trust-scoring.md)** -- PageRank for knowledge
+- **[Entity Resolution](docs/concepts/entity-resolution.md)** -- cross-agent discovery via shared entities
+- **[Briefings](docs/concepts/briefings.md)** -- role-based context synthesis with scope
+- **[Auto-Linker](docs/concepts/auto-linker.md)** -- configurable rules, entity promotion
+- **[Decay and Memory](docs/concepts/decay-and-memory.md)** -- edge decay vs temporal validity
+- **[Metadata Conventions](docs/reference/metadata-conventions.md)** -- well-known metadata keys
 
-**Our moat:** Graph-native memory with auto-linking and decay. Nobody else does this.
+### Guides
+
+- **[Coding Agent](docs/guides/coding-agent.md)** -- memory for coding agents
+- **[Research Agent](docs/guides/research-agent.md)** -- memory for research agents
+- **[Browser Agent](docs/guides/browser-agent.md)** -- memory for browser agents
+- **[Multi-Agent](docs/guides/multi-agent.md)** -- shared memory, entities, scoped briefings
+
+## How Cortex Compares
+
+| | Cortex | Mem0 | Zep/Graphiti | Cognee | Letta | Engram |
+|---|---|---|---|---|---|---|
+| Embedded (no server) | Yes | No | No | No | No | Yes |
+| Self-organizing graph | Yes | No | Partial | Partial | No | No |
+| Auto-linking | Yes | No | No | No | No | No |
+| Temporal validity | Yes | No | Yes | No | No | No |
+| Knowledge decay | Yes | No | No | Partial | No | Yes |
+| Contradiction detection | Yes | No | Yes | No | No | No |
+| Trust from topology | Yes | No | No | No | No | No |
+| Briefing synthesis | Yes | No | No | No | No | No |
+| Entity resolution | Yes | Yes | Yes | Yes | No | No |
+| Cross-agent discovery | Yes | Yes | No | Yes | No | No |
+| Single binary | Yes | No | No | No | No | Yes |
+| Rust (performance) | Yes | No | No | No | No | No (Go) |
+| Open source (MIT) | Yes | Partial | Partial | Yes | Yes | Yes |
+
+Cortex occupies a unique position: embedded AND self-organizing. Every competitor requires external infrastructure or manual curation. Cortex does neither.
 
 ## Graph Visualisation
 
@@ -149,34 +183,34 @@ Cortex ships a live graph explorer. Start the server and open [http://localhost:
 ## Architecture
 
 ```
-┌────────────────────────────────────────────┐
-│              Your Application              │
-│         AI Agent   SDK / gRPC client       │
-└─────────────────┬──────────────────────────┘
-                  │
-┌─────────────────▼──────────────────────────┐
-│                  Cortex                    │
-│  gRPC :9090          HTTP :9091            │
-│  ┌──────────┐  ┌───────────┐  ┌─────────┐  │
-│  │  Storage  │  │  Graph    │  │  HNSW   │  │
-│  │  (redb)   │  │  Engine   │  │  Index  │  │
-│  └──────────┘  └───────────┘  └─────────┘  │
-│  ┌──────────┐  ┌───────────┐  ┌─────────┐  │
-│  │Auto-Link │  │ Briefing  │  │  Ingest │  │
-│  │(background)│ │  Engine   │  │ Pipeline│  │
-│  └──────────┘  └───────────┘  └─────────┘  │
-│  ┌──────────┐  ┌───────────┐  ┌─────────┐  │
-│  │  Prompt  │  │ Selection │  │ Observe │  │
-│  │  Resolver│  │  Engine   │  │ Scoring │  │
-│  └──────────┘  └───────────┘  └─────────┘  │
-└────────────────────────────────────────────┘
+┌────────────────────────────────────────────────┐
+│              Your Application                  │
+│       AI Agent(s)    SDK / gRPC / MCP          │
+└──────────────────┬─────────────────────────────┘
+                   │
+┌──────────────────▼─────────────────────────────┐
+│                   Cortex                       │
+│  gRPC :9090           HTTP :9091               │
+│  ┌───────────┐  ┌────────────┐  ┌──────────┐  │
+│  │  Storage   │  │   Graph    │  │   HNSW   │  │
+│  │  (redb)    │  │   Engine   │  │   Index  │  │
+│  └───────────┘  └────────────┘  └──────────┘  │
+│  ┌───────────┐  ┌────────────┐  ┌──────────┐  │
+│  │ Auto-Link  │  │  Briefing  │  │  Trust   │  │
+│  │ + Entities │  │  + Scope   │  │  Engine  │  │
+│  └───────────┘  └────────────┘  └──────────┘  │
+│  ┌───────────┐  ┌────────────┐  ┌──────────┐  │
+│  │  Prompt    │  │ Selection  │  │ Retention│  │
+│  │  Resolver  │  │  Engine    │  │ + Expiry │  │
+│  └───────────┘  └────────────┘  └──────────┘  │
+└────────────────────────────────────────────────┘
 ```
 
 ## Integration Guides
 
-- **[LangChain](docs/guides/langchain.md)** — Use Cortex as a LangChain memory backend
-- **[CrewAI](docs/guides/crewai.md)** — Share memory across a multi-agent team
-- **[OpenClaw / Warren](docs/guides/openclaw.md)** — Native integration with Warren
+- **[LangChain](docs/guides/langchain.md)** -- Use Cortex as a LangChain memory backend
+- **[CrewAI](docs/guides/crewai.md)** -- Share memory across a multi-agent team
+- **[OpenClaw / Warren](docs/guides/openclaw.md)** -- Native integration with Warren
 
 ## Examples
 
@@ -195,4 +229,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). All contributions welcome.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT -- see [LICENSE](LICENSE).

@@ -6,14 +6,17 @@ Cortex is configured via `cortex.toml` in your project directory. Run `cortex in
 
 See **[Configuration Guide](../getting-started/configuration.md)** for the complete `cortex.toml` reference with all sections:
 
-- `[server]` — ports, data directory
-- `[auto_linker]` — background linking settings
-- `[briefing]` — section ordering, token budget
-- `[retention]` — TTL, max nodes, eviction strategy
-- `[security]` — encryption at rest
-- `[ingest.nats]` — NATS subscription
-- `[write_gate]` — write quality checks configuration
-- `[schemas.*]` — per-kind metadata schemas
+- `[server]` -- ports, data directory
+- `[auto_linker]` -- background linking settings, entity promotion, configurable rules
+- `[briefing]` -- token budget, role-to-kind mapping
+- `[briefing.roles]` -- map node kinds to briefing roles
+- `[trust]` -- trust scoring parameters
+- `[trust.weights]` -- relative importance of trust signals
+- `[retention]` -- TTL, max nodes, eviction strategy
+- `[security]` -- encryption at rest
+- `[ingest.nats]` -- NATS subscription
+- `[write_gate]` -- write quality checks configuration
+- `[schemas.*]` -- per-kind metadata schemas
 
 ## Schema Validation
 
@@ -54,6 +57,58 @@ allowed_values = ["proposed", "accepted", "rejected"]
 | `allowed_values` | String | Enum-like constraint on string values |
 
 Schema violations produce a 422 response with `gate.check == "schema"` and details about each violated constraint.
+
+## Trust Scoring
+
+Compute trust from graph topology. See [Trust Scoring](../concepts/trust-scoring.md) for the full model.
+
+```toml
+[trust]
+corroboration_saturation = 3
+corroboration_min_weight = 0.6
+contradiction_weight = 0.3
+access_saturation = 20
+freshness_halflife = 90
+
+[trust.weights]
+corroboration = 0.30
+contradiction = 0.25
+source = 0.20
+access = 0.15
+freshness = 0.10
+```
+
+## Briefing Roles
+
+Map node kinds to briefing roles. See [Briefings](../concepts/briefings.md) for role descriptions.
+
+```toml
+[briefing.roles]
+identity    = ["agent"]
+persistent  = ["preference"]
+trackable   = ["goal"]
+temporal    = ["event"]
+reviewable  = ["pattern"]
+superseding = ["fact", "decision"]
+```
+
+## Auto-Linker Rules
+
+Configurable structural rules for the auto-linker. See [Auto-Linker](../concepts/auto-linker.md) for condition types.
+
+```toml
+[auto_linker]
+entity_promote_every_n_cycles = 60
+entity_promote_min_agents = 2
+
+[[auto_linker.rules]]
+name = "decision-leads-to-event"
+from_kind = "decision"
+to_kind = "event"
+relation = "led_to"
+weight = 0.8
+condition = { type = "temporal_proximity", window_minutes = 60 }
+```
 
 ## Environment Variables
 

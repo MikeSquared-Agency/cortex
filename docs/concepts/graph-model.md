@@ -17,6 +17,10 @@ A node represents a discrete piece of knowledge.
 | `source.agent` | string | Which agent created this node |
 | `created_at` | timestamp | Creation time |
 | `metadata` | map | Arbitrary key-value pairs |
+| `valid_from` | Option\<timestamp\> | When this fact became true in the real world |
+| `valid_until` | Option\<timestamp\> | When this fact stopped being true |
+| `expires_at` | Option\<timestamp\> | When to garbage-collect this node (lifecycle expiry) |
+| `embedding_model` | Option\<string\> | Which embedding model generated the vector |
 
 ### Node Kinds
 
@@ -31,7 +35,8 @@ Node kinds are validated lowercase strings. Built-in kinds:
 | `observation` | A performance observation recording interaction outcomes |
 | `pattern` | A recurring behaviour or structure |
 | `preference` | A stated preference |
-| `agent` | An agent identity node |
+| `agent` | An agent identity node (migrating to `entity` with `entity_type: "agent"`) |
+| `entity` | A resolved entity (person, company, technology, etc.) |
 | `prompt` | A versioned prompt template with sections and metadata |
 
 Custom kinds are allowed — any lowercase alphanumeric string with hyphens (e.g. `project-milestone`).
@@ -48,6 +53,17 @@ An edge represents a typed, weighted relationship between two nodes.
 | `relation` | Relation | Relationship type (see below) |
 | `weight` | f32 0–1 | Relationship strength |
 | `created_at` | timestamp | Creation time |
+| `metadata` | map | Arbitrary key-value pairs (edge context) |
+
+### Edge Provenance
+
+Each edge records how it was created:
+
+| Variant | Description |
+|---------|-------------|
+| `Manual` | Created explicitly by a user or agent |
+| `AutoLinker` | Created by the auto-linker (similarity, structural rules) |
+| `Custom { kind, detail }` | Forward-compatible variant for plugins and adapters |
 
 ### Relations
 
@@ -71,8 +87,36 @@ Relations are validated lowercase strings with underscores. Built-in relations:
 | `informed_by` | Observation was informed by a prompt variant |
 | `rolled_back` | Version was rolled back due to degradation |
 | `rolled_back_to` | Target version of a rollback |
+| `authored_by` | Agent entity authored this knowledge node |
+| `references` | Knowledge node references this entity |
+| `shared_entity` | Two nodes share a reference to the same entity |
+| `led_to` | A decision led to an event (configurable rule) |
+| `instance_of` | An observation is an instance of a pattern |
 
 Custom relations are allowed — any lowercase alphanumeric string with underscores.
+
+## Entity Nodes
+
+Entity nodes are regular nodes with `kind: "entity"` and `metadata.entity_type`. They serve as hub nodes: all knowledge about "Company X" from every agent converges on a single entity node via `references` edges.
+
+**Entity extraction**: `metadata.entities` array and `entity-` prefixed tags.
+
+**Auto-promotion**: When 2+ agents mention the same normalised entity string, the auto-linker promotes it to a first-class entity node.
+
+**Agent nodes**: The deprecated `kind: "agent"` migrates to `kind: "entity"` with `metadata.entity_type: "agent"`.
+
+See [Entity Resolution](./entity-resolution.md) for the full model.
+
+## Temporal Validity
+
+Cortex supports a bi-temporal model for knowledge:
+
+- `valid_from` / `valid_until` -- **epistemic truth windows**. When was this fact actually true in the real world? Query with `NodeFilter::new().valid_at(timestamp)`.
+- `expires_at` -- **lifecycle expiry**. When should this node be garbage-collected? The retention engine sweeps expired nodes.
+
+These are distinct from edge decay. Decay is about *relevance* (how strongly connected). Temporal validity is about *truth* (when a fact was actually true). See [Decay and Memory](./decay-and-memory.md) for the distinction.
+
+Nodes past their `valid_until` remain in the graph for historical queries but are excluded from briefings and default search results.
 
 ## Decay
 

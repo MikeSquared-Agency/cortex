@@ -23,7 +23,12 @@ Cortex is a self-organizing graph memory engine built in Rust. It combines tradi
 
 **Design**:
 - Primary table: `nodes` (NodeId → Node)
+  - Includes `valid_from`, `valid_until` (temporal validity window)
+  - Includes `expires_at` (lifecycle GC)
+  - Includes `embedding_model` (vector provenance tracking)
 - Edge table: `edges` (EdgeId → Edge)
+  - Includes `metadata` (extensible HashMap for edge context)
+  - `EdgeProvenance::Custom` variant for forward-compatible linking mechanisms
 - Secondary indexes for filtering:
   - `nodes_by_kind` (NodeKind → Set<NodeId>)
   - `nodes_by_source` (SourceAgent → Set<NodeId>)
@@ -121,13 +126,15 @@ score = α × vector_similarity + (1-α) × graph_proximity
    └─────────────────────────────────────┘
    ```
 
-2. **Link Rules**:
-   - **Similarity**: Vector similarity > 0.85 → Similar edge
-   - **Temporal**: Events in sequence → Precedes edge
-   - **Source**: Same session → PartOf edge
-   - **Causality**: Decision before event → Causes edge
-   - **Support**: Fact near decision → Supports edge
-   - **Reference**: Title mentions → References edge
+2. **Configurable Rules** (ConfigRule):
+   - Rules define from_kind, to_kind, relation, weight, and a condition
+   - Wildcard kinds (`"*"`) match any node kind
+   - Condition types: min_similarity, shared_tags, temporal_proximity, newer_than, same_agent, body_field_ref, tag_references_title, negation_detected
+   - Legacy hardcoded rules (similarity, temporal, source, causality, support, reference) are automatically disabled when config rules are defined
+
+   **Entity features**:
+   - **Entity co-occurrence**: nodes from different agents referencing the same entity get `shared_entity` edges
+   - **Entity promotion**: periodic scan promotes entity strings referenced by 2+ agents to first-class entity nodes
 
 3. **Contradiction Detection**:
    - Finds semantically similar nodes with opposite polarity
@@ -187,6 +194,48 @@ score = α × vector_similarity + (1-α) × graph_proximity
 - Auto-generates embeddings
 - Deduplicates by title+session
 - Event types: stage.advanced, item.completed, evidence.submitted, etc.
+
+### Trust Engine (`cortex-core/trust`)
+
+**Purpose**: Compute trust scores from graph topology at query time.
+
+Trust is never stored as a field. It's derived from the neighbourhood of a node, like PageRank derives authority from link structure.
+
+**Five signals**:
+1. **Corroboration** -- how many independent agents stored similar facts
+2. **Contradiction penalty** -- unresolved `contradicts` edges reduce trust
+3. **Source track record** -- historical accuracy of the authoring agent
+4. **Access reinforcement** -- frequently retrieved, never corrected
+5. **Freshness** -- recency of last access
+
+**Combination**: configurable weighted sum, defaults in `[trust]` config.
+
+**Caching**: source reliability is cached per-agent, refreshed every N auto-linker cycles. All other signals are computed per-query from live graph state.
+
+### Entity Layer
+
+**Purpose**: Cross-agent discovery via shared entity resolution.
+
+Entity nodes are regular nodes with `kind: "entity"` and `metadata.entity_type`. They serve as hub nodes: all knowledge about "Company X" from every agent converges on a single entity node via `references` edges.
+
+**Entity extraction**: `metadata.entities` array and `entity-` prefixed tags.
+
+**Auto-promotion**: when 2+ agents mention the same normalised entity string, the auto-linker promotes it to a first-class entity node.
+
+**Agent nodes**: deprecated `kind: "agent"` migrates to `kind: "entity"` with `metadata.entity_type: "agent"`.
+
+### Briefing Engine (`cortex-core/briefing`)
+
+**Purpose**: Generate structured context documents for agents.
+
+Briefings use a **role-based** configuration rather than hardcoded sections. Each role (identity, persistent, trackable, temporal, reviewable, superseding) defines a retrieval strategy. Kinds are mapped to roles in config.
+
+**Scope parameter**:
+- **Agent** (default): only the requesting agent's knowledge
+- **Shared**: agent's knowledge plus cross-agent context about shared entities (via two-hop entity traversal)
+- **Unified**: multi-agent briefing for orchestrators, spans multiple agents
+
+**Trust-aware ranking**: when trust scoring is enabled, nodes are ranked by `0.6 * importance + 0.4 * trust_score`.
 
 ## Data Flow
 

@@ -19,7 +19,13 @@ Initialise a new Cortex project in the current directory.
 cortex init [--path <dir>]
 ```
 
-Creates `cortex.toml` with sensible defaults.
+Creates `cortex.toml` with sensible defaults. Use `--template` for agent-type presets:
+
+```bash
+cortex init --template coding     # Coding agent preset
+cortex init --template research   # Research agent preset
+cortex init --template browser    # Browser agent preset
+```
 
 ### `cortex serve`
 
@@ -34,7 +40,8 @@ cortex serve [--config cortex.toml]
 Manage nodes.
 
 ```bash
-cortex node create --kind <kind> --title <title> [--body <body>] [--importance 0.7] [--tags tag1,tag2]
+cortex node create --kind <kind> --title <title> [--body <body>] [--importance 0.7] [--tags tag1,tag2] \
+  [--valid-from <ISO8601>] [--valid-until <ISO8601>] [--expires-at <ISO8601>]
 cortex node get <id>
 cortex node list [--kind <kind>] [--limit 50]
 cortex node delete <id>
@@ -64,8 +71,14 @@ cortex search <query> [--limit 10] [--kind <kind>] [--hybrid] [--alpha 0.7]
 Generate a briefing for an agent.
 
 ```bash
-cortex briefing <agent-id> [--format text|json] [--max-tokens 2000]
+cortex briefing <agent-id> [--format text|json] [--max-tokens 2000] [--scope agent|shared]
+cortex briefing --agents <id1,id2,...> [--format text|json]   # Unified scope
 ```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--scope` | `agent` | Briefing scope: `agent` (own knowledge), `shared` (cross-agent entities) |
+| `--agents` | -- | Comma-separated agent IDs for unified (multi-agent) briefing |
 
 ### `cortex traverse`
 
@@ -115,6 +128,16 @@ Security utilities.
 
 ```bash
 cortex security generate-key   # Generate an AES-256-GCM encryption key
+```
+
+### `cortex trust`
+
+Show trust score breakdown for a node or agent reliability.
+
+```bash
+cortex trust <node-id>                        # Trust breakdown for a node
+cortex trust --agent <agent-id>               # Agent reliability score
+cortex trust --batch <id1>,<id2>,...          # Batch trust scores
 ```
 
 ### `cortex stats`

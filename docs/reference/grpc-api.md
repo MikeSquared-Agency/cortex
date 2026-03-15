@@ -17,6 +17,9 @@ message CreateNodeRequest {
   repeated string tags = 5;
   string source_agent = 6;
   map<string, string> metadata = 7;
+  google.protobuf.Timestamp valid_from = 8;    // optional temporal validity
+  google.protobuf.Timestamp valid_until = 9;   // optional temporal validity
+  google.protobuf.Timestamp expires_at = 10;   // optional lifecycle expiry
 }
 ```
 
@@ -90,6 +93,7 @@ message CreateEdgeRequest {
   string to_id = 2;
   string relation = 3;
   float weight = 4;
+  map<string, string> metadata = 5;   // optional edge metadata
 }
 ```
 
@@ -101,11 +105,57 @@ rpc GetBriefing(GetBriefingRequest) returns (BriefingResponse);
 message GetBriefingRequest {
   string agent_id = 1;
   uint32 max_tokens = 2;
+  BriefingScope scope = 3;         // AGENT, SHARED, or UNIFIED
+  repeated string agent_ids = 4;   // For UNIFIED scope
+}
+
+enum BriefingScope {
+  AGENT = 0;
+  SHARED = 1;
+  UNIFIED = 2;
 }
 
 message BriefingResponse {
   string text = 1;
   repeated BriefingSection sections = 2;
+}
+```
+
+### GetTrustScore
+
+```protobuf
+rpc GetTrustScore(GetTrustScoreRequest) returns (TrustScoreResponse);
+
+message GetTrustScoreRequest {
+  string node_id = 1;
+}
+
+message TrustScoreResponse {
+  string node_id = 1;
+  float trust_score = 2;
+  TrustSignals signals = 3;
+}
+
+message TrustSignals {
+  float corroboration = 1;
+  float contradiction = 2;
+  float source_reliability = 3;
+  float access_reinforcement = 4;
+  float freshness = 5;
+}
+```
+
+### BatchGetTrustScore
+
+```protobuf
+rpc BatchGetTrustScore(BatchTrustRequest) returns (BatchTrustResponse);
+
+message BatchTrustRequest {
+  repeated string node_ids = 1;
+}
+
+message BatchTrustResponse {
+  repeated TrustScoreResponse scores = 1;
 }
 ```
 
