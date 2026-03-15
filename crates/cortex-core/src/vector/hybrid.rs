@@ -3,6 +3,7 @@ use crate::graph::{GraphEngine, TraversalDirection, TraversalRequest};
 use crate::storage::Storage;
 use crate::types::{Node, NodeId, NodeKind};
 use crate::vector::{EmbeddingService, VectorFilter, VectorIndex};
+use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -29,6 +30,9 @@ pub struct HybridQuery {
     /// Maximum graph distance from anchors to consider.
     /// Nodes beyond this distance get zero graph proximity score.
     pub max_anchor_depth: u32,
+
+    /// Only include nodes valid at this time. None = no temporal filter.
+    pub valid_at: Option<DateTime<Utc>>,
 }
 
 impl Default for HybridQuery {
@@ -40,6 +44,7 @@ impl Default for HybridQuery {
             limit: 10,
             kind_filter: None,
             max_anchor_depth: 3,
+            valid_at: None,
         }
     }
 }
@@ -76,6 +81,11 @@ impl HybridQuery {
         self.max_anchor_depth = depth;
         self
     }
+
+    pub fn with_valid_at(mut self, time: DateTime<Utc>) -> Self {
+        self.valid_at = Some(time);
+        self
+    }
 }
 
 /// Result from hybrid search
@@ -109,6 +119,23 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> HybridSear
         }
     }
 
+    /// Check if a node is temporally valid at the given time.
+    fn is_valid_at(node: &Node, valid_at: &Option<DateTime<Utc>>) -> bool {
+        if let Some(t) = valid_at {
+            if let Some(from) = &node.valid_from {
+                if from > t {
+                    return false;
+                }
+            }
+            if let Some(until) = &node.valid_until {
+                if until <= t {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
     /// Execute a hybrid query
     pub fn search(&self, query: HybridQuery) -> Result<Vec<HybridResult>> {
         // 1. Generate embedding for query text
@@ -129,8 +156,11 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> HybridSear
         // 3. If no anchors, return pure vector results
         if query.anchors.is_empty() {
             let mut results = Vec::new();
-            for vr in vector_results.into_iter().take(query.limit) {
+            for vr in vector_results.into_iter() {
                 if let Some(node) = self.storage.get_node(vr.node_id)? {
+                    if !Self::is_valid_at(&node, &query.valid_at) {
+                        continue;
+                    }
                     results.push(HybridResult {
                         node,
                         vector_score: vr.score,
@@ -138,6 +168,9 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> HybridSear
                         combined_score: vr.score,
                         nearest_anchor: None,
                     });
+                    if results.len() >= query.limit {
+                        break;
+                    }
                 }
             }
             return Ok(results);
@@ -151,6 +184,10 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> HybridSear
 
         for vr in vector_results {
             if let Some(node) = self.storage.get_node(vr.node_id)? {
+                if !Self::is_valid_at(&node, &query.valid_at) {
+                    continue;
+                }
+
                 let graph_score = graph_scores
                     .get(&vr.node_id)
                     .map(|(score, _, _)| *score)

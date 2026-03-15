@@ -1,5 +1,6 @@
 use crate::types::{NodeKind, Relation};
 use chrono::{DateTime, Utc};
+use serde_json::Value;
 use std::collections::HashMap;
 
 /// Filter criteria for querying nodes
@@ -18,6 +19,16 @@ pub struct NodeFilter {
     pub updated_before: Option<DateTime<Utc>>,
     /// Only return nodes with expires_at before this time (for expiry sweep)
     pub expires_before: Option<DateTime<Utc>>,
+    /// Only return nodes that were valid (true) at this point in time.
+    /// A node is valid at time T when:
+    ///   (valid_from is None OR valid_from <= T)
+    ///   AND (valid_until is None OR valid_until > T)
+    /// Nodes without valid_from/valid_until are always considered valid.
+    pub valid_at: Option<DateTime<Utc>>,
+    /// Filter by metadata key-value pairs.
+    /// All specified pairs must match (AND semantics).
+    /// Values are compared as JSON Value equality.
+    pub metadata_match: Option<Vec<(String, Value)>>,
     pub limit: Option<usize>,
     pub offset: Option<usize>,
 }
@@ -98,6 +109,20 @@ impl NodeFilter {
     /// Filter by expires_at (before this time) for expiry sweep
     pub fn expires_before(mut self, time: DateTime<Utc>) -> Self {
         self.expires_before = Some(time);
+        self
+    }
+
+    /// Only return nodes that were valid at this point in time
+    pub fn valid_at(mut self, time: DateTime<Utc>) -> Self {
+        self.valid_at = Some(time);
+        self
+    }
+
+    /// Filter by metadata key-value pair (AND semantics with multiple calls)
+    pub fn with_metadata(mut self, key: impl Into<String>, value: Value) -> Self {
+        self.metadata_match
+            .get_or_insert_with(Vec::new)
+            .push((key.into(), value));
         self
     }
 }

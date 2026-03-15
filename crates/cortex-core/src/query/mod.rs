@@ -37,6 +37,12 @@ pub enum FieldFilter {
     CreatedBefore(DateTime<Utc>),
     Deleted(bool),
     Limit(usize),
+    /// Temporal validity: only nodes valid at this time
+    ValidAt(DateTime<Utc>),
+    /// Expiry filter: nodes with expires_at before this time
+    ExpiresBefore(DateTime<Utc>),
+    /// Metadata key-value match (e.g. meta.entity_type:company)
+    Metadata(String, String),
 }
 
 /// AST for filter expressions.
@@ -482,6 +488,30 @@ impl Parser {
                 let num = self.parse_number()?;
                 Ok(FilterExpr::Field(FieldFilter::Limit(num as usize)))
             }
+            "valid_at" => {
+                self.expect(&Token::Colon)?;
+                let value = self.parse_value()?;
+                let dt = parse_duration_or_date(&value, pos)?;
+                Ok(FilterExpr::Field(FieldFilter::ValidAt(dt)))
+            }
+            "expires_before" => {
+                self.expect(&Token::Colon)?;
+                let value = self.parse_value()?;
+                let dt = parse_duration_or_date(&value, pos)?;
+                Ok(FilterExpr::Field(FieldFilter::ExpiresBefore(dt)))
+            }
+            other if other.starts_with("meta.") => {
+                let meta_key = other.strip_prefix("meta.").unwrap().to_string();
+                if meta_key.is_empty() {
+                    return Err(ParseError {
+                        message: "Empty metadata key in 'meta.'".to_string(),
+                        position: pos,
+                    });
+                }
+                self.expect(&Token::Colon)?;
+                let value = self.parse_value()?;
+                Ok(FilterExpr::Field(FieldFilter::Metadata(meta_key, value)))
+            }
             other => Err(ParseError {
                 message: format!("Unknown field: '{}'", other),
                 position: pos,
@@ -836,6 +866,18 @@ fn apply_field(field: &FieldFilter, filter: &mut NodeFilter) -> Result<(), Compi
         }
         FieldFilter::Limit(n) => {
             filter.limit = Some(*n);
+        }
+        FieldFilter::ValidAt(dt) => {
+            filter.valid_at = Some(*dt);
+        }
+        FieldFilter::ExpiresBefore(dt) => {
+            filter.expires_before = Some(*dt);
+        }
+        FieldFilter::Metadata(key, value) => {
+            filter
+                .metadata_match
+                .get_or_insert_with(Vec::new)
+                .push((key.clone(), serde_json::Value::String(value.clone())));
         }
     }
     Ok(())
@@ -1218,5 +1260,79 @@ mod tests {
             "Expected error to contain 'Unknown field', got: {}",
             err.message
         );
+    }
+
+    #[test]
+    fn test_parse_valid_at() {
+        let expr = parse("valid_at:7d").unwrap();
+        match expr {
+            FilterExpr::Field(FieldFilter::ValidAt(dt)) => {
+                let now = Utc::now();
+                let diff = now - dt;
+                assert!(diff.num_days() >= 6 && diff.num_days() <= 8);
+            }
+            _ => panic!("Expected ValidAt"),
+        }
+    }
+
+    #[test]
+    fn test_parse_expires_before() {
+        let expr = parse("expires_before:30d").unwrap();
+        match expr {
+            FilterExpr::Field(FieldFilter::ExpiresBefore(dt)) => {
+                let now = Utc::now();
+                let diff = now - dt;
+                assert!(diff.num_days() >= 29 && diff.num_days() <= 31);
+            }
+            _ => panic!("Expected ExpiresBefore"),
+        }
+    }
+
+    #[test]
+    fn test_parse_metadata_field() {
+        let expr = parse("meta.entity_type:company").unwrap();
+        assert_eq!(
+            expr,
+            FilterExpr::Field(FieldFilter::Metadata(
+                "entity_type".to_string(),
+                "company".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn test_compile_valid_at() {
+        let filter = parse_and_compile("valid_at:7d").unwrap();
+        assert!(filter.valid_at.is_some());
+    }
+
+    #[test]
+    fn test_compile_expires_before() {
+        let filter = parse_and_compile("expires_before:30d").unwrap();
+        assert!(filter.expires_before.is_some());
+    }
+
+    #[test]
+    fn test_compile_metadata() {
+        let filter = parse_and_compile("meta.entity_type:company").unwrap();
+        let pairs = filter.metadata_match.unwrap();
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(pairs[0].0, "entity_type");
+        assert_eq!(pairs[0].1, serde_json::json!("company"));
+    }
+
+    #[test]
+    fn test_compile_metadata_and_kind() {
+        let filter =
+            parse_and_compile("kind:fact AND meta.entity_type:company AND meta.region:eu").unwrap();
+        assert!(filter.kinds.is_some());
+        let pairs = filter.metadata_match.unwrap();
+        assert_eq!(pairs.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_meta_empty_key_fails() {
+        let result = parse("meta.:value");
+        assert!(result.is_err());
     }
 }
