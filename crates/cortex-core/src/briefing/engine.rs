@@ -4,8 +4,8 @@ use super::{Briefing, BriefingScope, BriefingSection};
 use crate::error::Result;
 use crate::graph::{GraphEngine, TraversalDirection, TraversalRequest};
 use crate::storage::{NodeFilter, Storage};
-use crate::types::{Node, NodeId, NodeKind, Relation};
 use crate::trust::{TrustConfig, TrustEngine};
+use crate::types::{Node, NodeId, NodeKind, Relation};
 use crate::vector::{EmbeddingService, HybridQuery, HybridSearch, VectorIndex};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -352,11 +352,7 @@ where
     /// - `Agent` — identical to `generate(agent_id)`.
     /// - `Shared` — agent's briefing plus a cross-agent context section.
     /// - `Unified(agents)` — multi-agent briefing for orchestrators.
-    pub fn generate_with_scope(
-        &self,
-        agent_id: &str,
-        scope: BriefingScope,
-    ) -> Result<Briefing> {
+    pub fn generate_with_scope(&self, agent_id: &str, scope: BriefingScope) -> Result<Briefing> {
         match scope {
             BriefingScope::Agent => self.generate(agent_id),
             BriefingScope::Shared => self.generate_shared(agent_id),
@@ -517,11 +513,9 @@ where
         }
 
         // Last resort: scan agent/entity nodes for title/source match
-        let all_agents = self.storage.list_nodes(
-            NodeFilter::new()
-                .with_kinds(agent_kinds)
-                .with_limit(50),
-        )?;
+        let all_agents = self
+            .storage
+            .list_nodes(NodeFilter::new().with_kinds(agent_kinds).with_limit(50))?;
 
         for node in &all_agents {
             if !Self::is_agent_entity(node) {
@@ -548,11 +542,7 @@ where
             return true;
         }
         if node.kind.as_str() == "entity" {
-            return node
-                .data
-                .tags
-                .iter()
-                .any(|t| t == "entity-type-agent");
+            return node.data.tags.iter().any(|t| t == "entity-type-agent");
         }
         false
     }
@@ -852,11 +842,7 @@ where
         })
     }
 
-    fn generate_temporal(
-        &self,
-        agent_id: &str,
-        seen: &HashSet<NodeId>,
-    ) -> Result<BriefingSection> {
+    fn generate_temporal(&self, agent_id: &str, seen: &HashSet<NodeId>) -> Result<BriefingSection> {
         let title = self.role_section_title("temporal", &self.config.roles.temporal);
         let kind_filters: Vec<NodeKind> = self
             .config
@@ -1258,9 +1244,7 @@ where
             for edge in &outbound {
                 if edge.relation.as_str() == "contradicts" {
                     if let Ok(Some(other)) = self.storage.get_node(edge.to) {
-                        if agent_set.contains(other.source.agent.as_str())
-                            && !other.deleted
-                        {
+                        if agent_set.contains(other.source.agent.as_str()) && !other.deleted {
                             // Verify they're from *different* agents
                             if let Ok(Some(this)) = self.storage.get_node(*node_id) {
                                 if this.source.agent != other.source.agent {
@@ -2170,8 +2154,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
-        let mut experiment =
-            make_node(NodeKind::new("experiment").unwrap(), "Test A/B", "kai");
+        let mut experiment = make_node(NodeKind::new("experiment").unwrap(), "Test A/B", "kai");
         experiment.importance = 0.8;
         storage.put_node(&experiment).unwrap();
 
@@ -2195,8 +2178,7 @@ mod tests {
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
         // Low importance kind
-        let mut insight =
-            make_node(NodeKind::new("insight").unwrap(), "Small insight", "kai");
+        let mut insight = make_node(NodeKind::new("insight").unwrap(), "Small insight", "kai");
         insight.importance = 0.4;
         storage.put_node(&insight).unwrap();
 
@@ -2241,8 +2223,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
-        let mut experiment =
-            make_node(NodeKind::new("experiment").unwrap(), "Low exp", "kai");
+        let mut experiment = make_node(NodeKind::new("experiment").unwrap(), "Low exp", "kai");
         experiment.importance = 0.1; // Below default min_importance of 0.3
         storage.put_node(&experiment).unwrap();
 
@@ -2250,10 +2231,7 @@ mod tests {
         let briefing = engine.generate("kai").unwrap();
 
         assert!(
-            !briefing
-                .sections
-                .iter()
-                .any(|s| s.title == "Experiments"),
+            !briefing.sections.iter().any(|s| s.title == "Experiments"),
             "Low-importance novel kind should not produce a section"
         );
     }
@@ -2264,8 +2242,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
-        let mut experiment =
-            make_node(NodeKind::new("experiment").unwrap(), "Test A/B", "kai");
+        let mut experiment = make_node(NodeKind::new("experiment").unwrap(), "Test A/B", "kai");
         experiment.importance = 0.8;
         storage.put_node(&experiment).unwrap();
 
@@ -2275,16 +2252,12 @@ mod tests {
         };
         let graph = Arc::new(GraphEngineImpl::new(storage.clone()));
         let gv = Arc::new(AtomicU64::new(0));
-        let engine =
-            BriefingEngine::new(storage, graph, MockVectorIndex, MockEmbedder, gv, config);
+        let engine = BriefingEngine::new(storage, graph, MockVectorIndex, MockEmbedder, gv, config);
 
         let briefing = engine.generate("kai").unwrap();
 
         assert!(
-            !briefing
-                .sections
-                .iter()
-                .any(|s| s.title == "Experiments"),
+            !briefing.sections.iter().any(|s| s.title == "Experiments"),
             "Excluded kind should not produce a section"
         );
     }
@@ -2330,8 +2303,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
-        let mut experiment =
-            make_node(NodeKind::new("experiment").unwrap(), "Shared exp", "kai");
+        let mut experiment = make_node(NodeKind::new("experiment").unwrap(), "Shared exp", "kai");
         experiment.importance = 0.8;
         storage.put_node(&experiment).unwrap();
 
@@ -2360,8 +2332,7 @@ mod tests {
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
         // Create a novel-kind node and a fact (to populate Active Context)
-        let mut experiment =
-            make_node(NodeKind::new("experiment").unwrap(), "Novel exp", "kai");
+        let mut experiment = make_node(NodeKind::new("experiment").unwrap(), "Novel exp", "kai");
         experiment.importance = 0.8;
         storage.put_node(&experiment).unwrap();
 
@@ -2400,8 +2371,7 @@ mod tests {
         let fact = make_node(NodeKind::new("fact").unwrap(), "A fact", "kai");
         storage.put_node(&fact).unwrap();
 
-        let experiment =
-            make_node(NodeKind::new("experiment").unwrap(), "An exp", "kai");
+        let experiment = make_node(NodeKind::new("experiment").unwrap(), "An exp", "kai");
         storage.put_node(&experiment).unwrap();
 
         // Add a second fact — should not duplicate
@@ -2479,10 +2449,7 @@ mod tests {
             .find(|s| s.title == "Tasks & Milestones")
             .expect("Trackable section with multi-kind title missing");
 
-        assert!(section
-            .nodes
-            .iter()
-            .any(|n| n.data.title == "Fix bug #42"));
+        assert!(section.nodes.iter().any(|n| n.data.title == "Fix bug #42"));
     }
 
     // Test 34: kinds not in any role appear in auto-discovered sections
@@ -2492,8 +2459,7 @@ mod tests {
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
         // Use a config where "experiment" is NOT mapped to any role
-        let mut experiment =
-            make_node(NodeKind::new("experiment").unwrap(), "Novel exp", "kai");
+        let mut experiment = make_node(NodeKind::new("experiment").unwrap(), "Novel exp", "kai");
         experiment.importance = 0.8;
         storage.put_node(&experiment).unwrap();
 
@@ -2502,10 +2468,7 @@ mod tests {
         let briefing = engine.generate("kai").unwrap();
 
         assert!(
-            briefing
-                .sections
-                .iter()
-                .any(|s| s.title == "Experiments"),
+            briefing.sections.iter().any(|s| s.title == "Experiments"),
             "Unmapped kind should appear as auto-discovered section"
         );
     }
@@ -2551,7 +2514,15 @@ mod tests {
         let config = BriefingRoleConfig::default();
         let mapped = config.mapped_kinds();
 
-        let legacy = ["agent", "preference", "fact", "pattern", "goal", "event", "decision"];
+        let legacy = [
+            "agent",
+            "preference",
+            "fact",
+            "pattern",
+            "goal",
+            "event",
+            "decision",
+        ];
         for kind in &legacy {
             assert!(
                 mapped.contains(*kind),
@@ -2615,8 +2586,7 @@ mod tests {
         storage.put_node(&agent).unwrap();
 
         // "experiment" is mapped to reviewable — should NOT auto-discover
-        let mut experiment =
-            make_node(NodeKind::new("experiment").unwrap(), "Test A/B", "kai");
+        let mut experiment = make_node(NodeKind::new("experiment").unwrap(), "Test A/B", "kai");
         experiment.importance = 0.8;
         storage.put_node(&experiment).unwrap();
 
@@ -2695,11 +2665,7 @@ mod tests {
         // Kai's fact references the entity
         let kai_fact = make_node(NodeKind::new("fact").unwrap(), "Kai's observation", "kai");
         // Scout's fact also references the entity
-        let scout_fact = make_node(
-            NodeKind::new("fact").unwrap(),
-            "Scout's analysis",
-            "scout",
-        );
+        let scout_fact = make_node(NodeKind::new("fact").unwrap(), "Scout's analysis", "scout");
 
         storage.put_node(&agent_kai).unwrap();
         storage.put_node(&agent_scout).unwrap();
@@ -2801,23 +2767,14 @@ mod tests {
         let briefing = engine
             .generate_with_scope(
                 "kai",
-                super::super::BriefingScope::Unified(vec![
-                    "kai".to_string(),
-                    "scout".to_string(),
-                ]),
+                super::super::BriefingScope::Unified(vec!["kai".to_string(), "scout".to_string()]),
             )
             .unwrap();
 
         assert_eq!(briefing.agent_id, "kai,scout");
 
-        let kai_section = briefing
-            .sections
-            .iter()
-            .find(|s| s.title == "Agent: kai");
-        let scout_section = briefing
-            .sections
-            .iter()
-            .find(|s| s.title == "Agent: scout");
+        let kai_section = briefing.sections.iter().find(|s| s.title == "Agent: kai");
+        let scout_section = briefing.sections.iter().find(|s| s.title == "Agent: scout");
 
         assert!(
             kai_section.is_some(),
@@ -2835,7 +2792,11 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
 
-        let entity = make_node(NodeKind::new("entity").unwrap(), "Shared Resource", "system");
+        let entity = make_node(
+            NodeKind::new("entity").unwrap(),
+            "Shared Resource",
+            "system",
+        );
         let kai_fact = make_node(NodeKind::new("fact").unwrap(), "Kai ref", "kai");
         let scout_fact = make_node(NodeKind::new("fact").unwrap(), "Scout ref", "scout");
 
@@ -2863,10 +2824,7 @@ mod tests {
         let briefing = engine
             .generate_with_scope(
                 "kai",
-                super::super::BriefingScope::Unified(vec![
-                    "kai".to_string(),
-                    "scout".to_string(),
-                ]),
+                super::super::BriefingScope::Unified(vec!["kai".to_string(), "scout".to_string()]),
             )
             .unwrap();
 
@@ -2914,10 +2872,7 @@ mod tests {
         let briefing = engine
             .generate_with_scope(
                 "kai",
-                super::super::BriefingScope::Unified(vec![
-                    "kai".to_string(),
-                    "scout".to_string(),
-                ]),
+                super::super::BriefingScope::Unified(vec!["kai".to_string(), "scout".to_string()]),
             )
             .unwrap();
 

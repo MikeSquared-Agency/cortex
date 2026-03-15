@@ -249,7 +249,11 @@ mod tests {
         assert!((access_reinforcement(&node, &config) - 1.0).abs() < 0.001);
 
         node.access_count = 100;
-        assert_eq!(access_reinforcement(&node, &config), 1.0, "Should cap at 1.0");
+        assert_eq!(
+            access_reinforcement(&node, &config),
+            1.0,
+            "Should cap at 1.0"
+        );
     }
 
     #[test]

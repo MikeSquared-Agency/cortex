@@ -33,6 +33,33 @@ const LOADER_OPTIONS: protoLoader.Options = {
   includeDirs: [path.join(__dirname, '..', 'proto')],
 };
 
+/** Well-known entity type constants for metadata conventions. */
+export enum EntityType {
+  Agent = 'agent',
+  Company = 'company',
+  Person = 'person',
+  Technology = 'technology',
+  Project = 'project',
+  Location = 'location',
+  Product = 'product',
+}
+
+/** Options for storing an entity node. */
+export interface StoreEntityOptions {
+  /** Entity name (title). */
+  title: string;
+  /** Well-known entity type or custom string. */
+  entityType?: EntityType | string;
+  /** Alternative names for entity resolution. */
+  aliases?: string[];
+  body?: string;
+  tags?: string[];
+  importance?: number;
+  /** Extra metadata (merged with entityType/aliases). */
+  metadata?: Record<string, string>;
+  source_agent?: string;
+}
+
 /** Options for storing a node. */
 export interface StoreOptions {
   kind: string;
@@ -83,6 +110,31 @@ export class Cortex {
   // ------------------------------------------------------------------
   // Write
   // ------------------------------------------------------------------
+
+  /**
+   * Store an entity node with well-known metadata conventions.
+   *
+   * Convenience wrapper around {@link store} that sets `kind: "entity"`
+   * and populates `entity_type` and `aliases` metadata automatically.
+   */
+  async storeEntity(options: StoreEntityOptions): Promise<string> {
+    const metadata: Record<string, string> = { ...options.metadata };
+    if (options.entityType) {
+      metadata.entity_type = options.entityType;
+    }
+    if (options.aliases && options.aliases.length > 0) {
+      metadata.aliases = JSON.stringify(options.aliases);
+    }
+    return this.store({
+      kind: 'entity',
+      title: options.title,
+      body: options.body,
+      tags: options.tags,
+      importance: options.importance,
+      metadata,
+      source_agent: options.source_agent,
+    });
+  }
 
   /** Store a knowledge node. Returns the new node ID. */
   async store(options: StoreOptions): Promise<string> {

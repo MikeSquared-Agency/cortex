@@ -1118,7 +1118,9 @@ async fn get_briefing(
         _ => cortex_core::briefing::BriefingScope::Agent,
     };
 
-    let briefing = state.briefing_engine.generate_with_scope(&agent_id, scope)?;
+    let briefing = state
+        .briefing_engine
+        .generate_with_scope(&agent_id, scope)?;
     let rendered = state.briefing_engine.render(&briefing, compact);
 
     let sections: Vec<BriefingSectionData> = briefing
@@ -1173,9 +1175,7 @@ async fn get_unified_briefing(
 
     let scope = cortex_core::briefing::BriefingScope::Unified(agent_ids.clone());
     let primary = agent_ids.first().map(|s| s.as_str()).unwrap_or("default");
-    let briefing = state
-        .briefing_engine
-        .generate_with_scope(primary, scope)?;
+    let briefing = state.briefing_engine.generate_with_scope(primary, scope)?;
     let rendered = state.briefing_engine.render(&briefing, compact);
 
     let sections: Vec<BriefingSectionData> = briefing
@@ -1488,10 +1488,9 @@ async fn trust_node(
     State(state): State<AppState>,
     Path(node_id): Path<String>,
 ) -> AppResult<Json<serde_json::Value>> {
-    let trust_engine = state
-        .trust_engine
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("Trust scoring is not enabled. Add [trust] to cortex.toml."))?;
+    let trust_engine = state.trust_engine.as_ref().ok_or_else(|| {
+        anyhow::anyhow!("Trust scoring is not enabled. Add [trust] to cortex.toml.")
+    })?;
 
     let id: uuid::Uuid = node_id
         .parse()
@@ -1530,10 +1529,9 @@ async fn trust_batch(
     State(state): State<AppState>,
     Json(body): Json<TrustBatchRequest>,
 ) -> AppResult<Json<serde_json::Value>> {
-    let trust_engine = state
-        .trust_engine
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("Trust scoring is not enabled. Add [trust] to cortex.toml."))?;
+    let trust_engine = state.trust_engine.as_ref().ok_or_else(|| {
+        anyhow::anyhow!("Trust scoring is not enabled. Add [trust] to cortex.toml.")
+    })?;
 
     let mut nodes = Vec::new();
     let mut ids = Vec::new();
@@ -1575,13 +1573,10 @@ async fn trust_batch(
 }
 
 /// GET /trust/agents — source reliability for all cached agents.
-async fn trust_agents(
-    State(state): State<AppState>,
-) -> AppResult<Json<serde_json::Value>> {
-    let trust_engine = state
-        .trust_engine
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("Trust scoring is not enabled. Add [trust] to cortex.toml."))?;
+async fn trust_agents(State(state): State<AppState>) -> AppResult<Json<serde_json::Value>> {
+    let trust_engine = state.trust_engine.as_ref().ok_or_else(|| {
+        anyhow::anyhow!("Trust scoring is not enabled. Add [trust] to cortex.toml.")
+    })?;
 
     let reliabilities = trust_engine.agent_reliabilities();
 

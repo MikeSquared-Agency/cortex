@@ -32,7 +32,10 @@ pub enum FieldFilter {
     Kind(Vec<String>),
     Tags(Vec<String>),
     Agent(String),
-    Importance { op: CmpOp, value: f32 },
+    Importance {
+        op: CmpOp,
+        value: f32,
+    },
     CreatedAfter(DateTime<Utc>),
     CreatedBefore(DateTime<Utc>),
     Deleted(bool),

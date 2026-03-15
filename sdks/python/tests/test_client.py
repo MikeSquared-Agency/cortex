@@ -4,7 +4,9 @@ Unit tests for the Cortex Python SDK.
 All tests use MockCortex via the mock_cortex fixture — no real gRPC server
 or network connection is required.
 """
+import json
 import pytest
+from cortex_memory import EntityType
 from cortex_memory.testing import MockCortex, mock_cortex
 
 
@@ -217,3 +219,95 @@ class TestAssertNotStored:
         cx.store("fact", "Stored fact")
         with pytest.raises(AssertionError):
             cx.assert_not_stored("fact", "Stored fact")
+
+
+# ---------------------------------------------------------------------------
+# EntityType constants
+# ---------------------------------------------------------------------------
+
+class TestEntityType:
+    def test_all_constants_are_strings(self):
+        for t in EntityType.ALL:
+            assert isinstance(t, str)
+
+    def test_known_types(self):
+        assert EntityType.AGENT == "agent"
+        assert EntityType.COMPANY == "company"
+        assert EntityType.PERSON == "person"
+        assert EntityType.TECHNOLOGY == "technology"
+        assert EntityType.PROJECT == "project"
+        assert EntityType.LOCATION == "location"
+        assert EntityType.PRODUCT == "product"
+
+    def test_all_has_seven_entries(self):
+        assert len(EntityType.ALL) == 7
+
+
+# ---------------------------------------------------------------------------
+# store_entity()
+# ---------------------------------------------------------------------------
+
+class TestStoreEntity:
+    def test_returns_string_id(self, cx):
+        node_id = cx.store_entity("Anthropic", entity_type=EntityType.COMPANY)
+        assert isinstance(node_id, str)
+        assert len(node_id) > 0
+
+    def test_creates_entity_kind_node(self, cx):
+        node_id = cx.store_entity("Anthropic", entity_type=EntityType.COMPANY)
+        cx.assert_stored("entity", "Anthropic")
+
+    def test_sets_entity_type_metadata(self, cx):
+        node_id = cx.store_entity("Anthropic", entity_type=EntityType.COMPANY)
+        node = cx._nodes[node_id]
+        assert node["metadata"]["entity_type"] == "company"
+
+    def test_sets_aliases_metadata(self, cx):
+        node_id = cx.store_entity(
+            "Anthropic",
+            entity_type=EntityType.COMPANY,
+            aliases=["anthropic-ai", "Anthropic PBC"],
+        )
+        node = cx._nodes[node_id]
+        aliases = json.loads(node["metadata"]["aliases"])
+        assert aliases == ["anthropic-ai", "Anthropic PBC"]
+
+    def test_no_aliases_when_omitted(self, cx):
+        node_id = cx.store_entity("Anthropic", entity_type=EntityType.COMPANY)
+        node = cx._nodes[node_id]
+        assert "aliases" not in node["metadata"]
+
+    def test_merges_extra_metadata(self, cx):
+        node_id = cx.store_entity(
+            "Anthropic",
+            entity_type=EntityType.COMPANY,
+            metadata={"source_url": "https://anthropic.com"},
+        )
+        node = cx._nodes[node_id]
+        assert node["metadata"]["entity_type"] == "company"
+        assert node["metadata"]["source_url"] == "https://anthropic.com"
+
+    def test_accepts_custom_entity_type(self, cx):
+        node_id = cx.store_entity("Cortex", entity_type="framework")
+        node = cx._nodes[node_id]
+        assert node["metadata"]["entity_type"] == "framework"
+
+    def test_no_entity_type_when_omitted(self, cx):
+        node_id = cx.store_entity("Unknown Thing")
+        node = cx._nodes[node_id]
+        assert "entity_type" not in node["metadata"]
+
+    def test_passes_through_optional_fields(self, cx):
+        node_id = cx.store_entity(
+            "Anthropic",
+            entity_type=EntityType.COMPANY,
+            body="AI safety company",
+            tags=["ai", "safety"],
+            importance=0.9,
+            source_agent="kai",
+        )
+        node = cx._nodes[node_id]
+        assert node["body"] == "AI safety company"
+        assert node["tags"] == ["ai", "safety"]
+        assert node["importance"] == 0.9
+        assert node["source_agent"] == "kai"

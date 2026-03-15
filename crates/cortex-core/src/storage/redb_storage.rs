@@ -2017,8 +2017,8 @@ mod query_filter_tests {
 
         let tomorrow = Utc::now() + chrono::Duration::days(1);
 
-        let future = make_node(NodeKind::new("fact").unwrap(), "Future fact")
-            .with_valid_from(tomorrow);
+        let future =
+            make_node(NodeKind::new("fact").unwrap(), "Future fact").with_valid_from(tomorrow);
         storage.put_node(&future).unwrap();
 
         let results = storage
@@ -2059,8 +2059,7 @@ mod query_filter_tests {
             .metadata
             .insert("entity_type".to_string(), serde_json::json!("person"));
 
-        let filter =
-            NodeFilter::new().with_metadata("entity_type", serde_json::json!("company"));
+        let filter = NodeFilter::new().with_metadata("entity_type", serde_json::json!("company"));
 
         assert!(RedbStorage::node_matches_filter(&company, &filter));
         assert!(!RedbStorage::node_matches_filter(&person, &filter));

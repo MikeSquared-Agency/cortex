@@ -309,9 +309,7 @@ impl ConfigRule {
     /// Validate this rule's configuration.
     pub fn validate(&self) -> Result<()> {
         if self.name.is_empty() {
-            return Err(CortexError::Validation(
-                "Rule name cannot be empty".into(),
-            ));
+            return Err(CortexError::Validation("Rule name cannot be empty".into()));
         }
         // Validate kinds and relation using the same rules as NodeKind/Relation.
         // "*" is a wildcard meaning "any kind".

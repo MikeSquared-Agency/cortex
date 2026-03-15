@@ -183,9 +183,7 @@ impl RetentionEngine {
         let now = Utc::now();
 
         // 0. Explicit expiry: soft-delete nodes past their expires_at
-        let expired_nodes = storage.list_nodes(
-            NodeFilter::new().expires_before(now),
-        )?;
+        let expired_nodes = storage.list_nodes(NodeFilter::new().expires_before(now))?;
         for node in expired_nodes {
             self.cleanup_outbound_edges(node.id, storage)?;
             storage.delete_node(node.id)?;

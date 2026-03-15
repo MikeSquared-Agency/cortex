@@ -20,7 +20,7 @@
  * ```
  */
 
-import type { SearchResult, StoreOptions, Subgraph } from './client';
+import type { SearchResult, StoreOptions, StoreEntityOptions, Subgraph } from './client';
 
 interface StoredNode {
   id: string;
@@ -47,6 +47,25 @@ export class MockCortex {
   // ------------------------------------------------------------------
   // Write
   // ------------------------------------------------------------------
+
+  async storeEntity(options: StoreEntityOptions): Promise<string> {
+    const metadata: Record<string, string> = { ...options.metadata };
+    if (options.entityType) {
+      metadata.entity_type = options.entityType;
+    }
+    if (options.aliases && options.aliases.length > 0) {
+      metadata.aliases = JSON.stringify(options.aliases);
+    }
+    return this.store({
+      kind: 'entity',
+      title: options.title,
+      body: options.body,
+      tags: options.tags,
+      importance: options.importance,
+      metadata,
+      source_agent: options.source_agent,
+    });
+  }
 
   async store(options: StoreOptions): Promise<string> {
     const id = _uuid();

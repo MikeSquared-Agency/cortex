@@ -546,9 +546,7 @@ mod tests {
 
         // Verify entity node was created
         let entity_nodes = storage
-            .list_nodes(
-                NodeFilter::new().with_kinds(vec![NodeKind::new("entity").unwrap()]),
-            )
+            .list_nodes(NodeFilter::new().with_kinds(vec![NodeKind::new("entity").unwrap()]))
             .unwrap();
         assert_eq!(entity_nodes.len(), 1);
         assert_eq!(entity_nodes[0].data.title, "company x");
@@ -594,9 +592,7 @@ mod tests {
         assert_eq!(promoted, 0);
 
         let entity_nodes = storage
-            .list_nodes(
-                NodeFilter::new().with_kinds(vec![NodeKind::new("entity").unwrap()]),
-            )
+            .list_nodes(NodeFilter::new().with_kinds(vec![NodeKind::new("entity").unwrap()]))
             .unwrap();
         assert!(entity_nodes.is_empty());
     }
@@ -640,9 +636,7 @@ mod tests {
         assert_eq!(promoted2, 0);
 
         let entity_nodes = storage
-            .list_nodes(
-                NodeFilter::new().with_kinds(vec![NodeKind::new("entity").unwrap()]),
-            )
+            .list_nodes(NodeFilter::new().with_kinds(vec![NodeKind::new("entity").unwrap()]))
             .unwrap();
         assert_eq!(entity_nodes.len(), 1);
     }

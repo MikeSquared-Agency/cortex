@@ -1,5 +1,6 @@
 pub mod api;
 pub mod briefing;
+pub mod conventions;
 pub mod error;
 pub mod gate;
 pub mod graph;
@@ -17,6 +18,7 @@ pub mod types;
 pub mod vector;
 
 pub use api::{Cortex, LibraryConfig};
+pub use conventions::check_conventions;
 pub use error::{CortexError, Result};
 pub use gate::schema::{FieldSchema, FieldType, KindSchema, SchemaValidator, SchemaViolation};
 pub use gate::{

@@ -112,6 +112,36 @@ class MockCortex:
         self._call_log.append(("store", kind, title))
         return node_id
 
+    def store_entity(
+        self,
+        title: str,
+        *,
+        entity_type: str = "",
+        aliases: Optional[List[str]] = None,
+        body: str = "",
+        tags: Optional[List[str]] = None,
+        importance: float = 0.5,
+        metadata: Optional[dict] = None,
+        source_agent: str = "",
+    ) -> str:
+        """Store an entity node with well-known metadata conventions."""
+        import json
+
+        merged = dict(metadata or {})
+        if entity_type:
+            merged["entity_type"] = entity_type
+        if aliases:
+            merged["aliases"] = json.dumps(aliases)
+        return self.store(
+            "entity",
+            title,
+            body=body,
+            tags=tags,
+            importance=importance,
+            metadata=merged,
+            source_agent=source_agent,
+        )
+
     # ------------------------------------------------------------------
     # Read / search
     # ------------------------------------------------------------------
