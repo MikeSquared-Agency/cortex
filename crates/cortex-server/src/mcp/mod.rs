@@ -288,6 +288,17 @@ fn tools_schema() -> Value {
                             "type": "boolean",
                             "description": "If true, returns a shorter ~4x denser briefing",
                             "default": false
+                        },
+                        "scope": {
+                            "type": "string",
+                            "description": "Briefing scope: 'agent' (default, own knowledge only), 'shared' (includes cross-agent context), or 'unified' (multi-agent overview, requires agents parameter)",
+                            "enum": ["agent", "shared", "unified"],
+                            "default": "agent"
+                        },
+                        "agents": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Agent IDs for unified scope. Example: [\"kai\", \"scout\", \"lily\"]"
                         }
                     }
                 }
@@ -1088,7 +1099,9 @@ fn tools_list() -> Value {
                     "type": "object",
                     "properties": {
                         "agent_id": { "type": "string", "default": "default" },
-                        "compact": { "type": "boolean", "default": false }
+                        "compact": { "type": "boolean", "default": false },
+                        "scope": { "type": "string", "enum": ["agent", "shared", "unified"], "default": "agent" },
+                        "agents": { "type": "array", "items": { "type": "string" } }
                     }
                 }
             },
@@ -1223,17 +1236,47 @@ async fn remote_tool_call(
                 .get("compact")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
-            let resp: Value = http
-                .get(format!(
-                    "{}/briefing/{}?compact={}",
-                    base_url,
-                    urlencoding::encode(agent_id),
-                    compact
-                ))
-                .send()
-                .await?
-                .json()
-                .await?;
+            let scope = args
+                .get("scope")
+                .and_then(|v| v.as_str())
+                .unwrap_or("agent");
+            let agents: Vec<String> = args
+                .get("agents")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            let resp: Value = if scope == "unified" && !agents.is_empty() {
+                let agents_param = agents.join(",");
+                http
+                    .get(format!(
+                        "{}/briefing?agents={}&compact={}",
+                        base_url,
+                        urlencoding::encode(&agents_param),
+                        compact
+                    ))
+                    .send()
+                    .await?
+                    .json()
+                    .await?
+            } else {
+                http
+                    .get(format!(
+                        "{}/briefing/{}?compact={}&scope={}",
+                        base_url,
+                        urlencoding::encode(agent_id),
+                        compact,
+                        scope
+                    ))
+                    .send()
+                    .await?
+                    .json()
+                    .await?
+            };
             let rendered = resp["data"]["rendered"]
                 .as_str()
                 .unwrap_or("No briefing available");

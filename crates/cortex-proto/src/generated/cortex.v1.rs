@@ -343,6 +343,12 @@ pub struct BriefingRequest {
     /// Use compact renderer (~4× density)
     #[prost(bool, tag = "2")]
     pub compact: bool,
+    /// "agent" (default), "shared", or "unified"
+    #[prost(string, tag = "3")]
+    pub scope: ::prost::alloc::string::String,
+    /// For unified scope: list of agent IDs
+    #[prost(string, repeated, tag = "4")]
+    pub agent_ids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BriefingResponse {
