@@ -40,6 +40,40 @@ max_edges_per_node = 20         # Cap outgoing similarity edges
 [briefing]
 max_tokens = 2000
 
+# Role-to-kind mapping. Each role determines how nodes of that kind are
+# presented in the briefing. Kinds not listed here are auto-discovered.
+# These are the defaults (personal assistant); override for your agent type.
+[briefing.roles]
+identity    = ["agent"]
+persistent  = ["preference"]
+trackable   = ["goal"]
+temporal    = ["event"]
+reviewable  = ["pattern"]
+superseding = ["fact", "decision"]
+
+# Optional section title overrides (role name = custom title):
+# [briefing.titles]
+# persistent = "Standing constraints"
+# temporal = "Recent activity"
+
+# Example: coding agent roles
+# [briefing.roles]
+# identity    = ["agent"]
+# persistent  = ["constraint", "architecture-decision"]
+# trackable   = ["task", "milestone"]
+# temporal    = ["commit", "deployment", "incident"]
+# reviewable  = ["pattern", "anti-pattern", "code-smell"]
+# superseding = ["dependency", "api-version"]
+
+# Example: research agent roles
+# [briefing.roles]
+# identity    = ["agent"]
+# persistent  = ["hypothesis", "methodology"]
+# trackable   = ["research-question", "objective"]
+# temporal    = ["experiment", "observation"]
+# reviewable  = ["finding", "pattern"]
+# superseding = ["claim", "measurement", "citation"]
+
 [[briefing.sections]]
 name = "identity"
 mode = "filter"
