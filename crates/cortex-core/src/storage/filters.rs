@@ -16,6 +16,8 @@ pub struct NodeFilter {
     pub deleted_only: bool,
     /// Only return nodes with updated_at before this time (useful for purge)
     pub updated_before: Option<DateTime<Utc>>,
+    /// Only return nodes with expires_at before this time (for expiry sweep)
+    pub expires_before: Option<DateTime<Utc>>,
     pub limit: Option<usize>,
     pub offset: Option<usize>,
 }
@@ -90,6 +92,12 @@ impl NodeFilter {
     /// Filter by updated_at (before this time)
     pub fn updated_before(mut self, time: DateTime<Utc>) -> Self {
         self.updated_before = Some(time);
+        self
+    }
+
+    /// Filter by expires_at (before this time) for expiry sweep
+    pub fn expires_before(mut self, time: DateTime<Utc>) -> Self {
+        self.expires_before = Some(time);
         self
     }
 }

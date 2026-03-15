@@ -262,6 +262,27 @@ async fn stats(State(state): State<AppState>) -> AppResult<Json<JsonResponse<Sta
     })))
 }
 
+impl NodeData {
+    fn from_node(n: &cortex_core::Node, edge_count: usize) -> Self {
+        NodeData {
+            id: n.id.to_string(),
+            kind: format!("{:?}", n.kind),
+            title: n.data.title.clone(),
+            body: n.data.body.clone(),
+            tags: n.data.tags.clone(),
+            importance: n.importance,
+            source_agent: n.source.agent.clone(),
+            edge_count,
+            access_count: n.access_count,
+            last_accessed_at: n.last_accessed_at.to_rfc3339(),
+            valid_from: n.valid_from.map(|t| t.to_rfc3339()),
+            valid_until: n.valid_until.map(|t| t.to_rfc3339()),
+            expires_at: n.expires_at.map(|t| t.to_rfc3339()),
+            embedding_model: n.embedding_model.clone(),
+        }
+    }
+}
+
 #[derive(Deserialize)]
 struct ListNodesQuery {
     kind: Option<String>,
@@ -282,6 +303,14 @@ struct NodeData {
     edge_count: usize,
     access_count: u64,
     last_accessed_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    valid_from: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    valid_until: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expires_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    embedding_model: Option<String>,
 }
 
 async fn list_nodes(
@@ -317,18 +346,7 @@ async fn list_nodes(
             let incoming = state.storage.edges_to(n.id).unwrap_or_default();
             let edge_count = outgoing.len() + incoming.len();
 
-            NodeData {
-                id: n.id.to_string(),
-                kind: format!("{:?}", n.kind),
-                title: n.data.title.clone(),
-                body: n.data.body.clone(),
-                tags: n.data.tags.clone(),
-                importance: n.importance,
-                source_agent: n.source.agent.clone(),
-                edge_count,
-                access_count: n.access_count,
-                last_accessed_at: n.last_accessed_at.to_rfc3339(),
-            }
+            NodeData::from_node(n, edge_count)
         })
         .collect();
 
@@ -344,6 +362,9 @@ struct CreateNodeBody {
     importance: Option<f32>,
     source_agent: Option<String>,
     metadata: Option<HashMap<String, serde_json::Value>>,
+    valid_from: Option<chrono::DateTime<chrono::Utc>>,
+    valid_until: Option<chrono::DateTime<chrono::Utc>>,
+    expires_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Deserialize)]
@@ -384,6 +405,9 @@ async fn create_node(
     if let Some(metadata) = body.metadata {
         node.data.metadata = metadata;
     }
+    node.valid_from = body.valid_from;
+    node.valid_until = body.valid_until;
+    node.expires_at = body.expires_at;
 
     // ── Write gate ────────────────────────────────────────────────────────────
     let gate_config = &state.write_gate;
@@ -547,6 +571,7 @@ async fn create_edge(
         },
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
+        metadata: std::collections::HashMap::new(),
     };
 
     state.storage.put_edge(&edge)?;
@@ -703,6 +728,9 @@ struct PatchNodeBody {
     tags: Option<Vec<String>>,
     importance: Option<f32>,
     metadata: Option<HashMap<String, serde_json::Value>>,
+    valid_from: Option<chrono::DateTime<chrono::Utc>>,
+    valid_until: Option<chrono::DateTime<chrono::Utc>>,
+    expires_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 async fn patch_node(
@@ -734,6 +762,15 @@ async fn patch_node(
     }
     if let Some(metadata) = patch.metadata {
         node.data.metadata = metadata;
+    }
+    if let Some(valid_from) = patch.valid_from {
+        node.valid_from = Some(valid_from);
+    }
+    if let Some(valid_until) = patch.valid_until {
+        node.valid_until = Some(valid_until);
+    }
+    if let Some(expires_at) = patch.expires_at {
+        node.expires_at = Some(expires_at);
     }
     node.updated_at = chrono::Utc::now();
 
@@ -767,18 +804,7 @@ async fn get_node(
     let outgoing = state.storage.edges_from(node.id)?;
     let incoming = state.storage.edges_to(node.id)?;
 
-    let node_data = NodeData {
-        id: node.id.to_string(),
-        kind: format!("{:?}", node.kind),
-        title: node.data.title.clone(),
-        body: node.data.body.clone(),
-        tags: node.data.tags.clone(),
-        importance: node.importance,
-        source_agent: node.source.agent.clone(),
-        edge_count: outgoing.len() + incoming.len(),
-        access_count: node.access_count,
-        last_accessed_at: node.last_accessed_at.to_rfc3339(),
-    };
+    let node_data = NodeData::from_node(&node, outgoing.len() + incoming.len());
 
     Ok(Json(JsonResponse::ok(node_data)))
 }
@@ -825,18 +851,7 @@ async fn node_neighbors(
             let outgoing = state.storage.edges_from(n.id).unwrap_or_default();
             let incoming = state.storage.edges_to(n.id).unwrap_or_default();
 
-            NodeData {
-                id: n.id.to_string(),
-                kind: format!("{:?}", n.kind),
-                title: n.data.title.clone(),
-                body: n.data.body.clone(),
-                tags: n.data.tags.clone(),
-                importance: n.importance,
-                source_agent: n.source.agent.clone(),
-                edge_count: outgoing.len() + incoming.len(),
-                access_count: n.access_count,
-                last_accessed_at: n.last_accessed_at.to_rfc3339(),
-            }
+            NodeData::from_node(n, outgoing.len() + incoming.len())
         })
         .collect();
 
@@ -924,18 +939,7 @@ async fn search(
                     let incoming = state.storage.edges_to(node.id).unwrap_or_default();
 
                     let value = serde_json::json!({
-                        "node": NodeData {
-                            id: node.id.to_string(),
-                            kind: format!("{:?}", node.kind),
-                            title: node.data.title.clone(),
-                            body: node.data.body.clone(),
-                            tags: node.data.tags.clone(),
-                            importance: node.importance,
-                            source_agent: node.source.agent.clone(),
-                            edge_count: outgoing.len() + incoming.len(),
-                            access_count: node.access_count,
-                            last_accessed_at: node.last_accessed_at.to_rfc3339(),
-                        },
+                        "node": NodeData::from_node(&node, outgoing.len() + incoming.len()),
                         "score": final_score,
                         "raw_score": r.score,
                     });
@@ -1032,18 +1036,7 @@ async fn graph_export(State(state): State<AppState>) -> AppResult<Json<JsonRespo
 
     let node_data: Vec<_> = nodes
         .iter()
-        .map(|n| NodeData {
-            id: n.id.to_string(),
-            kind: format!("{:?}", n.kind),
-            title: n.data.title.clone(),
-            body: n.data.body.clone(),
-            tags: n.data.tags.clone(),
-            importance: n.importance,
-            source_agent: n.source.agent.clone(),
-            edge_count: edge_counts.get(&n.id).copied().unwrap_or(0),
-            access_count: n.access_count,
-            last_accessed_at: n.last_accessed_at.to_rfc3339(),
-        })
+        .map(|n| NodeData::from_node(n, edge_counts.get(&n.id).copied().unwrap_or(0)))
         .collect();
 
     Ok(Json(JsonResponse::ok(GraphExport {
@@ -1115,18 +1108,7 @@ async fn get_briefing(
                 .map(|n| {
                     let outgoing = state.storage.edges_from(n.id).unwrap_or_default();
                     let incoming = state.storage.edges_to(n.id).unwrap_or_default();
-                    NodeData {
-                        id: n.id.to_string(),
-                        kind: format!("{:?}", n.kind),
-                        title: n.data.title.clone(),
-                        body: n.data.body.clone(),
-                        tags: n.data.tags.clone(),
-                        importance: n.importance,
-                        source_agent: n.source.agent.clone(),
-                        edge_count: outgoing.len() + incoming.len(),
-                        access_count: n.access_count,
-                        last_accessed_at: n.last_accessed_at.to_rfc3339(),
-                    }
+                    NodeData::from_node(n, outgoing.len() + incoming.len())
                 })
                 .collect();
             BriefingSectionData {
@@ -1244,6 +1226,7 @@ async fn bind_prompt(
         },
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
+        metadata: std::collections::HashMap::new(),
     };
     state.storage.put_edge(&edge)?;
 

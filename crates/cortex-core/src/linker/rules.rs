@@ -1,7 +1,7 @@
 use crate::types::{Edge, EdgeProvenance, Node, NodeId, Relation};
 use crate::vector::SimilarityConfig;
 use chrono::{DateTime, Duration, Utc};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// Proposed edge from link rule evaluation
 #[derive(Debug, Clone)]
@@ -11,6 +11,7 @@ pub struct ProposedEdge {
     pub relation: Relation,
     pub weight: f32,
     pub provenance: EdgeProvenance,
+    pub metadata: HashMap<String, String>,
 }
 
 impl ProposedEdge {
@@ -22,6 +23,7 @@ impl ProposedEdge {
             self.weight,
             self.provenance,
         )
+        .with_metadata(self.metadata)
     }
 }
 
@@ -54,6 +56,10 @@ impl LinkRule for SimilarityLinkRule {
                 relation: Relation::new("related_to").unwrap(),
                 weight: score,
                 provenance: EdgeProvenance::AutoSimilarity { score },
+                metadata: HashMap::from([
+                    ("from_kind".to_string(), node.kind.as_str().to_string()),
+                    ("to_kind".to_string(), neighbor.kind.as_str().to_string()),
+                ]),
             })
         } else {
             None
@@ -139,6 +145,7 @@ impl StructuralRule {
                         provenance: EdgeProvenance::AutoStructural {
                             rule: "same_agent".into(),
                         },
+                        metadata: HashMap::new(),
                     })
                 } else {
                     None
@@ -161,6 +168,7 @@ impl StructuralRule {
                         provenance: EdgeProvenance::AutoStructural {
                             rule: "temporal_proximity".into(),
                         },
+                        metadata: HashMap::new(),
                     })
                 } else {
                     None
@@ -189,6 +197,7 @@ impl StructuralRule {
                         provenance: EdgeProvenance::AutoStructural {
                             rule: "shared_tags".into(),
                         },
+                        metadata: HashMap::new(),
                     })
                 } else {
                     None
@@ -210,6 +219,7 @@ impl StructuralRule {
                         provenance: EdgeProvenance::AutoStructural {
                             rule: "decision_to_event".into(),
                         },
+                        metadata: HashMap::new(),
                     })
                 } else {
                     None
@@ -232,6 +242,7 @@ impl StructuralRule {
                         provenance: EdgeProvenance::AutoStructural {
                             rule: "observation_to_pattern".into(),
                         },
+                        metadata: HashMap::new(),
                     })
                 } else {
                     None
@@ -256,6 +267,7 @@ impl StructuralRule {
                             provenance: EdgeProvenance::AutoStructural {
                                 rule: "fact_supersedes".into(),
                             },
+                            metadata: HashMap::new(),
                         })
                     } else {
                         None

@@ -104,6 +104,17 @@ impl CortexService for CortexServiceImpl {
             .collect();
         node.data.tags = req.tags;
 
+        // Temporal validity fields
+        if let Some(ts) = req.valid_from {
+            node.valid_from = Some(timestamp_to_datetime(ts));
+        }
+        if let Some(ts) = req.valid_until {
+            node.valid_until = Some(timestamp_to_datetime(ts));
+        }
+        if let Some(ts) = req.expires_at {
+            node.expires_at = Some(timestamp_to_datetime(ts));
+        }
+
         // Schema validation
         if let cortex_core::GateResult::Reject(r) =
             cortex_core::WriteGate::check_schema(&node, &self.schema_validator)
@@ -202,6 +213,15 @@ impl CortexService for CortexServiceImpl {
         }
         if let Some(importance) = req.importance {
             node.importance = importance;
+        }
+        if let Some(ts) = req.valid_from {
+            node.valid_from = Some(timestamp_to_datetime(ts));
+        }
+        if let Some(ts) = req.valid_until {
+            node.valid_until = Some(timestamp_to_datetime(ts));
+        }
+        if let Some(ts) = req.expires_at {
+            node.expires_at = Some(timestamp_to_datetime(ts));
         }
 
         // Schema validation
@@ -356,7 +376,8 @@ impl CortexService for CortexServiceImpl {
             EdgeProvenance::Manual {
                 created_by: "grpc_api".to_string(),
             },
-        );
+        )
+        .with_metadata(req.metadata);
 
         self.storage
             .put_edge(&edge)

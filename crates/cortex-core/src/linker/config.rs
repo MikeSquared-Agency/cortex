@@ -360,6 +360,7 @@ impl ConfigRule {
             provenance: EdgeProvenance::AutoStructural {
                 rule: self.name.clone(),
             },
+            metadata: std::collections::HashMap::new(),
         });
 
         if self.bidirectional {
@@ -371,6 +372,7 @@ impl ConfigRule {
                 provenance: EdgeProvenance::AutoStructural {
                     rule: self.name.clone(),
                 },
+                metadata: std::collections::HashMap::new(),
             });
         }
 

@@ -35,6 +35,9 @@ async fn create(args: NodeCreateArgs, server: &str) -> Result<()> {
         importance: args.importance,
         tags: args.tags,
         source_agent: "cli".into(),
+        valid_from: parse_optional_timestamp(&args.valid_from)?,
+        valid_until: parse_optional_timestamp(&args.valid_until)?,
+        expires_at: parse_optional_timestamp(&args.expires_at)?,
         ..Default::default()
     };
 
@@ -202,6 +205,22 @@ async fn stats(args: NodeStatsArgs, server: &str) -> Result<()> {
     Ok(())
 }
 
+/// Parse an optional ISO 8601 string into a protobuf Timestamp.
+fn parse_optional_timestamp(s: &Option<String>) -> Result<Option<prost_types::Timestamp>> {
+    match s {
+        None => Ok(None),
+        Some(s) => {
+            let dt = chrono::DateTime::parse_from_rfc3339(s)
+                .or_else(|_| chrono::DateTime::parse_from_rfc3339(&format!("{s}T00:00:00Z")))
+                .map_err(|e| anyhow::anyhow!("Invalid timestamp '{}': {}", s, e))?;
+            Ok(Some(prost_types::Timestamp {
+                seconds: dt.timestamp(),
+                nanos: dt.timestamp_subsec_nanos() as i32,
+            }))
+        }
+    }
+}
+
 /// Format an optional protobuf Timestamp as a human-readable UTC string.
 fn fmt_timestamp(ts: Option<&prost_types::Timestamp>) -> String {
     match ts {
@@ -232,4 +251,16 @@ pub fn print_node_detail(n: &NodeResponse) {
     println!("Access:     {}", n.access_count);
     println!("Last seen:  {}", fmt_timestamp(n.last_accessed_at.as_ref()));
     println!("Embedding:  {}", if n.has_embedding { "yes" } else { "no" });
+    if n.valid_from.is_some() {
+        println!("Valid from: {}", fmt_timestamp(n.valid_from.as_ref()));
+    }
+    if n.valid_until.is_some() {
+        println!("Valid until:{}", fmt_timestamp(n.valid_until.as_ref()));
+    }
+    if n.expires_at.is_some() {
+        println!("Expires at: {}", fmt_timestamp(n.expires_at.as_ref()));
+    }
+    if let Some(model) = &n.embedding_model {
+        println!("Emb model:  {}", model);
+    }
 }
