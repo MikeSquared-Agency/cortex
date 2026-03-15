@@ -1252,30 +1252,28 @@ async fn remote_tool_call(
 
             let resp: Value = if scope == "unified" && !agents.is_empty() {
                 let agents_param = agents.join(",");
-                http
-                    .get(format!(
-                        "{}/briefing?agents={}&compact={}",
-                        base_url,
-                        urlencoding::encode(&agents_param),
-                        compact
-                    ))
-                    .send()
-                    .await?
-                    .json()
-                    .await?
+                http.get(format!(
+                    "{}/briefing?agents={}&compact={}",
+                    base_url,
+                    urlencoding::encode(&agents_param),
+                    compact
+                ))
+                .send()
+                .await?
+                .json()
+                .await?
             } else {
-                http
-                    .get(format!(
-                        "{}/briefing/{}?compact={}&scope={}",
-                        base_url,
-                        urlencoding::encode(agent_id),
-                        compact,
-                        scope
-                    ))
-                    .send()
-                    .await?
-                    .json()
-                    .await?
+                http.get(format!(
+                    "{}/briefing/{}?compact={}&scope={}",
+                    base_url,
+                    urlencoding::encode(agent_id),
+                    compact,
+                    scope
+                ))
+                .send()
+                .await?
+                .json()
+                .await?
             };
             let rendered = resp["data"]["rendered"]
                 .as_str()

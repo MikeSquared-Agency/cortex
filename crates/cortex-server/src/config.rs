@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
 use cortex_core::briefing::BriefingRoleConfig;
-use cortex_core::{AutoLinkerConfig, ConfigRule, NodeKind, Relation, SimilarityConfig, TrustConfig};
+use cortex_core::{
+    AutoLinkerConfig, ConfigRule, NodeKind, Relation, SimilarityConfig, TrustConfig,
+};
 
 // Re-export from cortex-core so cortex-server code can use them from config
 #[allow(unused_imports)]
@@ -469,7 +471,10 @@ condition = { type = "min_similarity", threshold = 0.85 }
         assert_eq!(config.auto_linker.rules.len(), 3);
         assert_eq!(config.auto_linker.legacy_rules_enabled, Some(false));
 
-        assert_eq!(config.auto_linker.rules[0].name, "experiment-targets-function");
+        assert_eq!(
+            config.auto_linker.rules[0].name,
+            "experiment-targets-function"
+        );
         assert_eq!(config.auto_linker.rules[1].relation, "supersedes");
         assert!(config.auto_linker.rules[2].weight_from_score);
 

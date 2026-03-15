@@ -8,9 +8,8 @@ use crate::storage::{NodeFilter, Storage};
 /// reliability = 1.0 - (superseded + contradicted) / max(total, 1)
 /// Clamped to [0.2, 1.0] — even unreliable sources aren't zero.
 pub fn compute_source_reliability<S: Storage>(storage: &S, agent_id: &str) -> Result<f32> {
-    let agent_nodes = storage.list_nodes(
-        NodeFilter::new().with_source_agent(agent_id.to_string()),
-    )?;
+    let agent_nodes =
+        storage.list_nodes(NodeFilter::new().with_source_agent(agent_id.to_string()))?;
 
     let total = agent_nodes.len();
     if total == 0 {

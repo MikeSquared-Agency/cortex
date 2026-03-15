@@ -138,8 +138,7 @@ impl<S: Storage> TrustEngine<S> {
     pub fn score_batch(&self, nodes: &[Node]) -> Result<Vec<TrustScore>> {
         // Pre-warm source cache for all unique agents in this batch.
         let unique_agents: Vec<String> = {
-            let mut agents: Vec<String> =
-                nodes.iter().map(|n| n.source.agent.clone()).collect();
+            let mut agents: Vec<String> = nodes.iter().map(|n| n.source.agent.clone()).collect();
             agents.sort();
             agents.dedup();
             agents
@@ -229,7 +228,10 @@ mod tests {
     fn test_default_config_weights_sum_to_one() {
         let w = TrustWeights::default();
         let sum = w.corroboration + w.contradiction + w.source + w.access + w.freshness;
-        assert!((sum - 1.0).abs() < 0.001, "Weights should sum to 1.0, got {sum}");
+        assert!(
+            (sum - 1.0).abs() < 0.001,
+            "Weights should sum to 1.0, got {sum}"
+        );
     }
 
     #[test]
@@ -257,7 +259,10 @@ mod tests {
         let engine = TrustEngine::new(storage, TrustConfig::default());
         let s1 = engine.score(&node).unwrap();
         let s2 = engine.score(&node).unwrap();
-        assert_eq!(s1.total, s2.total, "Same graph state should produce same scores");
+        assert_eq!(
+            s1.total, s2.total,
+            "Same graph state should produce same scores"
+        );
     }
 
     #[test]
