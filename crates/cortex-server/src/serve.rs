@@ -136,6 +136,14 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
         auto_linker_config.clone(),
     )?));
 
+    if auto_linker_config.use_legacy_rules() {
+        warn!(
+            "Using legacy hardcoded structural rules. These will be removed in a future version. \
+             Define [[auto_linker.rules]] in cortex.toml to use configurable rules. \
+             See cortex.example.toml for defaults that match current behaviour."
+        );
+    }
+
     info!(
         "Auto-linker initialized (interval: {}s)",
         auto_linker_config.interval.as_secs()

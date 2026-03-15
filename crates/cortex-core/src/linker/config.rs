@@ -313,13 +313,18 @@ impl ConfigRule {
                 "Rule name cannot be empty".into(),
             ));
         }
-        // Validate kinds and relation using the same rules as NodeKind/Relation
-        NodeKind::new(&self.from_kind).map_err(|e| {
-            CortexError::Validation(format!("Rule '{}' from_kind: {}", self.name, e))
-        })?;
-        NodeKind::new(&self.to_kind).map_err(|e| {
-            CortexError::Validation(format!("Rule '{}' to_kind: {}", self.name, e))
-        })?;
+        // Validate kinds and relation using the same rules as NodeKind/Relation.
+        // "*" is a wildcard meaning "any kind".
+        if self.from_kind != "*" {
+            NodeKind::new(&self.from_kind).map_err(|e| {
+                CortexError::Validation(format!("Rule '{}' from_kind: {}", self.name, e))
+            })?;
+        }
+        if self.to_kind != "*" {
+            NodeKind::new(&self.to_kind).map_err(|e| {
+                CortexError::Validation(format!("Rule '{}' to_kind: {}", self.name, e))
+            })?;
+        }
         Relation::new(&self.relation).map_err(|e| {
             CortexError::Validation(format!("Rule '{}' relation: {}", self.name, e))
         })?;
@@ -343,8 +348,11 @@ impl ConfigRule {
     ) -> Vec<ProposedEdge> {
         let mut edges = Vec::new();
 
-        // Kind gate: node must be from_kind, neighbor must be to_kind
-        if node.kind.as_str() != self.from_kind || neighbor.kind.as_str() != self.to_kind {
+        // Kind gate: node must match from_kind, neighbor must match to_kind.
+        // "*" is a wildcard that matches any kind.
+        let from_match = self.from_kind == "*" || node.kind.as_str() == self.from_kind;
+        let to_match = self.to_kind == "*" || neighbor.kind.as_str() == self.to_kind;
+        if !from_match || !to_match {
             return edges;
         }
 
@@ -1119,6 +1127,125 @@ condition = { type = "min_similarity", threshold = 0.85 }
         assert_eq!(edges.len(), 1);
         assert_eq!(edges[0].from, newer.id);
         assert_eq!(edges[0].to, older.id);
+    }
+
+    // --- Wildcard kind tests ---
+
+    #[test]
+    fn test_wildcard_from_kind_matches_any() {
+        let rule = ConfigRule {
+            name: "wildcard-from".into(),
+            from_kind: "*".into(),
+            to_kind: "event".into(),
+            relation: "related_to".into(),
+            weight: 0.6,
+            weight_from_score: false,
+            bidirectional: false,
+            condition: RuleCondition::Always,
+        };
+
+        let fact = test_node("fact", "F1", "body");
+        let decision = test_node("decision", "D1", "body");
+        let event = test_node("event", "E1", "body");
+
+        // Any from_kind should match
+        assert_eq!(rule.evaluate(&fact, &event, 0.5).len(), 1);
+        assert_eq!(rule.evaluate(&decision, &event, 0.5).len(), 1);
+        // to_kind must still match exactly
+        assert!(rule.evaluate(&fact, &decision, 0.5).is_empty());
+    }
+
+    #[test]
+    fn test_wildcard_to_kind_matches_any() {
+        let rule = ConfigRule {
+            name: "wildcard-to".into(),
+            from_kind: "fact".into(),
+            to_kind: "*".into(),
+            relation: "related_to".into(),
+            weight: 0.6,
+            weight_from_score: false,
+            bidirectional: false,
+            condition: RuleCondition::Always,
+        };
+
+        let fact = test_node("fact", "F1", "body");
+        let event = test_node("event", "E1", "body");
+        let decision = test_node("decision", "D1", "body");
+
+        // Any to_kind should match
+        assert_eq!(rule.evaluate(&fact, &event, 0.5).len(), 1);
+        assert_eq!(rule.evaluate(&fact, &decision, 0.5).len(), 1);
+        // from_kind must still match exactly
+        assert!(rule.evaluate(&event, &decision, 0.5).is_empty());
+    }
+
+    #[test]
+    fn test_wildcard_both_kinds() {
+        let rule = ConfigRule {
+            name: "wildcard-both".into(),
+            from_kind: "*".into(),
+            to_kind: "*".into(),
+            relation: "related_to".into(),
+            weight: 0.5,
+            weight_from_score: false,
+            bidirectional: false,
+            condition: RuleCondition::SameAgent,
+        };
+
+        let a = test_node_with_agent("fact", "F1", "agent-1");
+        let b = test_node_with_agent("event", "E1", "agent-1");
+        let c = test_node_with_agent("decision", "D1", "agent-2");
+
+        // Same agent, any kinds → fires
+        assert_eq!(rule.evaluate(&a, &b, 0.5).len(), 1);
+        // Different agents → does not fire
+        assert!(rule.evaluate(&a, &c, 0.5).is_empty());
+    }
+
+    #[test]
+    fn test_wildcard_validation_accepted() {
+        let rule = ConfigRule {
+            name: "wildcard-valid".into(),
+            from_kind: "*".into(),
+            to_kind: "*".into(),
+            relation: "related_to".into(),
+            weight: 0.5,
+            weight_from_score: false,
+            bidirectional: false,
+            condition: RuleCondition::Always,
+        };
+        assert!(rule.validate().is_ok());
+    }
+
+    #[test]
+    fn test_wildcard_from_with_exact_to_validation() {
+        let rule = ConfigRule {
+            name: "wildcard-from-exact-to".into(),
+            from_kind: "*".into(),
+            to_kind: "event".into(),
+            relation: "related_to".into(),
+            weight: 0.5,
+            weight_from_score: false,
+            bidirectional: false,
+            condition: RuleCondition::Always,
+        };
+        assert!(rule.validate().is_ok());
+    }
+
+    #[test]
+    fn test_wildcard_deserialization() {
+        let toml_str = r#"
+name = "same-agent"
+from_kind = "*"
+to_kind = "*"
+relation = "related_to"
+weight = 0.6
+condition = { type = "same_agent" }
+"#;
+        let rule: ConfigRule = toml::from_str(toml_str).unwrap();
+        assert_eq!(rule.from_kind, "*");
+        assert_eq!(rule.to_kind, "*");
+        assert!(rule.validate().is_ok());
     }
 
     // --- Legacy compat tests ---
