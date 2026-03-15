@@ -381,7 +381,7 @@ where
     // --- Private section generators ---
 
     fn find_agent_node(&self, agent_id: &str) -> Result<Option<NodeId>> {
-        // Search both old kind: "agent" and new kind: "entity" with entity-type:agent tag
+        // Search both old kind: "agent" and new kind: "entity" with entity-type-agent tag
         let agent_kinds = vec![
             NodeKind::new("agent").unwrap(),
             NodeKind::new("entity").unwrap(),
@@ -436,7 +436,7 @@ where
     }
 
     /// Check if a node is an agent node — either old-style `kind: "agent"` or
-    /// new-style `kind: "entity"` with tag `entity-type:agent`.
+    /// new-style `kind: "entity"` with tag `entity-type-agent`.
     fn is_agent_entity(node: &Node) -> bool {
         if node.kind.as_str() == "agent" {
             return true;
@@ -446,7 +446,7 @@ where
                 .data
                 .tags
                 .iter()
-                .any(|t| t == "entity-type:agent");
+                .any(|t| t == "entity-type-agent");
         }
         false
     }

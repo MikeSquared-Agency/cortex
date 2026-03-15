@@ -51,6 +51,12 @@ pub struct AutoLinkerConfig {
     /// Whether to run the hardcoded legacy structural rules.
     /// None = auto: true when no config rules, false when config rules exist.
     pub legacy_rules_enabled: Option<bool>,
+
+    /// How often to run entity promotion (in auto-linker cycles). Default: 60.
+    pub entity_promote_every_n_cycles: u64,
+
+    /// Minimum number of distinct agents mentioning an entity before promotion. Default: 2.
+    pub entity_promote_min_agents: usize,
 }
 
 impl Default for AutoLinkerConfig {
@@ -69,6 +75,8 @@ impl Default for AutoLinkerConfig {
             embedding_model: "BAAI/bge-small-en-v1.5".into(),
             rules: Vec::new(),
             legacy_rules_enabled: None,
+            entity_promote_every_n_cycles: 60,
+            entity_promote_min_agents: 2,
         }
     }
 }
@@ -115,6 +123,16 @@ impl AutoLinkerConfig {
 
     pub fn with_legacy_rules_enabled(mut self, enabled: bool) -> Self {
         self.legacy_rules_enabled = Some(enabled);
+        self
+    }
+
+    pub fn with_entity_promote_every_n_cycles(mut self, n: u64) -> Self {
+        self.entity_promote_every_n_cycles = n;
+        self
+    }
+
+    pub fn with_entity_promote_min_agents(mut self, n: usize) -> Self {
+        self.entity_promote_min_agents = n;
         self
     }
 

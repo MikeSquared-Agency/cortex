@@ -1,7 +1,7 @@
 use crate::error::Result;
 use crate::graph::GraphEngine;
 use crate::linker::{
-    AutoLinkerConfig, AutoLinkerMetrics, ConfigRule, ContradictionDetector, DecayEngine,
+    entity, AutoLinkerConfig, AutoLinkerMetrics, ConfigRule, ContradictionDetector, DecayEngine,
     DedupScanner, LinkRule, ProposedEdge, SimilarityLinkRule, StructuralRule,
 };
 use crate::storage::{NodeFilter, Storage};
@@ -340,7 +340,19 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
             }
         }
 
-        // 6. Update metrics and cursor
+        // 6. Entity promotion (periodic)
+        if self
+            .cycle_count
+            .is_multiple_of(self.config.entity_promote_every_n_cycles)
+        {
+            let promoted =
+                entity::promote_entities(&*self.storage, self.config.entity_promote_min_agents)?;
+            if promoted > 0 {
+                log::info!("Entity promotion: created {} entity nodes", promoted);
+            }
+        }
+
+        // 7. Update metrics and cursor
         self.cycle_count += 1;
         self.metrics.increment_cycle();
         self.metrics.update_cursor(self.cursor);
@@ -426,6 +438,9 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
         for rule in &self.config_rules {
             edges.extend(rule.evaluate(node, neighbor, score));
         }
+
+        // Entity co-occurrence: cross-agent shared entity edges
+        edges.extend(entity::entity_cooccurrence_edges(node, neighbor));
 
         // Contradiction detection (pre-allocated)
         if let Some(contradiction) = self.contradiction_detector.check(node, neighbor, score) {

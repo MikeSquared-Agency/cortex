@@ -143,6 +143,20 @@ pub struct AutoLinkerTomlConfig {
     /// User-defined structural linking rules.
     #[serde(default)]
     pub rules: Vec<ConfigRule>,
+    /// How often to run entity promotion (in auto-linker cycles). Default: 60.
+    #[serde(default = "default_entity_promote_every_n_cycles")]
+    pub entity_promote_every_n_cycles: u64,
+    /// Minimum distinct agents mentioning an entity before promotion. Default: 2.
+    #[serde(default = "default_entity_promote_min_agents")]
+    pub entity_promote_min_agents: usize,
+}
+
+fn default_entity_promote_every_n_cycles() -> u64 {
+    60
+}
+
+fn default_entity_promote_min_agents() -> usize {
+    2
 }
 
 impl Default for AutoLinkerTomlConfig {
@@ -156,6 +170,8 @@ impl Default for AutoLinkerTomlConfig {
             max_edges_per_node: 50,
             legacy_rules_enabled: None,
             rules: Vec::new(),
+            entity_promote_every_n_cycles: default_entity_promote_every_n_cycles(),
+            entity_promote_min_agents: default_entity_promote_min_agents(),
         }
     }
 }
@@ -373,6 +389,8 @@ impl CortexConfig {
         }
 
         config
+            .with_entity_promote_every_n_cycles(self.auto_linker.entity_promote_every_n_cycles)
+            .with_entity_promote_min_agents(self.auto_linker.entity_promote_min_agents)
     }
 }
 
