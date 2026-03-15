@@ -12,6 +12,55 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+/// Node kinds handled by the default structured section generators (Phase 1).
+/// These are excluded from auto-discovery to avoid duplication.
+const DEFAULT_SECTION_KINDS: &[&str] = &[
+    "agent",
+    "preference",
+    "fact",
+    "pattern",
+    "goal",
+    "event",
+    "decision",
+];
+
+fn pluralise(word: &str) -> String {
+    if word.ends_with('y')
+        && !word.ends_with("ey")
+        && !word.ends_with("ay")
+        && !word.ends_with("oy")
+    {
+        format!("{}ies", &word[..word.len() - 1])
+    } else if word.ends_with('s')
+        || word.ends_with('x')
+        || word.ends_with("sh")
+        || word.ends_with("ch")
+    {
+        format!("{}es", word)
+    } else {
+        format!("{}s", word)
+    }
+}
+
+fn kind_to_section_title(kind: &str) -> String {
+    let title_cased = kind
+        .split('_')
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(c) => {
+                    let upper: String = c.to_uppercase().collect();
+                    upper + chars.as_str()
+                }
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    pluralise(&title_cased)
+}
+
 /// Configuration for the briefing engine
 pub struct BriefingConfig {
     pub max_items_per_section: usize,
@@ -22,6 +71,7 @@ pub struct BriefingConfig {
     pub include_contradictions: bool,
     pub min_importance: f32,
     pub min_weight: f32,
+    pub exclude_kinds: Vec<String>,
 }
 
 impl Default for BriefingConfig {
@@ -35,6 +85,7 @@ impl Default for BriefingConfig {
             include_contradictions: true,
             min_importance: 0.3,
             min_weight: 0.2,
+            exclude_kinds: vec![],
         }
     }
 }
@@ -171,19 +222,31 @@ where
             }
         }
 
-        // 5. Active Context (fills remaining slots with recent nodes not already covered)
+        // 5. Recent Events (Phase 1 — before auto-discovery so `event` kind is excluded)
+        let events = self.generate_recent_events(agent_id, &seen_ids)?;
+        if !events.nodes.is_empty() {
+            for n in &events.nodes {
+                seen_ids.insert(n.id);
+            }
+            sections.push(events);
+        }
+
+        // 6. Auto-discovered sections (Phase 2 — novel kinds not in DEFAULT_SECTION_KINDS)
+        let auto_sections = self.generate_auto_discovered_sections(&seen_ids)?;
+        for section in auto_sections {
+            for n in &section.nodes {
+                seen_ids.insert(n.id);
+            }
+            sections.push(section);
+        }
+
+        // 7. Active Context (Phase 3 — catch-all for anything not in a structured section)
         let active = self.generate_active_context(agent_id, agent_node_id, &seen_ids)?;
         if !active.nodes.is_empty() {
             for n in &active.nodes {
                 seen_ids.insert(n.id);
             }
             sections.push(active);
-        }
-
-        // 6. Recent Events
-        let events = self.generate_recent_events(agent_id, &seen_ids)?;
-        if !events.nodes.is_empty() {
-            sections.push(events);
         }
 
         // Enforce max_total_items across all sections
@@ -655,6 +718,52 @@ where
             title: section_title.to_string(),
             nodes,
         })
+    }
+
+    /// Phase 2: Generate sections for node kinds not covered by the default
+    /// structured generators. Uses `generate_global_by_kind` for each novel kind.
+    fn generate_auto_discovered_sections(
+        &self,
+        seen: &HashSet<NodeId>,
+    ) -> Result<Vec<BriefingSection>> {
+        let all_kinds = self.storage.list_distinct_kinds()?;
+
+        let default_kinds: HashSet<&str> = DEFAULT_SECTION_KINDS.iter().copied().collect();
+
+        let excluded: HashSet<&str> = self
+            .config
+            .exclude_kinds
+            .iter()
+            .map(|s| s.as_str())
+            .collect();
+
+        let novel_kinds: Vec<&NodeKind> = all_kinds
+            .iter()
+            .filter(|k| !default_kinds.contains(k.as_str()))
+            .filter(|k| !excluded.contains(k.as_str()))
+            .collect();
+
+        let mut sections = Vec::new();
+
+        for kind in novel_kinds {
+            let title = kind_to_section_title(kind.as_str());
+            let section = self.generate_global_by_kind(kind.as_str(), &title, seen)?;
+
+            if !section.nodes.is_empty() {
+                sections.push(section);
+            }
+        }
+
+        // Sort sections: most total importance first
+        sections.sort_by(|a, b| {
+            let a_imp: f32 = a.nodes.iter().map(|n| n.importance).sum();
+            let b_imp: f32 = b.nodes.iter().map(|n| n.importance).sum();
+            b_imp
+                .partial_cmp(&a_imp)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        Ok(sections)
     }
 }
 #[cfg(test)]
@@ -1451,5 +1560,330 @@ mod tests {
 
         assert_eq!(updated_agent.access_count, initial_agent_count + 1);
         assert_eq!(updated_pref.access_count, initial_pref_count + 1);
+    }
+
+    // ====================================================================
+    // Auto-Discovery Tests
+    // ====================================================================
+
+    // Test 21: kind_to_section_title derivation
+    #[test]
+    fn test_kind_to_section_title() {
+        assert_eq!(kind_to_section_title("opportunity"), "Opportunities");
+        assert_eq!(kind_to_section_title("experiment"), "Experiments");
+        assert_eq!(kind_to_section_title("test_file"), "Test Files");
+        assert_eq!(kind_to_section_title("class"), "Classes");
+        assert_eq!(kind_to_section_title("insight"), "Insights");
+        assert_eq!(kind_to_section_title("status"), "Statuses");
+        assert_eq!(kind_to_section_title("function"), "Functions");
+        assert_eq!(kind_to_section_title("research_note"), "Research Notes");
+    }
+
+    // Test 22: pluralise edge cases
+    #[test]
+    fn test_pluralise() {
+        assert_eq!(pluralise("Key"), "Keys");
+        assert_eq!(pluralise("Day"), "Days");
+        assert_eq!(pluralise("Boy"), "Boys");
+        assert_eq!(pluralise("Category"), "Categories");
+        assert_eq!(pluralise("Bus"), "Buses");
+        assert_eq!(pluralise("Box"), "Boxes");
+        assert_eq!(pluralise("Wish"), "Wishes");
+        assert_eq!(pluralise("Match"), "Matches");
+        assert_eq!(pluralise("Node"), "Nodes");
+    }
+
+    // Test 23: graph with only default kinds produces no auto-discovered sections
+    #[test]
+    fn test_auto_discovery_default_kinds_only() {
+        let dir = TempDir::new().unwrap();
+        let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
+
+        let agent = make_node(NodeKind::new("agent").unwrap(), "kai", "kai");
+        let fact = make_node(NodeKind::new("fact").unwrap(), "A fact", "kai");
+        let pattern = make_node(NodeKind::new("pattern").unwrap(), "A pattern", "kai");
+        storage.put_node(&agent).unwrap();
+        storage.put_node(&fact).unwrap();
+        storage.put_node(&pattern).unwrap();
+
+        let (engine, _) = make_engine(storage);
+        let briefing = engine.generate("kai").unwrap();
+
+        // No section titles should be auto-derived from default kinds
+        let auto_titles: Vec<&str> = briefing
+            .sections
+            .iter()
+            .map(|s| s.title.as_str())
+            .filter(|t| {
+                !matches!(
+                    *t,
+                    "Identity & Preferences"
+                        | "Patterns"
+                        | "Goals"
+                        | "Unresolved Contradictions"
+                        | "Active Context"
+                        | "Recent Events"
+                        | "Key Decisions"
+                )
+            })
+            .collect();
+
+        assert!(
+            auto_titles.is_empty(),
+            "Expected no auto-discovered sections, found: {:?}",
+            auto_titles
+        );
+    }
+
+    // Test 24: novel kind produces auto-discovered section
+    #[test]
+    fn test_auto_discovery_novel_kind() {
+        let dir = TempDir::new().unwrap();
+        let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
+
+        let mut experiment =
+            make_node(NodeKind::new("experiment").unwrap(), "Test A/B", "kai");
+        experiment.importance = 0.8;
+        storage.put_node(&experiment).unwrap();
+
+        let (engine, _) = make_engine(storage);
+        let briefing = engine.generate("kai").unwrap();
+
+        let section = briefing
+            .sections
+            .iter()
+            .find(|s| s.title == "Experiments")
+            .expect("Auto-discovered 'Experiments' section missing");
+
+        assert_eq!(section.nodes.len(), 1);
+        assert_eq!(section.nodes[0].data.title, "Test A/B");
+    }
+
+    // Test 25: multiple novel kinds sorted by total importance
+    #[test]
+    fn test_auto_discovery_multiple_kinds_sorted() {
+        let dir = TempDir::new().unwrap();
+        let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
+
+        // Low importance kind
+        let mut insight =
+            make_node(NodeKind::new("insight").unwrap(), "Small insight", "kai");
+        insight.importance = 0.4;
+        storage.put_node(&insight).unwrap();
+
+        // High importance kind
+        let mut constraint = make_node(
+            NodeKind::new("constraint").unwrap(),
+            "Critical constraint",
+            "kai",
+        );
+        constraint.importance = 0.9;
+        storage.put_node(&constraint).unwrap();
+
+        let (engine, _) = make_engine(storage);
+        let briefing = engine.generate("kai").unwrap();
+
+        // Find positions of auto-discovered sections
+        let section_titles: Vec<&str> =
+            briefing.sections.iter().map(|s| s.title.as_str()).collect();
+
+        let constraints_pos = section_titles.iter().position(|t| *t == "Constraints");
+        let insights_pos = section_titles.iter().position(|t| *t == "Insights");
+
+        assert!(
+            constraints_pos.is_some(),
+            "Constraints section missing, sections: {:?}",
+            section_titles
+        );
+        assert!(
+            insights_pos.is_some(),
+            "Insights section missing, sections: {:?}",
+            section_titles
+        );
+        assert!(
+            constraints_pos.unwrap() < insights_pos.unwrap(),
+            "Higher-importance Constraints should come before Insights"
+        );
+    }
+
+    // Test 26: novel kind below min_importance produces empty section (skipped)
+    #[test]
+    fn test_auto_discovery_skips_low_importance() {
+        let dir = TempDir::new().unwrap();
+        let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
+
+        let mut experiment =
+            make_node(NodeKind::new("experiment").unwrap(), "Low exp", "kai");
+        experiment.importance = 0.1; // Below default min_importance of 0.3
+        storage.put_node(&experiment).unwrap();
+
+        let (engine, _) = make_engine(storage);
+        let briefing = engine.generate("kai").unwrap();
+
+        assert!(
+            !briefing
+                .sections
+                .iter()
+                .any(|s| s.title == "Experiments"),
+            "Low-importance novel kind should not produce a section"
+        );
+    }
+
+    // Test 27: exclude_kinds prevents section generation
+    #[test]
+    fn test_auto_discovery_exclude_kinds() {
+        let dir = TempDir::new().unwrap();
+        let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
+
+        let mut experiment =
+            make_node(NodeKind::new("experiment").unwrap(), "Test A/B", "kai");
+        experiment.importance = 0.8;
+        storage.put_node(&experiment).unwrap();
+
+        let config = BriefingConfig {
+            exclude_kinds: vec!["experiment".to_string()],
+            ..Default::default()
+        };
+        let graph = Arc::new(GraphEngineImpl::new(storage.clone()));
+        let gv = Arc::new(AtomicU64::new(0));
+        let engine =
+            BriefingEngine::new(storage, graph, MockVectorIndex, MockEmbedder, gv, config);
+
+        let briefing = engine.generate("kai").unwrap();
+
+        assert!(
+            !briefing
+                .sections
+                .iter()
+                .any(|s| s.title == "Experiments"),
+            "Excluded kind should not produce a section"
+        );
+    }
+
+    // Test 28: default kind not duplicated in auto-discovery
+    #[test]
+    fn test_auto_discovery_no_duplicate_default_kinds() {
+        let dir = TempDir::new().unwrap();
+        let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
+
+        // Create nodes with default kinds
+        let agent = make_node(NodeKind::new("agent").unwrap(), "kai", "kai");
+        let goal = make_node(NodeKind::new("goal").unwrap(), "Ship v1", "kai");
+        storage.put_node(&agent).unwrap();
+        storage.put_node(&goal).unwrap();
+        storage
+            .put_edge(&manual_edge(
+                agent.id,
+                goal.id,
+                Relation::new("informed_by").unwrap(),
+            ))
+            .unwrap();
+
+        let (engine, _) = make_engine(storage);
+        let briefing = engine.generate("kai").unwrap();
+
+        // Count how many times "Goals" appears as a section title
+        let goals_count = briefing
+            .sections
+            .iter()
+            .filter(|s| s.title == "Goals")
+            .count();
+
+        assert!(
+            goals_count <= 1,
+            "Default kind 'goal' should not appear as both a traversal section and auto-discovered section"
+        );
+    }
+
+    // Test 29: seen_ids prevents nodes appearing in both Phase 1 and Phase 2
+    #[test]
+    fn test_auto_discovery_seen_ids_dedup() {
+        let dir = TempDir::new().unwrap();
+        let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
+
+        let mut experiment =
+            make_node(NodeKind::new("experiment").unwrap(), "Shared exp", "kai");
+        experiment.importance = 0.8;
+        storage.put_node(&experiment).unwrap();
+
+        let (engine, _) = make_engine(storage);
+        let briefing = engine.generate("kai").unwrap();
+
+        // Collect all node IDs across all sections
+        let all_ids: Vec<NodeId> = briefing
+            .sections
+            .iter()
+            .flat_map(|s| s.nodes.iter().map(|n| n.id))
+            .collect();
+
+        let unique_ids: HashSet<NodeId> = all_ids.iter().copied().collect();
+        assert_eq!(
+            all_ids.len(),
+            unique_ids.len(),
+            "No node should appear in multiple sections"
+        );
+    }
+
+    // Test 30: auto-discovered section appears before Active Context
+    #[test]
+    fn test_auto_discovery_before_active_context() {
+        let dir = TempDir::new().unwrap();
+        let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
+
+        // Create a novel-kind node and a fact (to populate Active Context)
+        let mut experiment =
+            make_node(NodeKind::new("experiment").unwrap(), "Novel exp", "kai");
+        experiment.importance = 0.8;
+        storage.put_node(&experiment).unwrap();
+
+        let mut fact = make_node(NodeKind::new("fact").unwrap(), "A fact", "kai");
+        fact.importance = 0.5;
+        storage.put_node(&fact).unwrap();
+
+        let (engine, _) = make_engine(storage);
+        let briefing = engine.generate("kai").unwrap();
+
+        let section_titles: Vec<&str> =
+            briefing.sections.iter().map(|s| s.title.as_str()).collect();
+
+        let experiments_pos = section_titles.iter().position(|t| *t == "Experiments");
+        let active_pos = section_titles.iter().position(|t| *t == "Active Context");
+
+        if let (Some(exp), Some(act)) = (experiments_pos, active_pos) {
+            assert!(
+                exp < act,
+                "Auto-discovered section should come before Active Context"
+            );
+        }
+    }
+
+    // Test 31: list_distinct_kinds returns correct kinds
+    #[test]
+    fn test_list_distinct_kinds() {
+        let dir = TempDir::new().unwrap();
+        let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
+
+        // Empty graph
+        let kinds = storage.list_distinct_kinds().unwrap();
+        assert!(kinds.is_empty(), "Empty graph should have no kinds");
+
+        // Add nodes
+        let fact = make_node(NodeKind::new("fact").unwrap(), "A fact", "kai");
+        storage.put_node(&fact).unwrap();
+
+        let experiment =
+            make_node(NodeKind::new("experiment").unwrap(), "An exp", "kai");
+        storage.put_node(&experiment).unwrap();
+
+        // Add a second fact — should not duplicate
+        let fact2 = make_node(NodeKind::new("fact").unwrap(), "Another fact", "kai");
+        storage.put_node(&fact2).unwrap();
+
+        let kinds = storage.list_distinct_kinds().unwrap();
+        let kind_strs: Vec<&str> = kinds.iter().map(|k| k.as_str()).collect();
+
+        assert_eq!(kind_strs.len(), 2);
+        assert!(kind_strs.contains(&"experiment"));
+        assert!(kind_strs.contains(&"fact"));
     }
 }

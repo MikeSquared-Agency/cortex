@@ -165,6 +165,8 @@ pub struct BriefingTomlConfig {
     pub max_chars: usize,
     pub precompute_agents: Vec<String>,
     pub sections: Vec<BriefingSectionConfig>,
+    /// Node kinds to exclude from auto-discovered briefing sections.
+    pub exclude_kinds: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

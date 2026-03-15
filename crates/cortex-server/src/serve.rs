@@ -152,7 +152,10 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
         RwLockVectorIndex(vector_index.clone()),
         embedding_service.clone(),
         graph_version.clone(),
-        BriefingConfig::default(),
+        BriefingConfig {
+            exclude_kinds: config.briefing.exclude_kinds.clone(),
+            ..Default::default()
+        },
     ));
     info!("Briefing engine ready");
 
