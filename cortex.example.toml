@@ -30,6 +30,58 @@ interval_seconds = 60           # How often to run
 similarity_threshold = 0.75     # Min cosine similarity for auto-edges
 max_edges_per_node = 20         # Cap outgoing similarity edges
 
+# Default structural rules (equivalent to legacy hardcoded rules).
+# Remove or modify these for non-personal-assistant agents.
+# When rules are defined, legacy hardcoded rules are automatically disabled.
+
+[[auto_linker.rules]]
+name = "same-agent-linking"
+from_kind = "*"
+to_kind = "*"
+relation = "related_to"
+weight = 0.6
+condition = { type = "same_agent" }
+
+[[auto_linker.rules]]
+name = "temporal-proximity"
+from_kind = "*"
+to_kind = "*"
+relation = "related_to"
+weight = 0.5
+condition = { type = "temporal_proximity", window_minutes = 30 }
+
+[[auto_linker.rules]]
+name = "shared-tags"
+from_kind = "*"
+to_kind = "*"
+relation = "related_to"
+weight = 0.7
+condition = { type = "shared_tags", min_shared = 2 }
+
+[[auto_linker.rules]]
+name = "decision-leads-to-event"
+from_kind = "decision"
+to_kind = "event"
+relation = "led_to"
+weight = 0.8
+condition = { type = "temporal_proximity", window_minutes = 60 }
+
+[[auto_linker.rules]]
+name = "observation-instance-of-pattern"
+from_kind = "observation"
+to_kind = "pattern"
+relation = "instance_of"
+weight = 0.7
+condition = { type = "min_similarity", threshold = 0.75 }
+
+[[auto_linker.rules]]
+name = "fact-supersedes-fact"
+from_kind = "fact"
+to_kind = "fact"
+relation = "supersedes"
+weight = 0.9
+condition = { type = "newer_than" }
+
 # ─── Embedding ────────────────────────────────────────────
 [embedding]
 # model = "all-MiniLM-L6-v2"   # Local embedding model

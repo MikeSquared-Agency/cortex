@@ -4,6 +4,74 @@ use crate::config::{
 };
 use anyhow::Result;
 use cortex_core::briefing::BriefingRoleConfig;
+use cortex_core::{ConfigRule, RuleCondition};
+
+/// Default structural linking rules that replicate legacy hardcoded behaviour.
+/// Used by `cortex init` so new instances start with configurable rules.
+fn default_config_rules() -> Vec<ConfigRule> {
+    vec![
+        ConfigRule {
+            name: "same-agent-linking".into(),
+            from_kind: "*".into(),
+            to_kind: "*".into(),
+            relation: "related_to".into(),
+            weight: 0.6,
+            weight_from_score: false,
+            bidirectional: false,
+            condition: RuleCondition::SameAgent,
+        },
+        ConfigRule {
+            name: "temporal-proximity".into(),
+            from_kind: "*".into(),
+            to_kind: "*".into(),
+            relation: "related_to".into(),
+            weight: 0.5,
+            weight_from_score: false,
+            bidirectional: false,
+            condition: RuleCondition::TemporalProximity { window_minutes: 30 },
+        },
+        ConfigRule {
+            name: "shared-tags".into(),
+            from_kind: "*".into(),
+            to_kind: "*".into(),
+            relation: "related_to".into(),
+            weight: 0.7,
+            weight_from_score: false,
+            bidirectional: false,
+            condition: RuleCondition::SharedTags { min_shared: 2 },
+        },
+        ConfigRule {
+            name: "decision-leads-to-event".into(),
+            from_kind: "decision".into(),
+            to_kind: "event".into(),
+            relation: "led_to".into(),
+            weight: 0.8,
+            weight_from_score: false,
+            bidirectional: false,
+            condition: RuleCondition::TemporalProximity { window_minutes: 60 },
+        },
+        ConfigRule {
+            name: "observation-instance-of-pattern".into(),
+            from_kind: "observation".into(),
+            to_kind: "pattern".into(),
+            relation: "instance_of".into(),
+            weight: 0.7,
+            weight_from_score: false,
+            bidirectional: false,
+            condition: RuleCondition::MinSimilarity { threshold: 0.75 },
+        },
+        ConfigRule {
+            name: "fact-supersedes-fact".into(),
+            from_kind: "fact".into(),
+            to_kind: "fact".into(),
+            relation: "supersedes".into(),
+            weight: 0.9,
+            weight_from_score: false,
+            bidirectional: false,
+            condition: RuleCondition::NewerThan,
+        },
+    ]
+}
 
 fn roles_for_template(template: &str) -> BriefingRoleConfig {
     match template {
@@ -127,6 +195,7 @@ pub async fn run(template: Option<&str>) -> Result<()> {
         auto_linker: AutoLinkerTomlConfig {
             enabled: autolinker,
             interval_seconds: autolinker_interval,
+            rules: default_config_rules(),
             ..AutoLinkerTomlConfig::default()
         },
         briefing: BriefingTomlConfig {
