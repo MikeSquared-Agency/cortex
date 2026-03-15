@@ -59,6 +59,21 @@ pub mod defaults {
         Relation::new("rolled_back_to").unwrap()
     }
 
+    /// Knowledge node was authored by this agent entity.
+    pub fn authored_by() -> Relation {
+        Relation::new("authored_by").unwrap()
+    }
+
+    /// Knowledge node references this entity.
+    pub fn references() -> Relation {
+        Relation::new("references").unwrap()
+    }
+
+    /// Shared entity co-occurrence across agents.
+    pub fn shared_entity() -> Relation {
+        Relation::new("shared_entity").unwrap()
+    }
+
     pub fn all() -> Vec<Relation> {
         vec![
             informed_by(),
@@ -79,6 +94,9 @@ pub mod defaults {
             observed_by(),
             rolled_back(),
             rolled_back_to(),
+            authored_by(),
+            references(),
+            shared_entity(),
         ]
     }
 }

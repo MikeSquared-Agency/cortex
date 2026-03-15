@@ -28,7 +28,8 @@ pub use graph::{
 };
 pub use hooks::{HookRegistry, MutationAction, MutationHook};
 pub use linker::{
-    AutoLinker, AutoLinkerConfig, AutoLinkerMetrics, ConfigRule, Contradiction,
+    entity_cooccurrence_edges, extract_entities, migrate_agent_to_entity, normalize_entity,
+    promote_entities, AutoLinker, AutoLinkerConfig, AutoLinkerMetrics, ConfigRule, Contradiction,
     ContradictionDetector, DecayConfig, DecayEngine, DedupAction, DedupScanner, DuplicatePair,
     LinkRule, ProposedEdge, Resolution, RuleCondition, SimilarityLinkRule, StructuralRule,
 };
