@@ -17,6 +17,7 @@ async fn create(args: EdgeCreateArgs, server: &str) -> Result<()> {
         to_id: args.to,
         relation: args.relation,
         weight: args.weight,
+        metadata: Default::default(),
     };
 
     let resp = client.create_edge(req).await?.into_inner();

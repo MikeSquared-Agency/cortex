@@ -65,6 +65,31 @@ pub struct Node {
     /// Soft delete. Nodes are never physically removed,
     /// only tombstoned. Allows undo and audit.
     pub deleted: bool,
+
+    /// When this fact became true in the real world.
+    /// None = true since created_at.
+    #[serde(default)]
+    pub valid_from: Option<DateTime<Utc>>,
+
+    /// When this fact stopped being true in the real world.
+    /// None = still true.
+    /// The node remains in the graph for historical queries.
+    /// Briefings and search should exclude expired facts by default.
+    #[serde(default)]
+    pub valid_until: Option<DateTime<Utc>>,
+
+    /// When to garbage-collect this node.
+    /// None = permanent.
+    /// Distinct from valid_until: valid_until is epistemic ("stopped being true"),
+    /// expires_at is lifecycle ("delete from graph").
+    /// The retention engine sweeps nodes past their expires_at.
+    #[serde(default)]
+    pub expires_at: Option<DateTime<Utc>>,
+
+    /// Which embedding model generated the vector in `embedding`.
+    /// None = unknown (existing nodes, or nodes without embeddings).
+    #[serde(default)]
+    pub embedding_model: Option<String>,
 }
 
 /// A node kind identifier. Lowercase alphanumeric + hyphens only.
@@ -176,6 +201,14 @@ pub struct Edge {
 
     /// Last time weight was updated (access or decay).
     pub updated_at: DateTime<Utc>,
+
+    /// Extensible key-value data for this edge.
+    /// Use cases: shared entity name linking two nodes,
+    /// similarity context, rule parameters, external references.
+    /// Default: empty map (backward-compatible with existing edges).
+    /// Uses String values (not serde_json::Value) for bincode compatibility.
+    #[serde(default)]
+    pub metadata: HashMap<String, String>,
 }
 
 /// A relation type identifier. Lowercase alphanumeric + underscores only.
@@ -267,6 +300,18 @@ pub enum EdgeProvenance {
 
     /// Imported from an external source (Alexandria migration).
     Imported { source: String },
+
+    /// Extensible provenance for linking mechanisms not covered
+    /// by the built-in variants. Forward-compatible: older code
+    /// that doesn't know about a specific custom kind can still
+    /// deserialise and display it.
+    Custom {
+        /// Machine-readable type identifier.
+        /// Examples: "entity_resolution", "user_plugin", "external_sync"
+        kind: String,
+        /// Arbitrary structured detail.
+        detail: HashMap<String, String>,
+    },
 }
 
 /// Source of a node
@@ -309,7 +354,31 @@ impl Node {
             created_at: now,
             updated_at: now,
             deleted: false,
+            valid_from: None,
+            valid_until: None,
+            expires_at: None,
+            embedding_model: None,
         }
+    }
+
+    pub fn with_valid_from(mut self, t: DateTime<Utc>) -> Self {
+        self.valid_from = Some(t);
+        self
+    }
+
+    pub fn with_valid_until(mut self, t: DateTime<Utc>) -> Self {
+        self.valid_until = Some(t);
+        self
+    }
+
+    pub fn with_expires_at(mut self, t: DateTime<Utc>) -> Self {
+        self.expires_at = Some(t);
+        self
+    }
+
+    pub fn with_embedding_model(mut self, model: String) -> Self {
+        self.embedding_model = Some(model);
+        self
     }
 
     /// Validate the node according to the rules in the spec
@@ -330,6 +399,13 @@ impl Node {
         // Tags validation
         if self.data.tags.len() > 32 {
             return Err("More than 32 tags".to_string());
+        }
+
+        // valid_from must be before valid_until when both are set
+        if let (Some(from), Some(until)) = (self.valid_from, self.valid_until) {
+            if from >= until {
+                return Err("valid_from must be before valid_until".to_string());
+            }
         }
 
         for tag in &self.data.tags {
@@ -379,7 +455,18 @@ impl Edge {
             provenance,
             created_at: now,
             updated_at: now,
+            metadata: HashMap::new(),
         }
+    }
+
+    pub fn with_metadata(mut self, metadata: HashMap<String, String>) -> Self {
+        self.metadata = metadata;
+        self
+    }
+
+    pub fn with_metadata_entry(mut self, key: String, value: String) -> Self {
+        self.metadata.insert(key, value);
+        self
     }
 
     /// Validate the edge according to the rules in the spec

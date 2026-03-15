@@ -182,6 +182,16 @@ impl RetentionEngine {
         let mut deleted = 0;
         let now = Utc::now();
 
+        // 0. Explicit expiry: soft-delete nodes past their expires_at
+        let expired_nodes = storage.list_nodes(
+            NodeFilter::new().expires_before(now),
+        )?;
+        for node in expired_nodes {
+            self.cleanup_outbound_edges(node.id, storage)?;
+            storage.delete_node(node.id)?;
+            deleted += 1;
+        }
+
         // 1. Per-kind TTLs with conditional checks
         for (kind_str, kind_retention) in &self.config.by_kind {
             if kind_retention.ttl_days == 0 {

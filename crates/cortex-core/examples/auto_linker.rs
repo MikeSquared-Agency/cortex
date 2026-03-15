@@ -193,6 +193,7 @@ fn main() {
                     EdgeProvenance::AutoDedup { similarity } =>
                         format!("Auto-dedup ({:.2})", similarity),
                     EdgeProvenance::Imported { source } => format!("Imported from {}", source),
+                    EdgeProvenance::Custom { kind, .. } => format!("Custom ({})", kind),
                 }
             );
         }

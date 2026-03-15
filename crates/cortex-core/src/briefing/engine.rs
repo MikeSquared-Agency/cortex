@@ -327,7 +327,11 @@ where
     /// Filter nodes below `min_importance` and sort by importance desc,
     /// access_count desc. Applied uniformly across all section generators.
     fn rank(&self, mut nodes: Vec<Node>) -> Vec<Node> {
-        nodes.retain(|n| n.importance >= self.config.min_importance);
+        let now = Utc::now();
+        nodes.retain(|n| {
+            n.importance >= self.config.min_importance
+                && n.valid_until.is_none_or(|until| until > now)
+        });
         nodes.sort_by(|a, b| {
             b.importance
                 .partial_cmp(&a.importance)

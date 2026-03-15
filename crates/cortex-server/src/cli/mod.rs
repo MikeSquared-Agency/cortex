@@ -417,6 +417,15 @@ pub struct NodeCreateArgs {
     /// Read body from stdin
     #[arg(long)]
     pub stdin: bool,
+    /// When this fact became true (ISO 8601)
+    #[arg(long)]
+    pub valid_from: Option<String>,
+    /// When this fact stopped being true (ISO 8601)
+    #[arg(long)]
+    pub valid_until: Option<String>,
+    /// When to auto-delete this node (ISO 8601)
+    #[arg(long)]
+    pub expires_at: Option<String>,
     /// Output format: table (default), json
     #[arg(long, default_value = "table")]
     pub format: String,

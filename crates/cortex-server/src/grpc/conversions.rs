@@ -28,6 +28,10 @@ pub fn node_to_response(node: &Node, edge_count: usize) -> NodeResponse {
         last_accessed_at: Some(datetime_to_timestamp(node.last_accessed_at)),
         has_embedding: node.embedding.is_some(),
         edge_count: edge_count as u32,
+        valid_from: node.valid_from.map(datetime_to_timestamp),
+        valid_until: node.valid_until.map(datetime_to_timestamp),
+        expires_at: node.expires_at.map(datetime_to_timestamp),
+        embedding_model: node.embedding_model.clone(),
     }
 }
 
@@ -41,6 +45,8 @@ pub fn edge_to_response(edge: &Edge) -> EdgeResponse {
         weight: edge.weight,
         created_at: Some(datetime_to_timestamp(edge.created_at)),
         updated_at: Some(datetime_to_timestamp(edge.updated_at)),
+        provenance: format!("{:?}", edge.provenance),
+        metadata: edge.metadata.clone(),
     }
 }
 

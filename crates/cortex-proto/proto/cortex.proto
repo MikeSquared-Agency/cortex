@@ -86,6 +86,9 @@ message CreateNodeRequest {
     string source_agent = 7;
     optional string source_session = 8;
     optional string source_channel = 9;
+    optional google.protobuf.Timestamp valid_from = 10;
+    optional google.protobuf.Timestamp valid_until = 11;
+    optional google.protobuf.Timestamp expires_at = 12;
 }
 
 message GetNodeRequest {
@@ -99,6 +102,9 @@ message UpdateNodeRequest {
     map<string, string> metadata = 4;
     repeated string tags = 5;
     optional float importance = 6;
+    optional google.protobuf.Timestamp valid_from = 7;
+    optional google.protobuf.Timestamp valid_until = 8;
+    optional google.protobuf.Timestamp expires_at = 9;
 }
 
 message DeleteNodeRequest {
@@ -140,6 +146,10 @@ message NodeResponse {
     bool has_embedding = 14;
     uint32 edge_count = 15;   // Total connected edges
     google.protobuf.Timestamp last_accessed_at = 16;  // Last time returned in search/briefing
+    optional google.protobuf.Timestamp valid_from = 17;
+    optional google.protobuf.Timestamp valid_until = 18;
+    optional google.protobuf.Timestamp expires_at = 19;
+    optional string embedding_model = 20;
 }
 
 message CreateEdgeRequest {
@@ -147,6 +157,7 @@ message CreateEdgeRequest {
     string to_id = 2;
     string relation = 3;     // Relation as string
     float weight = 4;        // Default 1.0 for manual edges
+    map<string, string> metadata = 5;  // Optional edge metadata
 }
 
 message EdgeResponse {
@@ -157,6 +168,8 @@ message EdgeResponse {
     float weight = 5;
     google.protobuf.Timestamp created_at = 6;
     google.protobuf.Timestamp updated_at = 7;
+    string provenance = 8;             // Debug representation of EdgeProvenance
+    map<string, string> metadata = 9;  // Edge metadata key-value pairs
 }
 
 message GetEdgesRequest {

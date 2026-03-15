@@ -117,6 +117,10 @@ fn main() -> anyhow::Result<()> {
                         created_at: old.created_at,
                         updated_at: old.updated_at,
                         deleted: old.deleted,
+                        valid_from: None,
+                        valid_until: None,
+                        expires_at: None,
+                        embedding_model: None,
                     };
 
                     let new_bytes = bincode::serialize(&new_node)?;

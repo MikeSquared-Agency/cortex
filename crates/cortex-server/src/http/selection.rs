@@ -476,6 +476,7 @@ pub async fn record_observation(
             },
             created_at: now,
             updated_at: now,
+            metadata: std::collections::HashMap::new(),
         },
         Edge {
             id: uuid::Uuid::now_v7(),
@@ -488,6 +489,7 @@ pub async fn record_observation(
             },
             created_at: now,
             updated_at: now,
+            metadata: std::collections::HashMap::new(),
         },
         Edge {
             id: uuid::Uuid::now_v7(),
@@ -500,6 +502,7 @@ pub async fn record_observation(
             },
             created_at: now,
             updated_at: now,
+            metadata: std::collections::HashMap::new(),
         },
         Edge {
             id: uuid::Uuid::now_v7(),
@@ -512,6 +515,7 @@ pub async fn record_observation(
             },
             created_at: now,
             updated_at: now,
+            metadata: std::collections::HashMap::new(),
         },
     ];
     state.storage.put_edges_batch(&new_edges)?;
@@ -605,6 +609,7 @@ pub async fn record_observation(
                     },
                     created_at: now,
                     updated_at: now,
+                    metadata: std::collections::HashMap::new(),
                 })?;
             } else {
                 log::warn!(

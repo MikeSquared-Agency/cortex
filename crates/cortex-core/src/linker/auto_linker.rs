@@ -387,6 +387,7 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
         // Store in node
         let mut updated = node.clone();
         updated.embedding = Some(embedding.clone());
+        updated.embedding_model = Some(self.embedding_service.model_name().to_string());
         self.storage.put_node(&updated)?;
 
         // Index it
@@ -437,6 +438,7 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
                 provenance: EdgeProvenance::AutoContradiction {
                     reason: contradiction.reason,
                 },
+                metadata: std::collections::HashMap::new(),
             });
         }
 

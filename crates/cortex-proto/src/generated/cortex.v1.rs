@@ -24,6 +24,12 @@ pub struct CreateNodeRequest {
     pub source_session: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "9")]
     pub source_channel: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(message, optional, tag = "10")]
+    pub valid_from: ::core::option::Option<::prost_types::Timestamp>,
+    #[prost(message, optional, tag = "11")]
+    pub valid_until: ::core::option::Option<::prost_types::Timestamp>,
+    #[prost(message, optional, tag = "12")]
+    pub expires_at: ::core::option::Option<::prost_types::Timestamp>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetNodeRequest {
@@ -47,6 +53,12 @@ pub struct UpdateNodeRequest {
     pub tags: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(float, optional, tag = "6")]
     pub importance: ::core::option::Option<f32>,
+    #[prost(message, optional, tag = "7")]
+    pub valid_from: ::core::option::Option<::prost_types::Timestamp>,
+    #[prost(message, optional, tag = "8")]
+    pub valid_until: ::core::option::Option<::prost_types::Timestamp>,
+    #[prost(message, optional, tag = "9")]
+    pub expires_at: ::core::option::Option<::prost_types::Timestamp>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DeleteNodeRequest {
@@ -119,6 +131,14 @@ pub struct NodeResponse {
     /// Last time returned in search/briefing
     #[prost(message, optional, tag = "16")]
     pub last_accessed_at: ::core::option::Option<::prost_types::Timestamp>,
+    #[prost(message, optional, tag = "17")]
+    pub valid_from: ::core::option::Option<::prost_types::Timestamp>,
+    #[prost(message, optional, tag = "18")]
+    pub valid_until: ::core::option::Option<::prost_types::Timestamp>,
+    #[prost(message, optional, tag = "19")]
+    pub expires_at: ::core::option::Option<::prost_types::Timestamp>,
+    #[prost(string, optional, tag = "20")]
+    pub embedding_model: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CreateEdgeRequest {
@@ -132,6 +152,10 @@ pub struct CreateEdgeRequest {
     /// Default 1.0 for manual edges
     #[prost(float, tag = "4")]
     pub weight: f32,
+    /// Optional edge metadata
+    #[prost(map = "string, string", tag = "5")]
+    pub metadata:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EdgeResponse {
@@ -149,6 +173,13 @@ pub struct EdgeResponse {
     pub created_at: ::core::option::Option<::prost_types::Timestamp>,
     #[prost(message, optional, tag = "7")]
     pub updated_at: ::core::option::Option<::prost_types::Timestamp>,
+    /// Debug representation of EdgeProvenance
+    #[prost(string, tag = "8")]
+    pub provenance: ::prost::alloc::string::String,
+    /// Edge metadata key-value pairs
+    #[prost(map = "string, string", tag = "9")]
+    pub metadata:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetEdgesRequest {

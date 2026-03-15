@@ -155,6 +155,7 @@ impl CortexClient {
                 to_id: to_id.into(),
                 relation: relation.into(),
                 weight: 1.0,
+                metadata: Default::default(),
             })
             .await?;
         Ok(resp.into_inner().id)
