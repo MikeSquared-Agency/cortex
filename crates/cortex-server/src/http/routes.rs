@@ -127,6 +127,10 @@ pub fn create_router(state: AppState) -> Router {
             "/prompts/:slug/versions/:version/performance",
             get(selection::version_performance),
         )
+        // Trust scoring endpoints
+        .route("/trust/:node_id", get(trust_node))
+        .route("/trust/batch", post(trust_batch))
+        .route("/trust/agents", get(trust_agents))
         .with_state(state)
 }
 
@@ -1399,4 +1403,111 @@ async fn event_stream(
             .interval(std::time::Duration::from_secs(30))
             .text("keep-alive"),
     )
+}
+
+// ── Trust scoring endpoints ────────────────────────────────────────────────────
+
+/// GET /trust/:node_id — trust score breakdown for a single node.
+async fn trust_node(
+    State(state): State<AppState>,
+    Path(node_id): Path<String>,
+) -> AppResult<Json<serde_json::Value>> {
+    let trust_engine = state
+        .trust_engine
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Trust scoring is not enabled. Add [trust] to cortex.toml."))?;
+
+    let id: uuid::Uuid = node_id
+        .parse()
+        .map_err(|_| anyhow::anyhow!("Invalid node ID: {}", node_id))?;
+
+    let node = state
+        .storage
+        .get_node(id)?
+        .ok_or_else(|| anyhow::anyhow!("Node not found: {}", node_id))?;
+
+    let score = trust_engine.score(&node)?;
+
+    Ok(Json(serde_json::json!({
+        "node_id": node_id,
+        "title": node.data.title,
+        "trust": {
+            "total": score.total,
+            "corroboration": score.corroboration,
+            "contradiction": score.contradiction,
+            "source_reliability": score.source_reliability,
+            "access": score.access,
+            "freshness": score.freshness,
+            "corroborating_agents": score.corroborating_agents,
+            "contradiction_count": score.contradiction_count,
+        }
+    })))
+}
+
+#[derive(Deserialize)]
+struct TrustBatchRequest {
+    node_ids: Vec<String>,
+}
+
+/// POST /trust/batch — trust scores for multiple nodes.
+async fn trust_batch(
+    State(state): State<AppState>,
+    Json(body): Json<TrustBatchRequest>,
+) -> AppResult<Json<serde_json::Value>> {
+    let trust_engine = state
+        .trust_engine
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Trust scoring is not enabled. Add [trust] to cortex.toml."))?;
+
+    let mut nodes = Vec::new();
+    let mut ids = Vec::new();
+    for id_str in &body.node_ids {
+        let id: uuid::Uuid = id_str
+            .parse()
+            .map_err(|_| anyhow::anyhow!("Invalid node ID: {}", id_str))?;
+        if let Some(node) = state.storage.get_node(id)? {
+            ids.push(id_str.clone());
+            nodes.push(node);
+        }
+    }
+
+    let scores = trust_engine.score_batch(&nodes)?;
+
+    let results: serde_json::Map<String, serde_json::Value> = ids
+        .iter()
+        .zip(nodes.iter())
+        .zip(scores.iter())
+        .map(|((id, node), score)| {
+            (
+                id.clone(),
+                serde_json::json!({
+                    "title": node.data.title,
+                    "total": score.total,
+                    "corroboration": score.corroboration,
+                    "contradiction": score.contradiction,
+                    "source_reliability": score.source_reliability,
+                    "access": score.access,
+                    "freshness": score.freshness,
+                    "corroborating_agents": score.corroborating_agents,
+                    "contradiction_count": score.contradiction_count,
+                }),
+            )
+        })
+        .collect();
+
+    Ok(Json(serde_json::json!({ "scores": results })))
+}
+
+/// GET /trust/agents — source reliability for all cached agents.
+async fn trust_agents(
+    State(state): State<AppState>,
+) -> AppResult<Json<serde_json::Value>> {
+    let trust_engine = state
+        .trust_engine
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Trust scoring is not enabled. Add [trust] to cortex.toml."))?;
+
+    let reliabilities = trust_engine.agent_reliabilities();
+
+    Ok(Json(serde_json::json!({ "agents": reliabilities })))
 }

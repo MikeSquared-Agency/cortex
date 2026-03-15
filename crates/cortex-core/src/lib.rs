@@ -12,6 +12,7 @@ pub mod prompt;
 pub mod query;
 pub mod relations;
 pub mod storage;
+pub mod trust;
 pub mod types;
 pub mod vector;
 
@@ -37,6 +38,7 @@ pub use policies::{
 };
 pub use query::{parse_and_compile as parse_filter, CmpOp, FieldFilter, FilterExpr};
 pub use storage::{NodeFilter, RedbStorage, Storage, StorageStats, CURRENT_SCHEMA_VERSION};
+pub use trust::{TrustConfig, TrustEngine, TrustScore, TrustWeights};
 pub use types::*;
 pub use vector::{
     apply_score_decay, embedding_input, EmbeddingService, FastEmbedService, HnswIndex, HybridQuery,

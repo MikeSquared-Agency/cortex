@@ -139,6 +139,10 @@ async fn main() -> anyhow::Result<()> {
         Commands::Prompt(cmd) => {
             cli::prompt::run(cmd, &config, &cli.server).await?;
         }
+
+        Commands::Trust(args) => {
+            cli::trust::run(args, config).await?;
+        }
     }
 
     Ok(())

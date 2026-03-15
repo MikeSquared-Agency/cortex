@@ -116,6 +116,7 @@ pub async fn run() -> Result<()> {
         score_decay: Default::default(),
         write_gate: Default::default(),
         schemas: Default::default(),
+        trust: None,
     };
 
     let toml_str = toml::to_string_pretty(&config)?;

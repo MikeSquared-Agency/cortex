@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use cortex_core::{AutoLinkerConfig, ConfigRule, NodeKind, Relation, SimilarityConfig};
+use cortex_core::{AutoLinkerConfig, ConfigRule, NodeKind, Relation, SimilarityConfig, TrustConfig};
 
 // Re-export from cortex-core so cortex-server code can use them from config
 #[allow(unused_imports)]
@@ -49,6 +49,9 @@ pub struct CortexConfig {
     pub write_gate: WriteGateConfig,
     #[serde(default)]
     pub schemas: HashMap<String, KindSchema>,
+    /// Trust scoring engine configuration. Presence enables trust-based ranking.
+    #[serde(default)]
+    pub trust: Option<TrustConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

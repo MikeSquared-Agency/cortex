@@ -144,6 +144,18 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
     // Initialize graph version counter
     let graph_version = Arc::new(AtomicU64::new(0));
 
+    // Initialize trust engine (if configured)
+    let trust_engine: Option<Arc<TrustEngine<RedbStorage>>> =
+        if let Some(ref trust_config) = config.trust {
+            info!("Trust scoring engine enabled");
+            Some(Arc::new(TrustEngine::new(
+                storage.clone(),
+                trust_config.clone(),
+            )))
+        } else {
+            None
+        };
+
     // Initialize briefing engine
     info!("Initializing briefing engine...");
     let briefing_engine = Arc::new(BriefingEngine::new(
@@ -154,6 +166,7 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
         graph_version.clone(),
         BriefingConfig {
             exclude_kinds: config.briefing.exclude_kinds.clone(),
+            trust: config.trust.clone(),
             ..Default::default()
         },
     ));
@@ -183,6 +196,7 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
             || !retention_cfg.by_kind.is_empty()
             || retention_cfg.max_nodes.is_some();
         let metrics_for_linker = cortex_metrics.clone();
+        let trust_for_linker = trust_engine.clone();
 
         tokio::spawn(async move {
             let retention_engine = if has_retention {
@@ -228,6 +242,13 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
                         Ok(0) => {}
                         Ok(n) => info!("Retention: hard-deleted {} expired nodes", n),
                         Err(e) => error!("Retention purge failed: {}", e),
+                    }
+                }
+
+                // Refresh trust source reliability cache every cycle
+                if let Some(ref te) = trust_for_linker {
+                    if let Err(e) = te.refresh_source_cache() {
+                        error!("Trust cache refresh failed: {}", e);
                     }
                 }
             }
@@ -359,6 +380,7 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
             event_bus: event_bus.clone(),
             schema_validator,
             hooks: hooks.clone(),
+            trust_engine: trust_engine.clone(),
         };
 
         let metrics_for_mw = cortex_metrics.clone();

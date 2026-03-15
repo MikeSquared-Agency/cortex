@@ -32,7 +32,8 @@ use axum::{
 use cortex_core::briefing::BriefingEngine;
 use cortex_core::prompt::RollbackConfig;
 use cortex_core::{
-    FastEmbedService, GraphEngineImpl, HnswIndex, RedbStorage, RwLockVectorIndex, WriteGateConfig,
+    FastEmbedService, GraphEngineImpl, HnswIndex, RedbStorage, RwLockVectorIndex, TrustEngine,
+    WriteGateConfig,
 };
 use serde::Serialize;
 use std::sync::atomic::AtomicU64;
@@ -71,6 +72,7 @@ pub struct AppState {
     pub event_bus: crate::observability::EventBus,
     pub schema_validator: cortex_core::SchemaValidator,
     pub hooks: Arc<cortex_core::HookRegistry>,
+    pub trust_engine: Option<Arc<TrustEngine<RedbStorage>>>,
 }
 
 /// JSON response wrapper

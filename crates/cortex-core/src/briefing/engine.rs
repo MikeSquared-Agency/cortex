@@ -5,9 +5,10 @@ use crate::error::Result;
 use crate::graph::{GraphEngine, TraversalDirection, TraversalRequest};
 use crate::storage::{NodeFilter, Storage};
 use crate::types::{Node, NodeId, NodeKind, Relation};
+use crate::trust::{TrustConfig, TrustEngine};
 use crate::vector::{EmbeddingService, HybridQuery, HybridSearch, VectorIndex};
 use chrono::Utc;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -72,6 +73,11 @@ pub struct BriefingConfig {
     pub min_importance: f32,
     pub min_weight: f32,
     pub exclude_kinds: Vec<String>,
+    /// Weight given to importance in combined ranking (remainder goes to trust).
+    /// Default 0.6 — set to 1.0 to disable trust-based ranking.
+    pub importance_weight: f32,
+    /// Trust scoring configuration. None = trust scoring disabled in briefing.
+    pub trust: Option<TrustConfig>,
 }
 
 impl Default for BriefingConfig {
@@ -86,6 +92,8 @@ impl Default for BriefingConfig {
             min_importance: 0.3,
             min_weight: 0.2,
             exclude_kinds: vec![],
+            importance_weight: 0.6,
+            trust: None,
         }
     }
 }
@@ -324,14 +332,43 @@ where
 
     // --- Helpers ---
 
-    /// Filter nodes below `min_importance` and sort by importance desc,
-    /// access_count desc. Applied uniformly across all section generators.
+    /// Filter nodes below `min_importance` and sort by combined importance + trust,
+    /// falling back to access_count. Applied uniformly across all section generators.
     fn rank(&self, mut nodes: Vec<Node>) -> Vec<Node> {
         let now = Utc::now();
         nodes.retain(|n| {
             n.importance >= self.config.min_importance
                 && n.valid_until.is_none_or(|until| until > now)
         });
+
+        // If trust scoring is configured, compute trust and blend with importance.
+        if let Some(ref trust_config) = self.config.trust {
+            let trust_engine = TrustEngine::new(self.storage.clone(), trust_config.clone());
+            if let Ok(scores) = trust_engine.score_batch(&nodes) {
+                let trust_map: HashMap<crate::types::NodeId, f32> = nodes
+                    .iter()
+                    .zip(scores.iter())
+                    .map(|(n, s)| (n.id, s.total))
+                    .collect();
+
+                let iw = self.config.importance_weight;
+                let tw = 1.0 - iw;
+
+                nodes.sort_by(|a, b| {
+                    let a_trust = trust_map.get(&a.id).copied().unwrap_or(0.0);
+                    let b_trust = trust_map.get(&b.id).copied().unwrap_or(0.0);
+                    let a_combined = a.importance * iw + a_trust * tw;
+                    let b_combined = b.importance * iw + b_trust * tw;
+                    b_combined
+                        .partial_cmp(&a_combined)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                        .then_with(|| b.access_count.cmp(&a.access_count))
+                });
+                return nodes;
+            }
+        }
+
+        // Fallback: pure importance ranking.
         nodes.sort_by(|a, b| {
             b.importance
                 .partial_cmp(&a.importance)
@@ -344,37 +381,46 @@ where
     // --- Private section generators ---
 
     fn find_agent_node(&self, agent_id: &str) -> Result<Option<NodeId>> {
-        // Primary: Agent node whose source_agent matches
+        // Search both old kind: "agent" and new kind: "entity" with entity-type:agent tag
+        let agent_kinds = vec![
+            NodeKind::new("agent").unwrap(),
+            NodeKind::new("entity").unwrap(),
+        ];
+
+        // Primary: Agent/entity node whose source_agent matches
         let nodes = self.storage.list_nodes(
             NodeFilter::new()
-                .with_kinds(vec![NodeKind::new("agent").unwrap()])
+                .with_kinds(agent_kinds.clone())
                 .with_source_agent(agent_id.to_string())
-                .with_limit(1),
+                .with_limit(10),
         )?;
 
-        if let Some(n) = nodes.first() {
+        if let Some(n) = nodes.iter().find(|n| Self::is_agent_entity(n)) {
             return Ok(Some(n.id));
         }
 
         // Fallback: search by tag (agents should be tagged with their ID)
         let by_tag = self.storage.list_nodes(
             NodeFilter::new()
-                .with_kinds(vec![NodeKind::new("agent").unwrap()])
+                .with_kinds(agent_kinds.clone())
                 .with_tags(vec![agent_id.to_lowercase()])
-                .with_limit(1),
+                .with_limit(10),
         )?;
-        if let Some(n) = by_tag.first() {
+        if let Some(n) = by_tag.iter().find(|n| Self::is_agent_entity(n)) {
             return Ok(Some(n.id));
         }
 
-        // Last resort: scan Agent nodes for title/source match
+        // Last resort: scan agent/entity nodes for title/source match
         let all_agents = self.storage.list_nodes(
             NodeFilter::new()
-                .with_kinds(vec![NodeKind::new("agent").unwrap()])
+                .with_kinds(agent_kinds)
                 .with_limit(50),
         )?;
 
         for node in &all_agents {
+            if !Self::is_agent_entity(node) {
+                continue;
+            }
             if node
                 .data
                 .title
@@ -387,6 +433,22 @@ where
         }
 
         Ok(None)
+    }
+
+    /// Check if a node is an agent node — either old-style `kind: "agent"` or
+    /// new-style `kind: "entity"` with tag `entity-type:agent`.
+    fn is_agent_entity(node: &Node) -> bool {
+        if node.kind.as_str() == "agent" {
+            return true;
+        }
+        if node.kind.as_str() == "entity" {
+            return node
+                .data
+                .tags
+                .iter()
+                .any(|t| t == "entity-type:agent");
+        }
+        false
     }
 
     fn generate_identity(
