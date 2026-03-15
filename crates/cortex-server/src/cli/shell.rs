@@ -109,6 +109,7 @@ async fn dispatch(
         Commands::Mcp(_) => println!("Run `cortex mcp` outside the shell to start the MCP server."),
         Commands::Agent(cmd) => super::agent::run(cmd, server).await?,
         Commands::Prompt(cmd) => super::prompt::run(cmd, &config, server).await?,
+        Commands::Trust(a) => super::trust::run(a, config).await?,
     }
     Ok(())
 }

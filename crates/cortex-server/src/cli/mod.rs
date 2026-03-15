@@ -16,6 +16,7 @@ pub mod security;
 pub mod shell;
 pub mod stats;
 pub mod traverse;
+pub mod trust;
 
 use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
@@ -102,6 +103,22 @@ pub enum Commands {
     /// Prompt versioning, branching, and migration (PromptForge integration)
     #[command(subcommand)]
     Prompt(PromptCommands),
+    /// Show trust scores for nodes or agents
+    Trust(TrustArgs),
+}
+
+// --- Trust args ---
+
+#[derive(Args, Debug)]
+pub struct TrustArgs {
+    /// Node ID to score (omit to show agent reliabilities)
+    pub id: Option<String>,
+    /// Show trust score for an agent instead of a node
+    #[arg(long)]
+    pub agent: Option<String>,
+    /// Output format: table (default), json
+    #[arg(long, default_value = "table")]
+    pub format: String,
 }
 
 // --- MCP args ---
