@@ -48,6 +48,10 @@ cortex shell                   # Interactive REPL
 - `Cortex::open(path)` — library mode, no server needed
 - `Storage` trait — `RedbStorage` implements it
 - `IngestAdapter` trait — pluggable event sources
+- `TrustEngine` -- computes trust from graph topology, no stored confidence
+- `BriefingRoleConfig` -- maps node kinds to briefing roles (identity, persistent, trackable, temporal, reviewable, superseding)
+- `BriefingScope` -- Agent (default), Shared (cross-agent), Unified (orchestrator)
+- Entity convention: `kind: "entity"` + `metadata.entity_type`
 - Config: `cortex.toml` with `#[serde(default)]` on all structs
 
 ## Architecture decisions
@@ -57,6 +61,10 @@ cortex shell                   # Interactive REPL
 - **gRPC** (tonic) for production API, **HTTP** (axum) for debug/viz
 - **warren-adapter** is optional (`--features warren`), cortex-core has zero network deps
 - Auto-linker runs background loop: similarity rules → edges, decay → prune, dedup → merge
+- **Trust from topology** -- confidence is computed at query time from graph structure (corroboration, contradiction, source reliability, access, freshness). Never stored as a field.
+- **Entities as convention** -- entity nodes are regular nodes with kind: "entity" and metadata.entity_type. Not a separate primitive. Relations: authored_by, references.
+- **Shared graph model** -- one graph, all agents write to it. Isolation is deployment (run two instances), not data layer scoping.
+- **Temporal validity** -- valid_from/valid_until for epistemic truth windows. expires_at for lifecycle GC. Distinct concerns.
 
 ## Config
 
@@ -98,6 +106,11 @@ order, adding fields mid-struct, or removing fields **silently corrupts all exis
 
 The `test_node_schema_golden` test in `redb_storage.rs` will fail immediately if the bincode
 format changes without these steps being followed.
+
+**Fields added in evolution (specs 09-10):**
+- Node: `valid_from`, `valid_until`, `expires_at`, `embedding_model` (all Option, serde default None)
+- Edge: `metadata` (HashMap, serde default empty)
+- EdgeProvenance: `Custom { kind, detail }` variant
 
 ## Common pitfalls
 

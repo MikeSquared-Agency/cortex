@@ -48,6 +48,14 @@ Query params: `q` (query string, required), `limit`, `kind`.
 
 Get a briefing for an agent.
 
+Query params: `scope` (agent|shared, default: agent), `max_tokens`.
+
+## GET /briefing
+
+Get a unified (multi-agent) briefing.
+
+Query params: `agents` (comma-separated agent IDs, required), `max_tokens`.
+
 ## GET /graph/export
 
 Export the full graph as JSON.
@@ -69,6 +77,66 @@ Open the interactive graph visualiser in your browser.
 ## POST /auto-linker/trigger
 
 Trigger an immediate auto-linker cycle.
+
+---
+
+## Trust Scoring API
+
+### GET /trust/:node_id
+
+Get the trust score breakdown for a single node.
+
+```json
+{
+  "success": true,
+  "data": {
+    "node_id": "019...",
+    "trust_score": 0.82,
+    "signals": {
+      "corroboration": 0.90,
+      "contradiction": 0.95,
+      "source_reliability": 0.75,
+      "access_reinforcement": 0.60,
+      "freshness": 0.88
+    },
+    "weights": {
+      "corroboration": 0.30,
+      "contradiction": 0.25,
+      "source": 0.20,
+      "access": 0.15,
+      "freshness": 0.10
+    }
+  }
+}
+```
+
+### POST /trust/batch
+
+Batch trust scores for multiple nodes.
+
+```bash
+curl -X POST http://localhost:9091/trust/batch \
+  -H "Content-Type: application/json" \
+  -d '{"node_ids": ["019...", "019..."]}'
+```
+
+### GET /trust/agents
+
+Agent reliability scores (source track record).
+
+```json
+{
+  "success": true,
+  "data": {
+    "agents": [
+      { "agent_id": "kai", "reliability": 0.85, "corroborated": 42, "contradicted": 3 },
+      { "agent_id": "scout", "reliability": 0.72, "corroborated": 28, "contradicted": 7 }
+    ]
+  }
+}
+```
+
+---
 
 ## GET /auto-linker/status
 

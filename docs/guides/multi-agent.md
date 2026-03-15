@@ -104,6 +104,55 @@ cortex agent history writer --limit 10
 
 Weights update automatically via EMA — well-performing prompts rise, underperforming ones fade. No manual tuning needed.
 
+## Entity Hub Traversal
+
+Entities are the bridge between agents. When multiple agents store knowledge about the same entity (person, company, technology), Cortex connects them via entity nodes.
+
+```
+Agent A's fact ──[references]──► "Anthropic" entity ◄──[references]── Agent B's decision
+```
+
+This two-hop pattern is how cross-agent discovery works: follow `references` edges from your knowledge to entities, then follow other agents' `references` edges back to their knowledge.
+
+```python
+# Store knowledge that references an entity
+cx.store("fact", "Anthropic released Claude 4",
+         source_agent="researcher", tags=["entity-anthropic"])
+
+# The auto-linker will connect this to other agents' knowledge about Anthropic
+```
+
+See [Entity Resolution](../concepts/entity-resolution.md) for the full model.
+
+## Briefing Scope
+
+Multi-agent setups unlock two additional briefing scopes:
+
+### Shared Scope
+
+Includes the requesting agent's knowledge plus cross-agent context about shared entities. Use when an agent needs awareness of what other agents know about the same topics.
+
+```bash
+cortex briefing researcher --scope shared
+```
+
+### Unified Scope
+
+Multi-agent briefing for orchestrators. Spans multiple agents and synthesises a combined view.
+
+```bash
+cortex briefing --agents researcher,architect,writer
+```
+
+## Philosophy: Agents Are Visitors, the Graph Is Persistent
+
+Agents come and go. They crash, restart, get replaced. The graph persists. Design your multi-agent system with this in mind:
+
+- Store knowledge in the graph, not in agent state
+- Use briefings to bootstrap agent context on startup
+- Let the auto-linker discover cross-agent connections -- don't wire them manually
+- Use entities as the coordination mechanism between agents
+
 ## Configuration
 
 No special configuration is needed for multi-agent setups. Run a single Cortex server and point all agents at it.

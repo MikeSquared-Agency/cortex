@@ -2,6 +2,39 @@
 
 All notable changes to Cortex are documented in this file.
 
+## [0.3.0] - YYYY-MM-DD
+
+### Added
+- **Temporal validity** -- Node fields: `valid_from`, `valid_until` for truth windows.
+  Query with `valid_at()` filter.
+- **Lifecycle expiry** -- Node field: `expires_at`. Retention engine auto-sweeps
+  expired nodes.
+- **Embedding model tracking** -- Node field: `embedding_model`. Tracks which
+  model generated each vector for migration detection.
+- **Edge metadata** -- Extensible HashMap on edges for contextual data.
+- **Custom provenance** -- `EdgeProvenance::Custom` variant for forward-compatible
+  linking mechanisms.
+- **Trust scoring** -- Compute trust from graph topology: corroboration,
+  contradiction, source reliability, access reinforcement, freshness.
+- **Entity layer** -- Entity nodes (`kind: "entity"` + `metadata.entity_type`),
+  `authored_by`/`references` relations, auto-promotion from co-occurrence.
+- **Briefing roles** -- Configurable mapping from node kinds to briefing roles
+  (identity, persistent, trackable, temporal, reviewable, superseding).
+- **Briefing scope** -- Agent (default), Shared (cross-agent), Unified
+  (orchestrator) scope parameter.
+- **Metadata query filter** -- `NodeFilter.with_metadata(key, value)` for
+  querying by metadata values.
+- **Legacy rule deprecation** -- Hardcoded structural rules replaced by
+  configurable `[[auto_linker.rules]]` with wildcard kind support.
+- **Metadata conventions** -- Well-known metadata keys documented for
+  interoperability (`entity_type`, `aliases`, `parent_agent`, `task_id`, etc).
+
+### Changed
+- Briefing engine uses role-based config instead of hardcoded section kinds.
+- Auto-linker supports entity co-occurrence and entity promotion.
+- Retention engine respects `expires_at` field.
+- `cortex init` accepts `--template` flag for agent-type presets.
+
 ## [0.2.0] - 2026-03-14
 
 ### Added

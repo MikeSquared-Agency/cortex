@@ -29,6 +29,8 @@ enabled = true
 interval_seconds = 60           # How often to run
 similarity_threshold = 0.75     # Min cosine similarity for auto-edges
 max_edges_per_node = 20         # Cap outgoing similarity edges
+entity_promote_every_n_cycles = 60   # How often to run entity promotion (cycles)
+entity_promote_min_agents = 2        # Min agents referencing an entity before promotion
 
 # Default structural rules (equivalent to legacy hardcoded rules).
 # Remove or modify these for non-personal-assistant agents.
@@ -81,6 +83,24 @@ to_kind = "fact"
 relation = "supersedes"
 weight = 0.9
 condition = { type = "newer_than" }
+
+# ─── Trust Scoring ───────────────────────────────────────
+# Trust is computed from graph topology at query time (like PageRank for knowledge).
+# These settings tune the five trust signals.
+[trust]
+corroboration_saturation = 3       # Max independent agents before corroboration maxes out
+corroboration_min_weight = 0.6     # Minimum edge weight to count as corroboration
+contradiction_weight = 0.3         # How much an unresolved contradiction reduces trust
+access_saturation = 20             # Access count at which reinforcement maxes out
+freshness_halflife = 90            # Days until freshness signal halves
+
+# Relative importance of each trust signal. Must sum to 1.0.
+[trust.weights]
+corroboration = 0.30
+contradiction = 0.25
+source = 0.20
+access = 0.15
+freshness = 0.10
 
 # ─── Embedding ────────────────────────────────────────────
 [embedding]
