@@ -411,6 +411,30 @@ impl RedbStorage {
             }
         }
 
+        // Check valid_at (temporal validity window)
+        if let Some(t) = &filter.valid_at {
+            if let Some(from) = &node.valid_from {
+                if from > t {
+                    return false; // not yet valid at requested time
+                }
+            }
+            if let Some(until) = &node.valid_until {
+                if until <= t {
+                    return false; // expired before requested time
+                }
+            }
+        }
+
+        // Check metadata_match (all pairs must match — AND semantics)
+        if let Some(pairs) = &filter.metadata_match {
+            let all_match = pairs
+                .iter()
+                .all(|(key, expected)| node.data.metadata.get(key) == Some(expected));
+            if !all_match {
+                return false;
+            }
+        }
+
         true
     }
 
@@ -751,6 +775,8 @@ impl Storage for RedbStorage {
             && filter.created_after.is_none()
             && filter.created_before.is_none()
             && filter.min_importance.is_none()
+            && filter.valid_at.is_none()
+            && filter.metadata_match.is_none()
             && !filter.include_deleted
         {
             if let Some(ref kinds) = filter.kinds {
@@ -1930,5 +1956,141 @@ mod schema_regression_tests {
         drop(storage);
         // Re-opening should pass pre-flight with no error
         RedbStorage::open(&db_path).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod query_filter_tests {
+    use super::*;
+    use crate::storage::filters::NodeFilter;
+    use crate::storage::traits::Storage;
+    use crate::types::{NodeKind, Source};
+    use chrono::Utc;
+    use tempfile::TempDir;
+
+    fn create_test_storage() -> (RedbStorage, TempDir) {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("qf_test.redb");
+        let storage = RedbStorage::open(&db_path).unwrap();
+        (storage, temp_dir)
+    }
+
+    fn make_node(kind: NodeKind, title: &str) -> Node {
+        Node::new(
+            kind,
+            title.to_string(),
+            "body".to_string(),
+            Source {
+                agent: "test".to_string(),
+                session: None,
+                channel: None,
+            },
+            0.5,
+        )
+    }
+
+    #[test]
+    fn test_valid_at_filter_excludes_expired() {
+        let (storage, _temp) = create_test_storage();
+
+        let past = Utc::now() - chrono::Duration::days(10);
+        let yesterday = Utc::now() - chrono::Duration::days(1);
+
+        let expired = make_node(NodeKind::new("fact").unwrap(), "Expired fact")
+            .with_valid_from(past)
+            .with_valid_until(yesterday);
+        storage.put_node(&expired).unwrap();
+
+        let current = make_node(NodeKind::new("fact").unwrap(), "Current fact");
+        storage.put_node(&current).unwrap();
+
+        let results = storage
+            .list_nodes(NodeFilter::new().valid_at(Utc::now()))
+            .unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].data.title, "Current fact");
+    }
+
+    #[test]
+    fn test_valid_at_filter_excludes_not_yet_valid() {
+        let (storage, _temp) = create_test_storage();
+
+        let tomorrow = Utc::now() + chrono::Duration::days(1);
+
+        let future = make_node(NodeKind::new("fact").unwrap(), "Future fact")
+            .with_valid_from(tomorrow);
+        storage.put_node(&future).unwrap();
+
+        let results = storage
+            .list_nodes(NodeFilter::new().valid_at(Utc::now()))
+            .unwrap();
+        assert_eq!(results.len(), 0);
+    }
+
+    #[test]
+    fn test_valid_at_includes_nodes_without_temporal_fields() {
+        let (storage, _temp) = create_test_storage();
+
+        let evergreen = make_node(NodeKind::new("fact").unwrap(), "Evergreen fact");
+        storage.put_node(&evergreen).unwrap();
+
+        let results = storage
+            .list_nodes(NodeFilter::new().valid_at(Utc::now()))
+            .unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].data.title, "Evergreen fact");
+    }
+
+    /// Test metadata matching via the filter logic directly.
+    /// Note: serde_json::Value doesn't round-trip through bincode 1.x
+    /// (deserialize_any limitation), so we test the filter matching without
+    /// going through storage serialization.
+    #[test]
+    fn test_metadata_match_filter() {
+        let mut company = make_node(NodeKind::new("fact").unwrap(), "Acme Corp");
+        company
+            .data
+            .metadata
+            .insert("entity_type".to_string(), serde_json::json!("company"));
+
+        let mut person = make_node(NodeKind::new("fact").unwrap(), "John Doe");
+        person
+            .data
+            .metadata
+            .insert("entity_type".to_string(), serde_json::json!("person"));
+
+        let filter =
+            NodeFilter::new().with_metadata("entity_type", serde_json::json!("company"));
+
+        assert!(RedbStorage::node_matches_filter(&company, &filter));
+        assert!(!RedbStorage::node_matches_filter(&person, &filter));
+    }
+
+    #[test]
+    fn test_metadata_match_multiple_and_semantics() {
+        let mut both = make_node(NodeKind::new("fact").unwrap(), "Match both");
+        both.data
+            .metadata
+            .insert("entity_type".to_string(), serde_json::json!("company"));
+        both.data
+            .metadata
+            .insert("region".to_string(), serde_json::json!("eu"));
+
+        let mut partial = make_node(NodeKind::new("fact").unwrap(), "Match one");
+        partial
+            .data
+            .metadata
+            .insert("entity_type".to_string(), serde_json::json!("company"));
+        partial
+            .data
+            .metadata
+            .insert("region".to_string(), serde_json::json!("us"));
+
+        let filter = NodeFilter::new()
+            .with_metadata("entity_type", serde_json::json!("company"))
+            .with_metadata("region", serde_json::json!("eu"));
+
+        assert!(RedbStorage::node_matches_filter(&both, &filter));
+        assert!(!RedbStorage::node_matches_filter(&partial, &filter));
     }
 }
