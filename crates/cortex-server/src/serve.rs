@@ -167,6 +167,8 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
         BriefingConfig {
             exclude_kinds: config.briefing.exclude_kinds.clone(),
             trust: config.trust.clone(),
+            roles: config.briefing.roles.clone(),
+            titles: config.briefing.titles.clone(),
             ..Default::default()
         },
     ));

@@ -8,22 +8,11 @@ use crate::types::{Node, NodeId, NodeKind, Relation};
 use crate::trust::{TrustConfig, TrustEngine};
 use crate::vector::{EmbeddingService, HybridQuery, HybridSearch, VectorIndex};
 use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-
-/// Node kinds handled by the default structured section generators (Phase 1).
-/// These are excluded from auto-discovery to avoid duplication.
-const DEFAULT_SECTION_KINDS: &[&str] = &[
-    "agent",
-    "preference",
-    "fact",
-    "pattern",
-    "goal",
-    "event",
-    "decision",
-];
 
 fn pluralise(word: &str) -> String {
     if word.ends_with('y')
@@ -62,6 +51,54 @@ fn kind_to_section_title(kind: &str) -> String {
     pluralise(&title_cased)
 }
 
+/// Maps node kinds to briefing roles. Each role determines how nodes of that
+/// kind are presented in the briefing. Kinds not mapped to any role are handled
+/// by auto-discovery.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct BriefingRoleConfig {
+    /// Kinds used to locate the agent's identity node. Default: `["agent"]`
+    pub identity: Vec<String>,
+    /// Kinds for persistent standing context (linked to agent via applies_to).
+    /// Default: `["preference"]`
+    pub persistent: Vec<String>,
+    /// Kinds for goal/task tracking via graph traversal. Default: `["goal"]`
+    pub trackable: Vec<String>,
+    /// Kinds for time-windowed recent items. Default: `["event"]`
+    pub temporal: Vec<String>,
+    /// Kinds ranked by access count + importance. Default: `["pattern"]`
+    pub reviewable: Vec<String>,
+    /// Kinds where newer nodes replace older ones. Default: `["fact", "decision"]`
+    pub superseding: Vec<String>,
+}
+
+impl Default for BriefingRoleConfig {
+    fn default() -> Self {
+        Self {
+            identity: vec!["agent".into()],
+            persistent: vec!["preference".into()],
+            trackable: vec!["goal".into()],
+            temporal: vec!["event".into()],
+            reviewable: vec!["pattern".into()],
+            superseding: vec!["fact".into(), "decision".into()],
+        }
+    }
+}
+
+impl BriefingRoleConfig {
+    /// All kinds mapped to a role. These are excluded from auto-discovery.
+    pub fn mapped_kinds(&self) -> HashSet<String> {
+        let mut all = HashSet::new();
+        all.extend(self.identity.iter().cloned());
+        all.extend(self.persistent.iter().cloned());
+        all.extend(self.trackable.iter().cloned());
+        all.extend(self.temporal.iter().cloned());
+        all.extend(self.reviewable.iter().cloned());
+        all.extend(self.superseding.iter().cloned());
+        all
+    }
+}
+
 /// Configuration for the briefing engine
 pub struct BriefingConfig {
     pub max_items_per_section: usize,
@@ -78,6 +115,10 @@ pub struct BriefingConfig {
     pub importance_weight: f32,
     /// Trust scoring configuration. None = trust scoring disabled in briefing.
     pub trust: Option<TrustConfig>,
+    /// Role-based kind mapping for briefing sections
+    pub roles: BriefingRoleConfig,
+    /// Optional per-role section title overrides (role name → custom title)
+    pub titles: HashMap<String, String>,
 }
 
 impl Default for BriefingConfig {
@@ -94,6 +135,8 @@ impl Default for BriefingConfig {
             exclude_kinds: vec![],
             importance_weight: 0.6,
             trust: None,
+            roles: BriefingRoleConfig::default(),
+            titles: HashMap::new(),
         }
     }
 }
@@ -174,22 +217,22 @@ where
         // Graph-based sections: use agent node traversal if available,
         // otherwise fall back to global queries by node kind.
         if let Some(aid) = agent_node_id {
-            // 2. Patterns (via graph traversal)
-            let patterns = self.generate_patterns(aid, &seen_ids)?;
-            if !patterns.nodes.is_empty() {
-                for n in &patterns.nodes {
+            // 2. Reviewable (patterns etc via graph traversal)
+            let reviewable = self.generate_reviewable(aid, &seen_ids)?;
+            if !reviewable.nodes.is_empty() {
+                for n in &reviewable.nodes {
                     seen_ids.insert(n.id);
                 }
-                sections.push(patterns);
+                sections.push(reviewable);
             }
 
-            // 3. Goals (via graph traversal)
-            let goals = self.generate_goals(aid, &seen_ids)?;
-            if !goals.nodes.is_empty() {
-                for n in &goals.nodes {
+            // 3. Trackable (goals etc via graph traversal)
+            let trackable = self.generate_trackable(aid, &seen_ids)?;
+            if !trackable.nodes.is_empty() {
+                for n in &trackable.nodes {
                     seen_ids.insert(n.id);
                 }
-                sections.push(goals);
+                sections.push(trackable);
             }
 
             // 4. Unresolved Contradictions
@@ -203,43 +246,51 @@ where
                 }
             }
         } else {
-            // No agent node — fall back to global queries by kind
-            let global_patterns = self.generate_global_by_kind("pattern", "Patterns", &seen_ids)?;
-            if !global_patterns.nodes.is_empty() {
-                for n in &global_patterns.nodes {
-                    seen_ids.insert(n.id);
+            // No agent node — fall back to global queries for each role's kinds
+            for kind in &self.config.roles.reviewable {
+                let title = kind_to_section_title(kind);
+                let section = self.generate_global_by_kind(kind, &title, &seen_ids)?;
+                if !section.nodes.is_empty() {
+                    for n in &section.nodes {
+                        seen_ids.insert(n.id);
+                    }
+                    sections.push(section);
                 }
-                sections.push(global_patterns);
             }
 
-            let global_goals = self.generate_global_by_kind("goal", "Goals", &seen_ids)?;
-            if !global_goals.nodes.is_empty() {
-                for n in &global_goals.nodes {
-                    seen_ids.insert(n.id);
+            for kind in &self.config.roles.trackable {
+                let title = kind_to_section_title(kind);
+                let section = self.generate_global_by_kind(kind, &title, &seen_ids)?;
+                if !section.nodes.is_empty() {
+                    for n in &section.nodes {
+                        seen_ids.insert(n.id);
+                    }
+                    sections.push(section);
                 }
-                sections.push(global_goals);
             }
 
-            let global_decisions =
-                self.generate_global_by_kind("decision", "Key Decisions", &seen_ids)?;
-            if !global_decisions.nodes.is_empty() {
-                for n in &global_decisions.nodes {
-                    seen_ids.insert(n.id);
+            for kind in &self.config.roles.superseding {
+                let title = kind_to_section_title(kind);
+                let section = self.generate_global_by_kind(kind, &title, &seen_ids)?;
+                if !section.nodes.is_empty() {
+                    for n in &section.nodes {
+                        seen_ids.insert(n.id);
+                    }
+                    sections.push(section);
                 }
-                sections.push(global_decisions);
             }
         }
 
-        // 5. Recent Events (Phase 1 — before auto-discovery so `event` kind is excluded)
-        let events = self.generate_recent_events(agent_id, &seen_ids)?;
-        if !events.nodes.is_empty() {
-            for n in &events.nodes {
+        // 5. Temporal (recent events — before auto-discovery so temporal kinds are excluded)
+        let temporal = self.generate_temporal(agent_id, &seen_ids)?;
+        if !temporal.nodes.is_empty() {
+            for n in &temporal.nodes {
                 seen_ids.insert(n.id);
             }
-            sections.push(events);
+            sections.push(temporal);
         }
 
-        // 6. Auto-discovered sections (Phase 2 — novel kinds not in DEFAULT_SECTION_KINDS)
+        // 6. Auto-discovered sections (Phase 2 — novel kinds not mapped to any role)
         let auto_sections = self.generate_auto_discovered_sections(&seen_ids)?;
         for section in auto_sections {
             for n in &section.nodes {
@@ -378,14 +429,52 @@ where
         nodes
     }
 
+    /// Derive a section title from the role name and its mapped kinds.
+    /// Custom titles from config take precedence.
+    fn role_section_title(&self, role: &str, kinds: &[String]) -> String {
+        if let Some(custom) = self.config.titles.get(role) {
+            return custom.clone();
+        }
+        match role {
+            "identity" => "Identity & Preferences".to_string(),
+            "temporal" => {
+                if kinds.len() == 1 {
+                    format!("Recent {}", kind_to_section_title(&kinds[0]))
+                } else {
+                    "Recent Activity".to_string()
+                }
+            }
+            _ => {
+                if kinds.len() == 1 {
+                    kind_to_section_title(&kinds[0])
+                } else {
+                    kinds
+                        .iter()
+                        .map(|k| kind_to_section_title(k))
+                        .collect::<Vec<_>>()
+                        .join(" & ")
+                }
+            }
+        }
+    }
+
     // --- Private section generators ---
 
     fn find_agent_node(&self, agent_id: &str) -> Result<Option<NodeId>> {
-        // Search both old kind: "agent" and new kind: "entity" with entity-type-agent tag
-        let agent_kinds = vec![
-            NodeKind::new("agent").unwrap(),
-            NodeKind::new("entity").unwrap(),
-        ];
+        // Build identity kind list from role config, plus "entity" for backward compat
+        let mut agent_kinds: Vec<NodeKind> = self
+            .config
+            .roles
+            .identity
+            .iter()
+            .filter_map(|k| NodeKind::new(k).ok())
+            .collect();
+        // Always include "entity" for backward compat with entity_type: "agent" nodes
+        if let Ok(entity_kind) = NodeKind::new("entity") {
+            if !agent_kinds.iter().any(|k| k.as_str() == "entity") {
+                agent_kinds.push(entity_kind);
+            }
+        }
 
         // Primary: Agent/entity node whose source_agent matches
         let nodes = self.storage.list_nodes(
@@ -456,7 +545,18 @@ where
         agent_id: &str,
         agent_node_id: Option<NodeId>,
     ) -> Result<BriefingSection> {
+        let title = self.role_section_title("identity", &self.config.roles.identity);
         let mut nodes: Vec<Node> = Vec::new();
+
+        // Standing context kinds: persistent + superseding roles
+        let neighbor_kinds: HashSet<&str> = self
+            .config
+            .roles
+            .persistent
+            .iter()
+            .chain(self.config.roles.superseding.iter())
+            .map(|s| s.as_str())
+            .collect();
 
         if let Some(aid) = agent_node_id {
             // Include the Agent node itself (always, regardless of importance)
@@ -464,7 +564,7 @@ where
                 nodes.push(agent_node);
             }
 
-            // Preferences/Facts connected via AppliesTo (either direction)
+            // Standing context connected via AppliesTo (either direction)
             let neighbors = self.graph.neighbors(
                 aid,
                 TraversalDirection::Both,
@@ -474,7 +574,7 @@ where
             let pref_nodes: Vec<Node> = neighbors
                 .into_iter()
                 .filter_map(|(node, _edge)| {
-                    if matches!(node.kind.as_str(), "preference" | "fact") {
+                    if neighbor_kinds.contains(node.kind.as_str()) {
                         Some(node)
                     } else {
                         None
@@ -488,13 +588,19 @@ where
             nodes.extend(ranked);
         } else {
             // Graceful degradation: no graph node, scan storage
+            let fallback_kinds: Vec<NodeKind> = self
+                .config
+                .roles
+                .identity
+                .iter()
+                .chain(self.config.roles.persistent.iter())
+                .filter_map(|k| NodeKind::new(k).ok())
+                .collect();
+
             let fallback = self.storage.list_nodes(
                 NodeFilter::new()
                     .with_source_agent(agent_id.to_string())
-                    .with_kinds(vec![
-                        NodeKind::new("agent").unwrap(),
-                        NodeKind::new("preference").unwrap(),
-                    ])
+                    .with_kinds(fallback_kinds)
                     .with_min_importance(self.config.min_importance)
                     .with_limit(self.config.max_items_per_section * 2),
             )?;
@@ -503,10 +609,7 @@ where
 
         nodes.truncate(self.config.max_items_per_section);
 
-        Ok(BriefingSection {
-            title: "Identity & Preferences".to_string(),
-            nodes,
-        })
+        Ok(BriefingSection { title, nodes })
     }
 
     fn generate_active_context(
@@ -614,11 +717,20 @@ where
         })
     }
 
-    fn generate_patterns(
+    fn generate_reviewable(
         &self,
         agent_node_id: NodeId,
         seen: &HashSet<NodeId>,
     ) -> Result<BriefingSection> {
+        let title = self.role_section_title("reviewable", &self.config.roles.reviewable);
+        let kind_filters: Vec<NodeKind> = self
+            .config
+            .roles
+            .reviewable
+            .iter()
+            .filter_map(|k| NodeKind::new(k).ok())
+            .collect();
+
         let result = self.graph.traverse(TraversalRequest {
             start: vec![agent_node_id],
             max_depth: Some(2),
@@ -627,7 +739,7 @@ where
                 Relation::new("applies_to").unwrap(),
                 Relation::new("instance_of").unwrap(),
             ]),
-            kind_filter: Some(vec![NodeKind::new("pattern").unwrap()]),
+            kind_filter: Some(kind_filters),
             ..Default::default()
         })?;
 
@@ -640,22 +752,28 @@ where
         let mut nodes = self.rank(candidates);
         nodes.truncate(self.config.max_items_per_section);
 
-        Ok(BriefingSection {
-            title: "Patterns".to_string(),
-            nodes,
-        })
+        Ok(BriefingSection { title, nodes })
     }
 
-    fn generate_goals(
+    fn generate_trackable(
         &self,
         agent_node_id: NodeId,
         seen: &HashSet<NodeId>,
     ) -> Result<BriefingSection> {
+        let title = self.role_section_title("trackable", &self.config.roles.trackable);
+        let kind_filters: Vec<NodeKind> = self
+            .config
+            .roles
+            .trackable
+            .iter()
+            .filter_map(|k| NodeKind::new(k).ok())
+            .collect();
+
         let result = self.graph.traverse(TraversalRequest {
             start: vec![agent_node_id],
             max_depth: Some(2),
             direction: TraversalDirection::Both,
-            kind_filter: Some(vec![NodeKind::new("goal").unwrap()]),
+            kind_filter: Some(kind_filters),
             ..Default::default()
         })?;
 
@@ -668,10 +786,7 @@ where
         let mut nodes = self.rank(candidates);
         nodes.truncate(self.config.max_items_per_section);
 
-        Ok(BriefingSection {
-            title: "Goals".to_string(),
-            nodes,
-        })
+        Ok(BriefingSection { title, nodes })
     }
 
     fn generate_unresolved(
@@ -720,19 +835,28 @@ where
         })
     }
 
-    fn generate_recent_events(
+    fn generate_temporal(
         &self,
         agent_id: &str,
         seen: &HashSet<NodeId>,
     ) -> Result<BriefingSection> {
+        let title = self.role_section_title("temporal", &self.config.roles.temporal);
+        let kind_filters: Vec<NodeKind> = self
+            .config
+            .roles
+            .temporal
+            .iter()
+            .filter_map(|k| NodeKind::new(k).ok())
+            .collect();
+
         let cutoff =
             Utc::now() - chrono::Duration::seconds(self.config.recent_window.as_secs() as i64);
 
-        // Try agent-specific events first, fall back to global
+        // Try agent-specific first, fall back to global
         let mut raw = self.storage.list_nodes(
             NodeFilter::new()
                 .with_source_agent(agent_id.to_string())
-                .with_kinds(vec![NodeKind::new("event").unwrap()])
+                .with_kinds(kind_filters.clone())
                 .created_after(cutoff)
                 .with_limit(self.config.max_items_per_section * 2),
         )?;
@@ -740,7 +864,7 @@ where
         if raw.is_empty() {
             raw = self.storage.list_nodes(
                 NodeFilter::new()
-                    .with_kinds(vec![NodeKind::new("event").unwrap()])
+                    .with_kinds(kind_filters)
                     .created_after(cutoff)
                     .with_limit(self.config.max_items_per_section * 2),
             )?;
@@ -751,10 +875,7 @@ where
         let mut nodes = self.rank(candidates);
         nodes.truncate(self.config.max_items_per_section);
 
-        Ok(BriefingSection {
-            title: "Recent Events".to_string(),
-            nodes,
-        })
+        Ok(BriefingSection { title, nodes })
     }
 
     /// Global fallback: query nodes by kind without requiring graph traversal.
@@ -794,7 +915,7 @@ where
     ) -> Result<Vec<BriefingSection>> {
         let all_kinds = self.storage.list_distinct_kinds()?;
 
-        let default_kinds: HashSet<&str> = DEFAULT_SECTION_KINDS.iter().copied().collect();
+        let mapped = self.config.roles.mapped_kinds();
 
         let excluded: HashSet<&str> = self
             .config
@@ -805,7 +926,7 @@ where
 
         let novel_kinds: Vec<&NodeKind> = all_kinds
             .iter()
-            .filter(|k| !default_kinds.contains(k.as_str()))
+            .filter(|k| !mapped.contains(k.as_str()))
             .filter(|k| !excluded.contains(k.as_str()))
             .collect();
 
@@ -1951,5 +2072,239 @@ mod tests {
         assert_eq!(kind_strs.len(), 2);
         assert!(kind_strs.contains(&"experiment"));
         assert!(kind_strs.contains(&"fact"));
+    }
+
+    // ====================================================================
+    // Role Configuration Tests (Spec 14)
+    // ====================================================================
+
+    // Test 32: mapped_kinds returns union of all roles
+    #[test]
+    fn test_mapped_kinds_returns_all_role_kinds() {
+        let config = BriefingRoleConfig::default();
+        let mapped = config.mapped_kinds();
+        assert!(mapped.contains("agent"));
+        assert!(mapped.contains("preference"));
+        assert!(mapped.contains("goal"));
+        assert!(mapped.contains("event"));
+        assert!(mapped.contains("pattern"));
+        assert!(mapped.contains("fact"));
+        assert!(mapped.contains("decision"));
+        assert_eq!(mapped.len(), 7);
+    }
+
+    // Test 33: custom role config for coding agent produces correct section titles
+    #[test]
+    fn test_custom_roles_coding_agent() {
+        let dir = TempDir::new().unwrap();
+        let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
+
+        let agent = make_node(NodeKind::new("agent").unwrap(), "coder", "coder");
+        storage.put_node(&agent).unwrap();
+
+        // Create a "task" node and link it (trackable role in coding template)
+        let mut task = make_node(NodeKind::new("task").unwrap(), "Fix bug #42", "coder");
+        task.importance = 0.8;
+        storage.put_node(&task).unwrap();
+        storage
+            .put_edge(&manual_edge(
+                agent.id,
+                task.id,
+                Relation::new("informed_by").unwrap(),
+            ))
+            .unwrap();
+
+        let config = BriefingConfig {
+            roles: BriefingRoleConfig {
+                identity: vec!["agent".into()],
+                persistent: vec!["constraint".into()],
+                trackable: vec!["task".into(), "milestone".into()],
+                temporal: vec!["commit".into()],
+                reviewable: vec!["pattern".into()],
+                superseding: vec!["dependency".into()],
+            },
+            ..Default::default()
+        };
+        let graph = Arc::new(GraphEngineImpl::new(storage.clone()));
+        let gv = Arc::new(AtomicU64::new(0));
+        let engine = BriefingEngine::new(storage, graph, MockVectorIndex, MockEmbedder, gv, config);
+
+        let briefing = engine.generate("coder").unwrap();
+
+        let section = briefing
+            .sections
+            .iter()
+            .find(|s| s.title == "Tasks & Milestones")
+            .expect("Trackable section with multi-kind title missing");
+
+        assert!(section
+            .nodes
+            .iter()
+            .any(|n| n.data.title == "Fix bug #42"));
+    }
+
+    // Test 34: kinds not in any role appear in auto-discovered sections
+    #[test]
+    fn test_unmapped_kinds_auto_discovered() {
+        let dir = TempDir::new().unwrap();
+        let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
+
+        // Use a config where "experiment" is NOT mapped to any role
+        let mut experiment =
+            make_node(NodeKind::new("experiment").unwrap(), "Novel exp", "kai");
+        experiment.importance = 0.8;
+        storage.put_node(&experiment).unwrap();
+
+        // Default roles don't include "experiment"
+        let (engine, _) = make_engine(storage);
+        let briefing = engine.generate("kai").unwrap();
+
+        assert!(
+            briefing
+                .sections
+                .iter()
+                .any(|s| s.title == "Experiments"),
+            "Unmapped kind should appear as auto-discovered section"
+        );
+    }
+
+    // Test 35: custom section titles from titles config
+    #[test]
+    fn test_custom_section_titles() {
+        let dir = TempDir::new().unwrap();
+        let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
+
+        let agent = make_node(NodeKind::new("agent").unwrap(), "kai", "kai");
+        storage.put_node(&agent).unwrap();
+
+        let mut event = make_node(NodeKind::new("event").unwrap(), "Deploy v2", "kai");
+        event.importance = 0.8;
+        storage.put_node(&event).unwrap();
+
+        let mut titles = HashMap::new();
+        titles.insert("temporal".to_string(), "What Just Happened".to_string());
+
+        let config = BriefingConfig {
+            titles,
+            ..Default::default()
+        };
+        let graph = Arc::new(GraphEngineImpl::new(storage.clone()));
+        let gv = Arc::new(AtomicU64::new(0));
+        let engine = BriefingEngine::new(storage, graph, MockVectorIndex, MockEmbedder, gv, config);
+
+        let briefing = engine.generate("kai").unwrap();
+
+        assert!(
+            briefing
+                .sections
+                .iter()
+                .any(|s| s.title == "What Just Happened"),
+            "Custom title override should be used"
+        );
+    }
+
+    // Test 36: default role config matches DEFAULT_SECTION_KINDS
+    #[test]
+    fn test_default_mapped_kinds_match_legacy() {
+        let config = BriefingRoleConfig::default();
+        let mapped = config.mapped_kinds();
+
+        let legacy = ["agent", "preference", "fact", "pattern", "goal", "event", "decision"];
+        for kind in &legacy {
+            assert!(
+                mapped.contains(*kind),
+                "Default mapped_kinds missing legacy kind: {}",
+                kind
+            );
+        }
+        assert_eq!(
+            mapped.len(),
+            legacy.len(),
+            "Default mapped_kinds should have exactly the same kinds as legacy DEFAULT_SECTION_KINDS"
+        );
+    }
+
+    // Test 37: role_section_title derives correct titles
+    #[test]
+    fn test_role_section_title_derivation() {
+        let dir = TempDir::new().unwrap();
+        let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
+        let (engine, _) = make_engine(storage);
+
+        // identity always returns fixed title
+        assert_eq!(
+            engine.role_section_title("identity", &["agent".into()]),
+            "Identity & Preferences"
+        );
+
+        // temporal with single kind
+        assert_eq!(
+            engine.role_section_title("temporal", &["event".into()]),
+            "Recent Events"
+        );
+
+        // temporal with multiple kinds
+        assert_eq!(
+            engine.role_section_title("temporal", &["commit".into(), "deployment".into()]),
+            "Recent Activity"
+        );
+
+        // single-kind role
+        assert_eq!(
+            engine.role_section_title("reviewable", &["pattern".into()]),
+            "Patterns"
+        );
+
+        // multi-kind role
+        assert_eq!(
+            engine.role_section_title("trackable", &["task".into(), "milestone".into()]),
+            "Tasks & Milestones"
+        );
+    }
+
+    // Test 38: custom roles exclude mapped kinds from auto-discovery
+    #[test]
+    fn test_custom_roles_exclude_from_auto_discovery() {
+        let dir = TempDir::new().unwrap();
+        let storage = Arc::new(RedbStorage::open(dir.path().join("t.redb")).unwrap());
+
+        // Create an agent so the traversal path is taken
+        let agent = make_node(NodeKind::new("agent").unwrap(), "kai", "kai");
+        storage.put_node(&agent).unwrap();
+
+        // "experiment" is mapped to reviewable — should NOT auto-discover
+        let mut experiment =
+            make_node(NodeKind::new("experiment").unwrap(), "Test A/B", "kai");
+        experiment.importance = 0.8;
+        storage.put_node(&experiment).unwrap();
+
+        let config = BriefingConfig {
+            roles: BriefingRoleConfig {
+                reviewable: vec!["experiment".into()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let graph = Arc::new(GraphEngineImpl::new(storage.clone()));
+        let gv = Arc::new(AtomicU64::new(0));
+        let engine = BriefingEngine::new(storage, graph, MockVectorIndex, MockEmbedder, gv, config);
+
+        let briefing = engine.generate("kai").unwrap();
+
+        // Count sections titled "Experiments" — reviewable traversal may produce one
+        // if agent is linked, but auto-discovery must NOT produce a duplicate.
+        // Since experiment isn't linked to agent via applies_to/instance_of,
+        // the reviewable traversal finds nothing — and auto-discovery is blocked.
+        // The experiment may appear in Active Context, but not as its own section.
+        let experiments_sections: Vec<_> = briefing
+            .sections
+            .iter()
+            .filter(|s| s.title == "Experiments")
+            .collect();
+
+        assert!(
+            experiments_sections.is_empty(),
+            "Mapped kind should not produce an auto-discovered section"
+        );
     }
 }

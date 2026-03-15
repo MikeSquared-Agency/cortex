@@ -3,7 +3,7 @@ pub mod engine;
 pub mod ingest;
 pub mod renderer;
 
-pub use engine::{BriefingConfig, BriefingEngine};
+pub use engine::{BriefingConfig, BriefingEngine, BriefingRoleConfig};
 
 use chrono::{DateTime, Utc};
 

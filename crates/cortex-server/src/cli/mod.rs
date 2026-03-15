@@ -56,7 +56,7 @@ pub enum Commands {
     /// Start the gRPC + HTTP server
     Serve,
     /// Interactive setup wizard
-    Init,
+    Init(InitArgs),
     /// Interactive REPL
     Shell,
     /// Node operations
@@ -119,6 +119,15 @@ pub struct TrustArgs {
     /// Output format: table (default), json
     #[arg(long, default_value = "table")]
     pub format: String,
+}
+
+// --- Init args ---
+
+#[derive(Args, Debug)]
+pub struct InitArgs {
+    /// Agent template: default, coding, research, browser
+    #[arg(long)]
+    pub template: Option<String>,
 }
 
 // --- MCP args ---

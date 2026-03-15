@@ -88,7 +88,7 @@ async fn dispatch(
     use super::Commands;
     match cli.command {
         Commands::Serve => println!("Use 'exit' first, then run `cortex serve`."),
-        Commands::Init => super::init::run().await?,
+        Commands::Init(args) => super::init::run(args.template.as_deref()).await?,
         Commands::Shell => println!("Already in shell mode."),
         Commands::Node(cmd) => super::node::run(cmd, server).await?,
         Commands::Edge(cmd) => super::edge::run(cmd, server).await?,

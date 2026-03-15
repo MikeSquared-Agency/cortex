@@ -3,11 +3,46 @@ use crate::config::{
     ObservabilityConfig, RetentionConfig, SchemaConfig, SecurityConfig, ServerConfig,
 };
 use anyhow::Result;
+use cortex_core::briefing::BriefingRoleConfig;
 
-pub async fn run() -> Result<()> {
+fn roles_for_template(template: &str) -> BriefingRoleConfig {
+    match template {
+        "coding" => BriefingRoleConfig {
+            identity: vec!["agent".into()],
+            persistent: vec!["constraint".into(), "architecture-decision".into()],
+            trackable: vec!["task".into(), "milestone".into()],
+            temporal: vec!["commit".into(), "deployment".into(), "incident".into()],
+            reviewable: vec!["pattern".into(), "anti-pattern".into(), "code-smell".into()],
+            superseding: vec!["dependency".into(), "api-version".into()],
+        },
+        "research" => BriefingRoleConfig {
+            identity: vec!["agent".into()],
+            persistent: vec!["hypothesis".into(), "methodology".into()],
+            trackable: vec!["research-question".into(), "objective".into()],
+            temporal: vec!["experiment".into(), "observation".into()],
+            reviewable: vec!["finding".into(), "pattern".into()],
+            superseding: vec!["claim".into(), "measurement".into(), "citation".into()],
+        },
+        "browser" => BriefingRoleConfig {
+            identity: vec!["agent".into()],
+            persistent: vec!["preference".into(), "bookmark".into()],
+            trackable: vec!["task".into(), "search-query".into()],
+            temporal: vec!["page-visit".into(), "extraction".into()],
+            reviewable: vec!["pattern".into(), "site-profile".into()],
+            superseding: vec!["fact".into(), "screenshot".into()],
+        },
+        _ => BriefingRoleConfig::default(),
+    }
+}
+
+pub async fn run(template: Option<&str>) -> Result<()> {
     use inquire::{Confirm, Select, Text};
 
     println!("\nWelcome to Cortex — graph memory for AI agents.\n");
+
+    if let Some(t) = template {
+        println!("Using template: {}\n", t);
+    }
 
     let data_dir = Text::new("Where should Cortex store data?")
         .with_default("./data")
@@ -74,6 +109,8 @@ pub async fn run() -> Result<()> {
 
     let nats_enabled = ingest_choice == "NATS";
 
+    let roles = roles_for_template(template.unwrap_or("default"));
+
     let config = CortexConfig {
         server: ServerConfig {
             grpc_addr,
@@ -94,6 +131,7 @@ pub async fn run() -> Result<()> {
         },
         briefing: BriefingTomlConfig {
             precompute_agents: agents,
+            roles,
             ..BriefingTomlConfig::default()
         },
         ingest: IngestConfig::default(),
@@ -126,6 +164,9 @@ pub async fn run() -> Result<()> {
     std::fs::create_dir_all(&data_dir)?;
     println!("✅ Created data directory: {}", data_dir);
 
+    if template.is_some() {
+        println!("✅ Applied briefing role template");
+    }
     println!("✅ Ready\n");
     println!("Run `cortex serve` to start, or `cortex shell` for interactive mode.");
 

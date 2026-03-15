@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use cortex_core::briefing::BriefingRoleConfig;
 use cortex_core::{AutoLinkerConfig, ConfigRule, NodeKind, Relation, SimilarityConfig, TrustConfig};
 
 // Re-export from cortex-core so cortex-server code can use them from config
@@ -186,6 +187,12 @@ pub struct BriefingTomlConfig {
     pub sections: Vec<BriefingSectionConfig>,
     /// Node kinds to exclude from auto-discovered briefing sections.
     pub exclude_kinds: Vec<String>,
+    /// Role-to-kind mapping for briefing sections.
+    #[serde(default)]
+    pub roles: BriefingRoleConfig,
+    /// Optional per-role section title overrides.
+    #[serde(default)]
+    pub titles: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -51,8 +51,8 @@ async fn main() -> anyhow::Result<()> {
             serve::run(config).await?;
         }
 
-        Commands::Init => {
-            cli::init::run().await?;
+        Commands::Init(args) => {
+            cli::init::run(args.template.as_deref()).await?;
         }
 
         Commands::Shell => {
