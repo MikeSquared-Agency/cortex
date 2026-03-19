@@ -1,7 +1,7 @@
 {
   "name": "@cortex-memory/client",
-  "version": "0.2.0",
-  "description": "Graph memory for AI agents",
+  "version": "0.3.0",
+  "description": "Self-organizing graph memory for AI agents — TypeScript SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "license": "MIT",

@@ -9,13 +9,13 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["Mike Darlington"]
 license = "MIT"
-description = "Embedded graph memory for AI agents"
+description = "Self-organizing graph memory for AI agents"
 repository = "https://github.com/MikeSquared-Agency/cortex"
-keywords = ["ai", "graph", "memory", "agents", "knowledge-graph"]
+keywords = ["ai", "graph", "memory", "agents", "knowledge-graph", "mcp", "self-organizing"]
 categories = ["database", "science"]
 
 [workspace.dependencies]

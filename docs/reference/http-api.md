@@ -9,7 +9,7 @@ Returns server health status.
 ```json
 {
   "healthy": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "uptime_seconds": 3600,
   "stats": {
     "node_count": 1234,

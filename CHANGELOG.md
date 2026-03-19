@@ -2,7 +2,7 @@
 
 All notable changes to Cortex are documented in this file.
 
-## [0.3.0] - YYYY-MM-DD
+## [0.3.0] - 2026-03-19
 
 ### Added
 - **Temporal validity** -- Node fields: `valid_from`, `valid_until` for truth windows.

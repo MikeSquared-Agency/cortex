@@ -23,7 +23,7 @@ use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(name = "cortex")]
-#[command(version, about = "Embedded graph memory for AI agents")]
+#[command(version, about = "Self-organizing graph memory for AI agents")]
 pub struct Cli {
     /// Path to cortex.toml
     #[arg(
