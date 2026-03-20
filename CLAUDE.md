@@ -130,3 +130,15 @@ and best practices for keeping the graph clean.
 Start every session with: `cortex_briefing(agent_id="YOUR_AGENT_ID", compact=true)`
 
 The rest of this CLAUDE.md is for developers working on the Cortex codebase itself.
+
+## Using Cortex as an MCP server
+
+The native MCP server is in `crates/cortex-server/src/mcp/mod.rs`.
+It implements 7 tools via stdio JSON-RPC transport.
+
+The MCP server runs in two modes:
+- **Library mode** (default): opens the redb database directly. Fastest.
+- **Proxy mode** (`--server`): connects to a running gRPC server.
+
+The Node.js bridge in `mcp-bridge/` proxies to the HTTP API for environments
+without the Rust binary.
