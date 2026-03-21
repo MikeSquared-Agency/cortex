@@ -2,6 +2,14 @@
 
 All notable changes to Cortex are documented in this file.
 
+## [0.3.1] - 2026-03-21
+
+### Added
+- **GitHub templates** -- Bug report, feature request, and PR templates for
+  community contributions.
+- **MCP quickstart guide** -- Step-by-step guide for connecting AI agents to
+  Cortex via Model Context Protocol (`docs/guides/mcp-setup.md`).
+
 ## [0.3.0] - 2026-03-19
 
 ### Added
