@@ -26,7 +26,7 @@ default = ["warren"]
 cortex-core = { path = "../cortex-core", package = "cortex-memory-core", version = "0.3.1" }
 cortex-client = { path = "../cortex-client", package = "cortex-memory-client", version = "0.3.1" }
 cortex-proto = { path = "../cortex-proto", package = "cortex-memory-proto", version = "0.3.1" }
-warren-adapter = { path = "../warren-adapter", optional = true }
+warren-adapter = { path = "../warren-adapter", optional = true, version = "0.3.1" }
 
 # gRPC/HTTP
 tonic.workspace = true
