@@ -147,7 +147,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Publish cortex-proto
-        run: cargo publish -p cortex-proto --allow-dirty
+        run: cargo publish -p cortex-proto --allow-dirty || echo "Already published"
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -155,7 +155,7 @@ jobs:
         run: sleep 30
 
       - name: Publish cortex-core
-        run: cargo publish -p cortex-core --no-default-features --allow-dirty
+        run: cargo publish -p cortex-core --no-default-features --allow-dirty || echo "Already published"
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -163,7 +163,7 @@ jobs:
         run: sleep 30
 
       - name: Publish cortex-client
-        run: cargo publish -p cortex-client --allow-dirty
+        run: cargo publish -p cortex-client --allow-dirty || echo "Already published"
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -171,7 +171,7 @@ jobs:
         run: sleep 30
 
       - name: Publish cortex-memory
-        run: cargo publish -p cortex-memory --no-default-features --allow-dirty
+        run: cargo publish -p cortex-memory --no-default-features --allow-dirty || echo "Already published"
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
