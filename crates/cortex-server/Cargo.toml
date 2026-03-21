@@ -23,9 +23,9 @@ default = ["warren"]
 
 [dependencies]
 # Local crates
-cortex-core = { path = "../cortex-core", package = "cortex-memory-core" }
-cortex-client = { path = "../cortex-client", package = "cortex-memory-client" }
-cortex-proto = { path = "../cortex-proto", package = "cortex-memory-proto" }
+cortex-core = { path = "../cortex-core", package = "cortex-memory-core", version = "0.3.1" }
+cortex-client = { path = "../cortex-client", package = "cortex-memory-client", version = "0.3.1" }
+cortex-proto = { path = "../cortex-proto", package = "cortex-memory-proto", version = "0.3.1" }
 warren-adapter = { path = "../warren-adapter", optional = true }
 
 # gRPC/HTTP

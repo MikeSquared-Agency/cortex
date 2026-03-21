@@ -8,7 +8,7 @@ description = "Rust client for the Cortex graph memory engine"
 repository = "https://github.com/MikeSquared-Agency/cortex"
 
 [dependencies]
-cortex-proto = { path = "../cortex-proto", package = "cortex-memory-proto" }
+cortex-proto = { path = "../cortex-proto", package = "cortex-memory-proto", version = "0.3.1" }
 tonic.workspace = true
 tokio.workspace = true
 anyhow.workspace = true
