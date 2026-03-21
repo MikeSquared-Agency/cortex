@@ -7,7 +7,7 @@ license.workspace = true
 publish = false  # Internal crate, not published to crates.io
 
 [dependencies]
-cortex-core = { path = "../cortex-core" }
+cortex-core = { path = "../cortex-core", package = "cortex-memory-core" }
 async-nats = { workspace = true }
 futures = { workspace = true }
 serde = { workspace = true }

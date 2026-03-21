@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-cortex-core = { path = "../../crates/cortex-core" }
+cortex-core = { path = "../../crates/cortex-core", package = "cortex-memory-core" }
 anyhow = "1.0"
 tokio = { version = "1", features = ["full"] }

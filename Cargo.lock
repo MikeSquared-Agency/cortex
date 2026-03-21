@@ -734,44 +734,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cortex-client"
-version = "0.3.1"
-dependencies = [
- "anyhow",
- "cortex-proto",
- "tokio",
- "tonic",
-]
-
-[[package]]
-name = "cortex-core"
-version = "0.3.1"
-dependencies = [
- "aes-gcm",
- "anyhow",
- "async-trait",
- "base64 0.22.1",
- "bincode",
- "chrono",
- "criterion",
- "env_logger",
- "fastembed",
- "futures",
- "instant-distance",
- "log",
- "proptest",
- "rand 0.8.5",
- "rayon",
- "redb",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.18",
- "toml",
- "uuid",
-]
-
-[[package]]
 name = "cortex-memory"
 version = "0.3.1"
 dependencies = [
@@ -783,9 +745,9 @@ dependencies = [
  "bincode",
  "chrono",
  "clap",
- "cortex-client",
- "cortex-core",
- "cortex-proto",
+ "cortex-memory-client",
+ "cortex-memory-core",
+ "cortex-memory-proto",
  "csv",
  "futures",
  "hex",
@@ -816,7 +778,45 @@ dependencies = [
 ]
 
 [[package]]
-name = "cortex-proto"
+name = "cortex-memory-client"
+version = "0.3.1"
+dependencies = [
+ "anyhow",
+ "cortex-memory-proto",
+ "tokio",
+ "tonic",
+]
+
+[[package]]
+name = "cortex-memory-core"
+version = "0.3.1"
+dependencies = [
+ "aes-gcm",
+ "anyhow",
+ "async-trait",
+ "base64 0.22.1",
+ "bincode",
+ "chrono",
+ "criterion",
+ "env_logger",
+ "fastembed",
+ "futures",
+ "instant-distance",
+ "log",
+ "proptest",
+ "rand 0.8.5",
+ "rayon",
+ "redb",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "toml",
+ "uuid",
+]
+
+[[package]]
+name = "cortex-memory-proto"
 version = "0.3.1"
 dependencies = [
  "prost",
@@ -4778,7 +4778,7 @@ name = "warren-adapter"
 version = "0.3.1"
 dependencies = [
  "async-nats",
- "cortex-core",
+ "cortex-memory-core",
  "futures",
  "serde",
  "serde_json",

@@ -1,5 +1,5 @@
 [package]
-name = "cortex-proto"
+name = "cortex-memory-proto"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
