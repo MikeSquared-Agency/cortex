@@ -1,6 +1,6 @@
 {
   "name": "cortex-mcp-bridge",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "MCP bridge for Cortex graph memory (no Rust needed)",
   "bin": {
     "cortex-mcp-bridge": "./cortex-mcp-bridge.js"
