@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+description = "Protobuf and gRPC definitions for the Cortex graph memory engine"
+repository = "https://github.com/MikeSquared-Agency/cortex"
 
 [dependencies]
 tonic.workspace = true
