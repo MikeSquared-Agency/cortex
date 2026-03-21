@@ -1,0 +1,14 @@
+{
+  "name": "cortex-mcp-bridge",
+  "version": "0.3.0",
+  "description": "MCP bridge for Cortex graph memory (no Rust needed)",
+  "bin": {
+    "cortex-mcp-bridge": "./cortex-mcp-bridge.js"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MikeSquared-Agency/cortex"
+  },
+  "keywords": ["mcp", "cortex", "memory", "ai-agents", "model-context-protocol"]
+}

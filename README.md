@@ -1,5 +1,12 @@
 # Cortex
 
+[![CI](https://github.com/MikeSquared-Agency/cortex/actions/workflows/ci.yml/badge.svg)](https://github.com/MikeSquared-Agency/cortex/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/MikeSquared-Agency/cortex)](https://github.com/MikeSquared-Agency/cortex/releases/latest)
+[![crates.io](https://img.shields.io/crates/v/cortex-memory.svg)](https://crates.io/crates/cortex-memory)
+[![PyPI](https://img.shields.io/pypi/v/cortex-memory.svg)](https://pypi.org/project/cortex-memory/)
+[![npm](https://img.shields.io/npm/v/@cortex-memory/client.svg)](https://www.npmjs.com/package/@cortex-memory/client)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 **Self-organizing graph memory for AI agents. One binary. Zero dependencies.**
 
 Cortex is an embedded temporal graph memory that auto-links knowledge, decays what's irrelevant, detects contradictions, and synthesises context briefings on demand. Think SQLite, but for agent memory.
@@ -64,6 +71,109 @@ cortex briefing my-agent --scope shared
 cortex trust <node-id>
 ```
 
+## Use with AI Agents (MCP)
+
+Cortex speaks MCP natively. One command gives your AI agent persistent,
+self-organizing memory.
+
+### Claude Code
+
+```bash
+# Start Cortex in the background
+cortex serve &
+
+# Add to Claude Code
+claude mcp add cortex -- cortex mcp
+```
+
+Claude Code now has 7 memory tools: `cortex_store`, `cortex_search`,
+`cortex_recall`, `cortex_briefing`, `cortex_traverse`, `cortex_relate`,
+`cortex_observe`.
+
+### Cursor
+
+Add to `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "cortex": {
+      "command": "cortex",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+### Windsurf
+
+Add to your MCP config:
+
+```json
+{
+  "mcpServers": {
+    "cortex": {
+      "command": "cortex",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+### VS Code (Copilot)
+
+Add to `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "cortex": {
+      "command": "cortex",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+### Without installing the binary
+
+Use the Node.js bridge (no Rust needed):
+
+```bash
+npx cortex-mcp-bridge
+```
+
+Or with a remote Cortex server:
+
+```json
+{
+  "mcpServers": {
+    "cortex": {
+      "command": "node",
+      "args": ["/path/to/cortex-mcp-bridge.js"],
+      "env": {
+        "CORTEX_URL": "http://your-server:9091"
+      }
+    }
+  }
+}
+```
+
+### What your agent gets
+
+| Tool | Purpose |
+|------|---------|
+| `cortex_store` | Remember facts, decisions, goals, events, patterns |
+| `cortex_search` | Semantic search by meaning |
+| `cortex_recall` | Hybrid search (semantic + graph structure) |
+| `cortex_briefing` | "What do I need to know?" context document |
+| `cortex_traverse` | Explore how concepts connect in the graph |
+| `cortex_relate` | Explicitly link related knowledge |
+| `cortex_observe` | Record performance metrics for prompt selection |
+
+The briefing tool supports scope: `agent` (default), `shared` (cross-agent),
+or `unified` (multi-agent overview for orchestrators).
+
 ### Prompt Management
 
 Cortex includes a built-in prompt versioning system with branching, inheritance, and context-aware selection.
@@ -124,6 +234,7 @@ let results = cx.search("authentication", 5)?;
 ## Documentation
 
 - **[Quick Start](docs/getting-started/quickstart.md)**
+- **[MCP Setup](docs/guides/mcp-setup.md)** -- Claude Code, Cursor, Windsurf, VS Code
 - **[Configuration Reference](docs/reference/config.md)**
 - **[CLI Reference](docs/reference/cli.md)**
 - **[Python SDK](docs/reference/python-sdk.md)**
