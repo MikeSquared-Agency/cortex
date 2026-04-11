@@ -10,9 +10,6 @@ mod migration;
 mod observability;
 mod serve;
 
-#[cfg(feature = "warren")]
-mod nats;
-
 use clap::Parser;
 use cli::{Cli, Commands};
 use config::CortexConfig;

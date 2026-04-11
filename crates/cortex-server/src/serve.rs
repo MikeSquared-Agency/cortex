@@ -431,48 +431,11 @@ pub async fn run(config: CortexConfig) -> anyhow::Result<()> {
         })
     };
 
-    // Optionally start NATS consumer
-    let nats_enabled = config.server.nats_enabled;
-    let nats_url = config.server.nats_url.clone();
-
-    let nats_task: Option<JoinHandle<()>> = if nats_enabled {
-        info!("Connecting to NATS at {}...", nats_url);
-
-        #[cfg(feature = "warren")]
-        {
-            match async_nats::connect(&nats_url).await {
-                Ok(client) => {
-                    info!("NATS connected (Warren adapter)");
-                    let nats_ingest = crate::nats::NatsIngest::new(
-                        client,
-                        storage.clone(),
-                        embedding_service.clone(),
-                        vector_index.clone(),
-                        graph_version.clone(),
-                    );
-                    Some(tokio::spawn(async move {
-                        if let Err(e) = nats_ingest.start().await {
-                            error!("NATS ingest failed: {}", e);
-                        }
-                    }))
-                }
-                Err(e) => {
-                    error!("Failed to connect to NATS: {}", e);
-                    error!("Continuing without NATS consumer");
-                    None
-                }
-            }
-        }
-
-        #[cfg(not(feature = "warren"))]
-        {
-            info!("NATS consumer not available (warren feature disabled)");
-            None
-        }
-    } else {
-        info!("NATS consumer disabled");
-        None
-    };
+    // NATS consumer (reserved for future generic ingest adapter)
+    let nats_task: Option<JoinHandle<()>> = None;
+    if config.server.nats_enabled {
+        info!("NATS ingest configured but no adapter available");
+    }
 
     info!("Cortex server ready");
 
