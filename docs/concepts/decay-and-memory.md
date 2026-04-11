@@ -94,8 +94,6 @@ enabled = false
 default_ttl_days = 0
 ```
 
-Or use the legal template: `cortex init --template legal`
-
 When decay is disabled:
 - Edge weights never change due to age
 - Edges are never pruned or deleted due to low weight

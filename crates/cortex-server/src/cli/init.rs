@@ -1,7 +1,6 @@
 use crate::config::{
     AutoLinkerTomlConfig, BriefingTomlConfig, CortexConfig, EmbeddingConfig, IngestConfig,
-    ObservabilityConfig, RetentionConfig, SchemaConfig, ScoreDecayConfig, SecurityConfig,
-    ServerConfig,
+    ObservabilityConfig, RetentionConfig, SchemaConfig, SecurityConfig, ServerConfig,
 };
 use anyhow::Result;
 use cortex_core::briefing::BriefingRoleConfig;
@@ -74,7 +73,7 @@ fn default_config_rules() -> Vec<ConfigRule> {
     ]
 }
 
-pub(crate) fn roles_for_template(template: &str) -> BriefingRoleConfig {
+fn roles_for_template(template: &str) -> BriefingRoleConfig {
     match template {
         "coding" => BriefingRoleConfig {
             identity: vec!["agent".into()],
@@ -99,26 +98,6 @@ pub(crate) fn roles_for_template(template: &str) -> BriefingRoleConfig {
             temporal: vec!["page-visit".into(), "extraction".into()],
             reviewable: vec!["pattern".into(), "site-profile".into()],
             superseding: vec!["fact".into(), "screenshot".into()],
-        },
-        "legal" => BriefingRoleConfig {
-            identity: vec!["agent".into()],
-            persistent: vec![
-                "legal-precedent".into(),
-                "regulation".into(),
-                "client-profile".into(),
-            ],
-            trackable: vec!["case".into(), "filing".into(), "deadline".into()],
-            temporal: vec![
-                "hearing".into(),
-                "deposition".into(),
-                "correspondence".into(),
-            ],
-            reviewable: vec!["pattern".into(), "argument".into(), "citation".into()],
-            superseding: vec![
-                "case-status".into(),
-                "client-statement".into(),
-                "ruling".into(),
-            ],
         },
         _ => BriefingRoleConfig::default(),
     }
@@ -198,7 +177,6 @@ pub async fn run(template: Option<&str>) -> Result<()> {
 
     let nats_enabled = ingest_choice == "NATS";
 
-    let is_legal = template == Some("legal");
     let roles = roles_for_template(template.unwrap_or("default"));
 
     let config = CortexConfig {
@@ -217,8 +195,6 @@ pub async fn run(template: Option<&str>) -> Result<()> {
         auto_linker: AutoLinkerTomlConfig {
             enabled: autolinker,
             interval_seconds: autolinker_interval,
-            decay_enabled: !is_legal,
-            decay_rate_per_day: if is_legal { 0.0 } else { 0.01 },
             rules: default_config_rules(),
             ..AutoLinkerTomlConfig::default()
         },
@@ -229,12 +205,7 @@ pub async fn run(template: Option<&str>) -> Result<()> {
         },
         ingest: IngestConfig::default(),
         observability: ObservabilityConfig::default(),
-        retention: if is_legal {
-            RetentionConfig {
-                default_ttl_days: 0,
-                ..RetentionConfig::default()
-            }
-        } else {
+        retention: {
             let mut r = RetentionConfig::default();
             r.by_kind.insert(
                 "observation".to_string(),
@@ -249,14 +220,7 @@ pub async fn run(template: Option<&str>) -> Result<()> {
         webhooks: vec![],
         plugins: vec![],
         prompt_rollback: Default::default(),
-        score_decay: if is_legal {
-            ScoreDecayConfig {
-                enabled: false,
-                ..Default::default()
-            }
-        } else {
-            Default::default()
-        },
+        score_decay: Default::default(),
         write_gate: Default::default(),
         schemas: Default::default(),
         trust: None,
@@ -276,33 +240,4 @@ pub async fn run(template: Option<&str>) -> Result<()> {
     println!("Run `cortex serve` to start, or `cortex shell` for interactive mode.");
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_legal_template_roles() {
-        let roles = roles_for_template("legal");
-        assert!(roles.persistent.contains(&"legal-precedent".to_string()));
-        assert!(roles.persistent.contains(&"regulation".to_string()));
-        assert!(roles.persistent.contains(&"client-profile".to_string()));
-        assert!(roles.trackable.contains(&"case".to_string()));
-        assert!(roles.trackable.contains(&"filing".to_string()));
-        assert!(roles.trackable.contains(&"deadline".to_string()));
-        assert!(roles.temporal.contains(&"hearing".to_string()));
-        assert!(roles.temporal.contains(&"deposition".to_string()));
-        assert!(roles.reviewable.contains(&"citation".to_string()));
-        assert!(roles.superseding.contains(&"ruling".to_string()));
-    }
-
-    #[test]
-    fn test_legal_template_unknown_falls_back_to_default() {
-        let legal = roles_for_template("legal");
-        let default = roles_for_template("unknown");
-        // Legal has specific roles, default does not
-        assert!(legal.persistent.contains(&"regulation".to_string()));
-        assert!(!default.persistent.contains(&"regulation".to_string()));
-    }
 }
