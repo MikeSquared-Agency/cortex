@@ -743,8 +743,14 @@ fn test_decay_disabled_full_graph_integration() {
     let engine = DecayEngine::new(storage.clone(), config);
     let (pruned, deleted) = engine.apply_decay(chrono::Utc::now()).unwrap();
 
-    assert_eq!(pruned, 0, "No edges should be pruned when decay is disabled");
-    assert_eq!(deleted, 0, "No edges should be deleted when decay is disabled");
+    assert_eq!(
+        pruned, 0,
+        "No edges should be pruned when decay is disabled"
+    );
+    assert_eq!(
+        deleted, 0,
+        "No edges should be deleted when decay is disabled"
+    );
 
     let after = storage.get_edge(edge.id).unwrap().unwrap();
     assert_eq!(

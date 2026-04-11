@@ -1,6 +1,6 @@
 use crate::config::{
     AutoLinkerTomlConfig, BriefingTomlConfig, CortexConfig, EmbeddingConfig, IngestConfig,
-    ObservabilityConfig, RetentionConfig, ScoreDecayConfig, SchemaConfig, SecurityConfig,
+    ObservabilityConfig, RetentionConfig, SchemaConfig, ScoreDecayConfig, SecurityConfig,
     ServerConfig,
 };
 use anyhow::Result;
