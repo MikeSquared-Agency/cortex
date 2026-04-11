@@ -138,6 +138,11 @@ pub struct AutoLinkerTomlConfig {
     pub interval_seconds: u64,
     pub similarity_threshold: f32,
     pub dedup_threshold: f32,
+    /// Set to false to disable edge weight decay entirely.
+    /// Edges will never fade, weaken, or be deleted due to age.
+    /// Use for legal, compliance, or archival deployments.
+    #[serde(default = "default_true")]
+    pub decay_enabled: bool,
     pub decay_rate_per_day: f32,
     pub max_edges_per_node: usize,
     /// Whether to run legacy hardcoded structural rules.
@@ -152,6 +157,10 @@ pub struct AutoLinkerTomlConfig {
     /// Minimum distinct agents mentioning an entity before promotion. Default: 2.
     #[serde(default = "default_entity_promote_min_agents")]
     pub entity_promote_min_agents: usize,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_entity_promote_every_n_cycles() -> u64 {
@@ -169,6 +178,7 @@ impl Default for AutoLinkerTomlConfig {
             interval_seconds: 60,
             similarity_threshold: 0.75,
             dedup_threshold: 0.92,
+            decay_enabled: true,
             decay_rate_per_day: 0.01,
             max_edges_per_node: 50,
             legacy_rules_enabled: None,
@@ -388,6 +398,7 @@ impl CortexConfig {
             )
             .with_decay(
                 cortex_core::DecayConfig::new()
+                    .with_enabled(self.auto_linker.decay_enabled)
                     .with_daily_decay_rate(self.auto_linker.decay_rate_per_day),
             )
             .with_embedding_model(self.embedding.model.clone())
@@ -503,5 +514,54 @@ enabled = true
         let config = CortexConfig::default();
         let errors = config.validate();
         assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_decay_enabled_false_parses_from_toml() {
+        let toml_str = r#"
+[auto_linker]
+decay_enabled = false
+decay_rate_per_day = 0.0
+"#;
+        let config: CortexConfig = toml::from_str(toml_str).unwrap();
+        assert!(!config.auto_linker.decay_enabled);
+        assert_eq!(config.auto_linker.decay_rate_per_day, 0.0);
+    }
+
+    #[test]
+    fn test_decay_enabled_defaults_true_when_missing() {
+        let toml_str = r#"
+[auto_linker]
+enabled = true
+"#;
+        let config: CortexConfig = toml::from_str(toml_str).unwrap();
+        assert!(
+            config.auto_linker.decay_enabled,
+            "decay_enabled must default to true for backward compatibility"
+        );
+    }
+
+    #[test]
+    fn test_decay_enabled_wired_to_auto_linker_config() {
+        let toml_str = r#"
+[auto_linker]
+decay_enabled = false
+"#;
+        let config: CortexConfig = toml::from_str(toml_str).unwrap();
+        let linker_config = config.auto_linker_config();
+        assert!(
+            !linker_config.decay.enabled,
+            "decay_enabled=false in TOML must propagate to DecayConfig.enabled"
+        );
+    }
+
+    #[test]
+    fn test_decay_enabled_true_wired_to_auto_linker_config() {
+        let config = CortexConfig::default();
+        let linker_config = config.auto_linker_config();
+        assert!(
+            linker_config.decay.enabled,
+            "Default config must have decay enabled"
+        );
     }
 }

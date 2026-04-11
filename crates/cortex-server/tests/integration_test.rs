@@ -686,10 +686,137 @@ fn test_auto_linker_config_defaults_are_sane() {
 #[test]
 fn test_decay_config_defaults_are_sane() {
     let config = DecayConfig::default();
+    assert!(config.enabled, "Decay must be enabled by default");
     assert!(config.daily_decay_rate > 0.0 && config.daily_decay_rate <= 1.0);
     assert!(config.prune_threshold > config.delete_threshold);
     assert!(config.exempt_manual);
     assert!(config.validate().is_ok());
+}
+
+#[test]
+fn test_decay_config_with_enabled_builder() {
+    let config = DecayConfig::new().with_enabled(false);
+    assert!(!config.enabled);
+    // Other fields keep defaults
+    assert_eq!(config.daily_decay_rate, 0.01);
+    assert!(config.exempt_manual);
+    assert!(config.validate().is_ok());
+}
+
+#[test]
+fn test_decay_disabled_full_graph_integration() {
+    let dir = tempdir().unwrap();
+    let db_path = dir.path().join("decay_disabled.redb");
+    let storage = Arc::new(RedbStorage::open(&db_path).unwrap());
+
+    // Create two nodes and an old edge
+    let n1 = Node::new(
+        NodeKind::new("fact").unwrap(),
+        "Deposition transcript".into(),
+        "Key witness testimony".into(),
+        make_source("legal-agent"),
+        0.5,
+    );
+    let n2 = Node::new(
+        NodeKind::new("fact").unwrap(),
+        "Exhibit A".into(),
+        "Primary evidence document".into(),
+        make_source("legal-agent"),
+        0.5,
+    );
+    storage.put_node(&n1).unwrap();
+    storage.put_node(&n2).unwrap();
+
+    let mut edge = Edge::new(
+        n1.id,
+        n2.id,
+        Relation::new("related_to").unwrap(),
+        0.9,
+        EdgeProvenance::AutoSimilarity { score: 0.9 },
+    );
+    // 18 months old — typical litigation timeline
+    edge.updated_at = chrono::Utc::now() - chrono::Duration::days(540);
+    storage.put_edge(&edge).unwrap();
+
+    // Run decay with enabled=false
+    let config = DecayConfig::new().with_enabled(false);
+    let engine = DecayEngine::new(storage.clone(), config);
+    let (pruned, deleted) = engine.apply_decay(chrono::Utc::now()).unwrap();
+
+    assert_eq!(pruned, 0, "No edges should be pruned when decay is disabled");
+    assert_eq!(deleted, 0, "No edges should be deleted when decay is disabled");
+
+    let after = storage.get_edge(edge.id).unwrap().unwrap();
+    assert_eq!(
+        after.weight, 0.9,
+        "Edge weight must be exactly preserved when decay is disabled"
+    );
+    assert_eq!(
+        after.updated_at, edge.updated_at,
+        "Edge timestamp must not change when decay is disabled"
+    );
+
+    // Now run with enabled=true — same edge should decay or be deleted
+    let config_enabled = DecayConfig::default();
+    let engine_enabled = DecayEngine::new(storage.clone(), config_enabled);
+    engine_enabled.apply_decay(chrono::Utc::now()).unwrap();
+
+    let after_enabled = storage.get_edge(edge.id).unwrap();
+    match after_enabled {
+        None => {} // deleted after 540 days — expected
+        Some(e) => assert!(
+            e.weight < 0.9,
+            "Edge should have decayed with enabled=true, got {}",
+            e.weight
+        ),
+    }
+}
+
+#[test]
+fn test_decay_disabled_multiple_cycles_no_change() {
+    let dir = tempdir().unwrap();
+    let db_path = dir.path().join("multi_cycle.redb");
+    let storage = Arc::new(RedbStorage::open(&db_path).unwrap());
+
+    let n1 = Node::new(
+        NodeKind::new("fact").unwrap(),
+        "Regulation".into(),
+        "SOX compliance requirement".into(),
+        make_source("compliance"),
+        0.8,
+    );
+    let n2 = Node::new(
+        NodeKind::new("fact").unwrap(),
+        "Filing".into(),
+        "Annual filing".into(),
+        make_source("compliance"),
+        0.8,
+    );
+    storage.put_node(&n1).unwrap();
+    storage.put_node(&n2).unwrap();
+
+    let mut edge = Edge::new(
+        n1.id,
+        n2.id,
+        Relation::new("related_to").unwrap(),
+        0.75,
+        EdgeProvenance::AutoSimilarity { score: 0.75 },
+    );
+    edge.updated_at = chrono::Utc::now() - chrono::Duration::days(180);
+    storage.put_edge(&edge).unwrap();
+
+    let config = DecayConfig::new().with_enabled(false);
+    let engine = DecayEngine::new(storage.clone(), config);
+
+    // Run decay 10 times — nothing should change
+    for _ in 0..10 {
+        let (p, d) = engine.apply_decay(chrono::Utc::now()).unwrap();
+        assert_eq!(p, 0);
+        assert_eq!(d, 0);
+    }
+
+    let after = storage.get_edge(edge.id).unwrap().unwrap();
+    assert_eq!(after.weight, 0.75);
 }
 
 // ── Write Gate Schema Validation ────────────────────────────────────────────

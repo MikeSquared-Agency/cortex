@@ -183,6 +183,12 @@ impl AutoLinkerConfig {
 /// Configuration for edge decay
 #[derive(Debug, Clone)]
 pub struct DecayConfig {
+    /// Set to false to skip edge decay entirely.
+    /// When disabled, edge weights never change, edges are never pruned or deleted
+    /// due to age. Use for legal, compliance, or archival deployments.
+    /// Default: true.
+    pub enabled: bool,
+
     /// Base decay rate per day. Default: 0.01 (1% per day).
     pub daily_decay_rate: f32,
 
@@ -208,6 +214,7 @@ pub struct DecayConfig {
 impl Default for DecayConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             daily_decay_rate: 0.01,
             prune_threshold: 0.1,
             delete_threshold: 0.05,
@@ -221,6 +228,11 @@ impl Default for DecayConfig {
 impl DecayConfig {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn with_enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
     }
 
     pub fn with_daily_decay_rate(mut self, rate: f32) -> Self {

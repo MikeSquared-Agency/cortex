@@ -74,6 +74,10 @@ impl<S: Storage, E: EmbeddingService, V: VectorIndex, G: GraphEngine> AutoLinker
         let contradiction_detector =
             ContradictionDetector::new(config.similarity.contradiction_threshold);
 
+        if !config.decay.enabled {
+            log::info!("Edge decay is DISABLED. Edges will never fade or be deleted due to age.");
+        }
+
         Ok(Self {
             storage,
             graph_engine,
