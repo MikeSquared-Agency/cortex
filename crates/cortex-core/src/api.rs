@@ -29,7 +29,7 @@ impl Default for LibraryConfig {
 ///
 /// # Example
 /// ```rust,no_run
-/// use cortex_core::{Cortex, LibraryConfig};
+/// use cortex_memory_core::{Cortex, LibraryConfig};
 ///
 /// let cortex = Cortex::open("./memory.redb", LibraryConfig::default()).unwrap();
 /// cortex.store(Cortex::fact("The API uses JWT auth", 0.7)).unwrap();

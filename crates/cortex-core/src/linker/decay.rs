@@ -19,6 +19,10 @@ impl<S: Storage> DecayEngine<S> {
     /// Apply decay to all edges in the graph
     /// Returns (pruned_count, deleted_count)
     pub fn apply_decay(&self, now: DateTime<Utc>) -> Result<(u64, u64)> {
+        if !self.config.enabled {
+            return Ok((0, 0));
+        }
+
         let mut pruned_count = 0;
         let mut deleted_count = 0;
 
@@ -336,6 +340,128 @@ mod tests {
         // Check that updated_at was reset
         let reinforced_edge = storage.get_edge(edge.id).unwrap().unwrap();
         assert!(reinforced_edge.updated_at > old_time);
+    }
+
+    #[test]
+    fn test_decay_skipped_when_disabled() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("no_decay.redb");
+        let storage = Arc::new(RedbStorage::open(&db_path).unwrap());
+
+        let node1 = Node::new(
+            NodeKind::new("fact").unwrap(),
+            "Deposition transcript".into(),
+            "Key witness testimony from month one".into(),
+            Source {
+                agent: "legal".into(),
+                session: None,
+                channel: None,
+            },
+            0.5,
+        );
+        let node2 = Node::new(
+            NodeKind::new("fact").unwrap(),
+            "Filing deadline".into(),
+            "Response due in 30 days".into(),
+            Source {
+                agent: "legal".into(),
+                session: None,
+                channel: None,
+            },
+            0.5,
+        );
+        storage.put_node(&node1).unwrap();
+        storage.put_node(&node2).unwrap();
+
+        let mut edge = Edge::new(
+            node1.id,
+            node2.id,
+            Relation::new("related_to").unwrap(),
+            0.8,
+            EdgeProvenance::AutoSimilarity { score: 0.8 },
+        );
+        // Edge is 365 days old
+        edge.updated_at = Utc::now() - Duration::days(365);
+        storage.put_edge(&edge).unwrap();
+
+        // Decay DISABLED
+        let config = DecayConfig {
+            enabled: false,
+            ..DecayConfig::default()
+        };
+        let engine = DecayEngine::new(storage.clone(), config);
+        let (pruned, deleted) = engine.apply_decay(Utc::now()).unwrap();
+
+        assert_eq!(pruned, 0);
+        assert_eq!(deleted, 0);
+
+        // Edge weight unchanged after a full year
+        let unchanged = storage.get_edge(edge.id).unwrap().unwrap();
+        assert_eq!(
+            unchanged.weight, 0.8,
+            "Edge weight must not change when decay is disabled"
+        );
+    }
+
+    #[test]
+    fn test_decay_still_works_when_enabled() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("enabled_decay.redb");
+        let storage = Arc::new(RedbStorage::open(&db_path).unwrap());
+
+        let node1 = Node::new(
+            NodeKind::new("fact").unwrap(),
+            "Node 1".into(),
+            "Body 1".into(),
+            Source {
+                agent: "test".into(),
+                session: None,
+                channel: None,
+            },
+            0.5,
+        );
+        let node2 = Node::new(
+            NodeKind::new("fact").unwrap(),
+            "Node 2".into(),
+            "Body 2".into(),
+            Source {
+                agent: "test".into(),
+                session: None,
+                channel: None,
+            },
+            0.5,
+        );
+        storage.put_node(&node1).unwrap();
+        storage.put_node(&node2).unwrap();
+
+        let mut edge = Edge::new(
+            node1.id,
+            node2.id,
+            Relation::new("related_to").unwrap(),
+            0.8,
+            EdgeProvenance::AutoSimilarity { score: 0.8 },
+        );
+        edge.updated_at = Utc::now() - Duration::days(365);
+        storage.put_edge(&edge).unwrap();
+
+        // Decay ENABLED (default)
+        let config = DecayConfig::default();
+        assert!(config.enabled);
+        let engine = DecayEngine::new(storage.clone(), config);
+        engine.apply_decay(Utc::now()).unwrap();
+
+        // Year-old edge should have decayed significantly
+        let updated = storage.get_edge(edge.id).unwrap();
+        // With default rate 0.01/day over 365 days, weight should be near zero or deleted
+        // Either the edge was deleted or its weight dropped well below 0.8
+        match updated {
+            None => {} // deleted — expected for a year-old edge
+            Some(e) => assert!(
+                e.weight < 0.8,
+                "Edge weight should have decayed, got {}",
+                e.weight
+            ),
+        }
     }
 }
 

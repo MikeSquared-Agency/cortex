@@ -3,11 +3,11 @@
 //! Run with: cargo run --example auto_linker
 //! Note: First run downloads the embedding model (~30MB)
 
-use cortex_core::graph::GraphEngineImpl;
-use cortex_core::linker::{AutoLinker, AutoLinkerConfig};
-use cortex_core::storage::{RedbStorage, Storage};
-use cortex_core::types::*;
-use cortex_core::vector::{EmbeddingService, FastEmbedService, HnswIndex, SimilarityConfig};
+use cortex_memory_core::graph::GraphEngineImpl;
+use cortex_memory_core::linker::{AutoLinker, AutoLinkerConfig};
+use cortex_memory_core::storage::{RedbStorage, Storage};
+use cortex_memory_core::types::*;
+use cortex_memory_core::vector::{EmbeddingService, FastEmbedService, HnswIndex, SimilarityConfig};
 use std::sync::{Arc, RwLock};
 use tempfile::TempDir;
 
@@ -160,7 +160,7 @@ fn main() {
         println!("Sample edges created:");
         // Collect edges by iterating over all nodes' outgoing edges
         let all_nodes = storage
-            .list_nodes(cortex_core::storage::NodeFilter::new())
+            .list_nodes(cortex_memory_core::storage::NodeFilter::new())
             .unwrap();
         let all_edges: Vec<_> = all_nodes
             .iter()

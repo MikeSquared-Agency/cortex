@@ -78,6 +78,32 @@ cortex node create --kind fact --title "Sprint goal: fix auth bug" \
 
 The retention engine sweeps nodes past their `expires_at` during each cycle.
 
+## Disabling Decay
+
+For domains where knowledge must never fade (legal, compliance, medical, archival),
+disable decay entirely:
+
+```toml
+[auto_linker]
+decay_enabled = false
+
+[score_decay]
+enabled = false
+
+[retention]
+default_ttl_days = 0
+```
+
+When decay is disabled:
+- Edge weights never change due to age
+- Edges are never pruned or deleted due to low weight
+- Search results are ranked by pure relevance, not recency
+- Nodes are never expired by the retention engine (when TTL is 0)
+- A deposition from month one carries the same weight at trial 18 months later
+
+The auto-linker still runs (creating new edges, detecting contradictions,
+promoting entities). Only the decay pass is skipped.
+
 ## Retention Policies
 
 Hard retention limits are separate from decay. See [configuration](../getting-started/configuration.md) for `[retention]` settings.

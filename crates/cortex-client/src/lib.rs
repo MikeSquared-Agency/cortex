@@ -4,8 +4,8 @@
 //!
 //! # Example
 //! ```rust,no_run
-//! use cortex_client::CortexClient;
-//! use cortex_proto::cortex::v1::CreateNodeRequest;
+//! use cortex_memory_client::CortexClient;
+//! use cortex_memory_client::proto::CreateNodeRequest;
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {

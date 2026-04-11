@@ -29,6 +29,8 @@ enabled = true
 interval_seconds = 60           # How often to run
 similarity_threshold = 0.75     # Min cosine similarity for auto-edges
 max_edges_per_node = 20         # Cap outgoing similarity edges
+decay_enabled = true            # Set to false for legal/compliance (nothing fades)
+decay_rate_per_day = 0.01       # Ignored when decay_enabled = false
 entity_promote_every_n_cycles = 60   # How often to run entity promotion (cycles)
 entity_promote_min_agents = 2        # Min agents referencing an entity before promotion
 
