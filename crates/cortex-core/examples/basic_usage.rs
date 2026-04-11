@@ -1,4 +1,4 @@
-use cortex_core::{
+use cortex_memory_core::{
     Edge, EdgeProvenance, Node, NodeFilter, NodeKind, RedbStorage, Relation, Source, Storage,
 };
 

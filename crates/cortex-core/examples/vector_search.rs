@@ -3,9 +3,9 @@
 //! Run with: cargo run --example vector_search
 //! Note: First run downloads the embedding model (~30MB)
 
-use cortex_core::storage::{RedbStorage, Storage};
-use cortex_core::types::*;
-use cortex_core::vector::{
+use cortex_memory_core::storage::{RedbStorage, Storage};
+use cortex_memory_core::types::*;
+use cortex_memory_core::vector::{
     embedding_input, EmbeddingService, FastEmbedService, HnswIndex, VectorIndex,
 };
 use tempfile::TempDir;

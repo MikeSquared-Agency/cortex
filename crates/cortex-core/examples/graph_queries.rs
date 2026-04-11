@@ -1,4 +1,4 @@
-use cortex_core::{
+use cortex_memory_core::{
     Edge, EdgeProvenance, GraphEngine, GraphEngineImpl, Node, NodeKind, PathRequest, RedbStorage,
     Relation, Source, Storage, TraversalDirection, TraversalRequest, TraversalStrategy,
 };
