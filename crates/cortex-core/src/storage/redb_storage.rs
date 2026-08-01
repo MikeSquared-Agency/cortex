@@ -759,7 +759,7 @@ impl Storage for RedbStorage {
         }
 
         // Sort by created_at descending (newest first)
-        nodes.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        nodes.sort_by_key(|node| std::cmp::Reverse(node.created_at));
 
         // Apply offset and limit
         let start = filter.offset.unwrap_or(0);

@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 authors = ["Mike Darlington"]
 license = "MIT"
@@ -75,6 +75,5 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 # Testing
 proptest = "1.6"
 criterion = "0.5"
-
 
 

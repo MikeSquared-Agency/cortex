@@ -3,7 +3,7 @@
 ## Install
 
 ```bash
-pip install cortex-memory
+pip install cortex-memory-client
 ```
 
 ## Quick Start
@@ -20,7 +20,7 @@ Connect to a Cortex server.
 
 - `addr` — gRPC address, e.g. `"localhost:9090"`
 
-## cx.store(kind, title, *, body="", importance=0.5, tags=None, source_agent="", metadata=None) → str
+## cx.store(kind, title, \*, body="", importance=0.5, tags=None, source_agent="", metadata=None) → str
 
 Store a new node. Returns the node ID.
 
@@ -35,7 +35,7 @@ node_id = cx.store("fact", "JWT is used for auth",
 
 Get a node by ID.
 
-## cx.search(query, limit=10, *, kind=None, hybrid=False, alpha=0.7) → List[SearchResult]
+## cx.search(query, limit=10, \*, kind=None, hybrid=False, alpha=0.7) → List[SearchResult]
 
 Search nodes semantically.
 
@@ -45,7 +45,7 @@ for r in results:
     print(r.score, r.title, r.id)
 ```
 
-## cx.briefing(agent_id, *, max_tokens=2000) → str
+## cx.briefing(agent_id, \*, max_tokens=2000) → str
 
 Get a context briefing for an agent.
 
@@ -54,7 +54,7 @@ briefing = cx.briefing("my-agent")
 # Use as system prompt context
 ```
 
-## cx.edge(from_id, to_id, relation, *, weight=0.8) → str
+## cx.edge(from_id, to_id, relation, \*, weight=0.8) → str
 
 Create an edge between two nodes.
 
@@ -66,31 +66,31 @@ cx.edge(node_a, node_b, "supports", weight=0.9)
 
 Delete a node.
 
-## cx.traverse(node_id, *, depth=2, direction="both") → Subgraph
+## cx.traverse(node_id, \*, depth=2, direction="both") → Subgraph
 
 Traverse the graph from a node.
 
 ## SearchResult
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | str | Node ID |
-| `title` | str | Node title |
-| `body` | str | Node body |
-| `kind` | str | Node kind |
-| `score` | float | Similarity score |
+| Field        | Type  | Description      |
+| ------------ | ----- | ---------------- |
+| `id`         | str   | Node ID          |
+| `title`      | str   | Node title       |
+| `body`       | str   | Node body        |
+| `kind`       | str   | Node kind        |
+| `score`      | float | Similarity score |
 | `importance` | float | Importance score |
 
 ## Node
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | str | Node ID |
-| `kind` | str | Node kind |
-| `title` | str | Title |
-| `body` | str | Body |
-| `importance` | float | Importance score |
-| `tags` | List[str] | Tags |
-| `source_agent` | str | Source agent ID |
-| `created_at` | datetime | Creation timestamp |
-| `metadata` | Dict[str, str] | Metadata |
+| Field          | Type           | Description        |
+| -------------- | -------------- | ------------------ |
+| `id`           | str            | Node ID            |
+| `kind`         | str            | Node kind          |
+| `title`        | str            | Title              |
+| `body`         | str            | Body               |
+| `importance`   | float          | Importance score   |
+| `tags`         | List[str]      | Tags               |
+| `source_agent` | str            | Source agent ID    |
+| `created_at`   | datetime       | Creation timestamp |
+| `metadata`     | Dict[str, str] | Metadata           |

@@ -490,6 +490,30 @@ mod tests {
     use std::sync::Arc;
     use tempfile::TempDir;
 
+    #[derive(Clone)]
+    struct NoopEmbedder;
+
+    impl EmbeddingService for NoopEmbedder {
+        fn embed(&self, _text: &str) -> crate::error::Result<crate::types::Embedding> {
+            Ok(vec![0.0; 384])
+        }
+
+        fn embed_batch(
+            &self,
+            texts: &[String],
+        ) -> crate::error::Result<Vec<crate::types::Embedding>> {
+            Ok(texts.iter().map(|_| vec![0.0; 384]).collect())
+        }
+
+        fn dimension(&self) -> usize {
+            384
+        }
+
+        fn model_name(&self) -> &str {
+            "noop"
+        }
+    }
+
     #[test]
     #[ignore] // Requires embedding model
     fn test_auto_linker_cycle() {
@@ -560,7 +584,7 @@ mod tests {
         let db_path = temp_dir.path().join("cursor_test.redb");
         let storage = Arc::new(RedbStorage::open(&db_path).unwrap());
 
-        let embedding_service = Arc::new(FastEmbedService::new().unwrap());
+        let embedding_service = Arc::new(NoopEmbedder);
         let vector_index = Arc::new(RwLock::new(HnswIndex::new(384)));
         let graph_engine = Arc::new(GraphEngineImpl::new(storage.clone()));
 
@@ -602,7 +626,7 @@ mod tests {
         let db_path = temp_dir.path().join("config_change_test.redb");
         let storage = Arc::new(RedbStorage::open(&db_path).unwrap());
 
-        let embedding_service = Arc::new(FastEmbedService::new().unwrap());
+        let embedding_service = Arc::new(NoopEmbedder);
         let vector_index = Arc::new(RwLock::new(HnswIndex::new(384)));
         let graph_engine = Arc::new(GraphEngineImpl::new(storage.clone()));
 
@@ -657,7 +681,7 @@ mod tests {
         let db_path = temp_dir.path().join("no_config_change_test.redb");
         let storage = Arc::new(RedbStorage::open(&db_path).unwrap());
 
-        let embedding_service = Arc::new(FastEmbedService::new().unwrap());
+        let embedding_service = Arc::new(NoopEmbedder);
         let vector_index = Arc::new(RwLock::new(HnswIndex::new(384)));
         let graph_engine = Arc::new(GraphEngineImpl::new(storage.clone()));
 
@@ -706,7 +730,7 @@ mod tests {
         let db_path = temp_dir.path().join("model_change_test.redb");
         let storage = Arc::new(RedbStorage::open(&db_path).unwrap());
 
-        let embedding_service = Arc::new(FastEmbedService::new().unwrap());
+        let embedding_service = Arc::new(NoopEmbedder);
         let vector_index = Arc::new(RwLock::new(HnswIndex::new(384)));
         let graph_engine = Arc::new(GraphEngineImpl::new(storage.clone()));
 

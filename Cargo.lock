@@ -735,7 +735,7 @@ dependencies = [
 
 [[package]]
 name = "cortex-memory"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -779,7 +779,7 @@ dependencies = [
 
 [[package]]
 name = "cortex-memory-client"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "cortex-memory-proto",
@@ -789,7 +789,7 @@ dependencies = [
 
 [[package]]
 name = "cortex-memory-core"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -817,7 +817,7 @@ dependencies = [
 
 [[package]]
 name = "cortex-memory-proto"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "prost",
  "prost-types",
@@ -4775,7 +4775,7 @@ dependencies = [
 
 [[package]]
 name = "warren-adapter"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "async-nats",
  "cortex-memory-core",

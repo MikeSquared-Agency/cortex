@@ -3,12 +3,28 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cortex-memory"
-version = "0.3.1"
+name = "cortex-memory-client"
+version = "0.3.2"
 description = "Self-organizing graph memory for AI agents — Python SDK"
-license = { text = "MIT" }
+license = "MIT"
 requires-python = ">=3.9"
 readme = "README.md"
+authors = [
+    { name = "MikeSquared Agency", email = "mike@darlington.dev" },
+]
+keywords = ["ai-agents", "cortex", "graph-memory", "memory", "sdk"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "grpcio>=1.60",
     "grpcio-tools>=1.60",
@@ -17,6 +33,12 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio"]
+
+[project.urls]
+Homepage = "https://github.com/MikeSquared-Agency/cortex"
+Documentation = "https://github.com/MikeSquared-Agency/cortex/tree/main/docs"
+Repository = "https://github.com/MikeSquared-Agency/cortex.git"
+Issues = "https://github.com/MikeSquared-Agency/cortex/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["cortex_memory"]

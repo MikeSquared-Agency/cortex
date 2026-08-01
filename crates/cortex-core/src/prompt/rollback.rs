@@ -747,7 +747,7 @@ impl<S: Storage> RollbackMonitor<S> {
                     .unwrap_or(false)
             })
             .collect();
-        events.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        events.sort_by_key(|event| std::cmp::Reverse(event.created_at));
         Ok(events)
     }
 

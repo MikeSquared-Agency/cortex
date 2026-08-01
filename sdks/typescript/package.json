@@ -1,26 +1,48 @@
 {
-  "name": "@cortex-memory/client",
-  "version": "0.3.1",
+  "name": "cortex-memory-client",
+  "version": "0.3.2",
   "description": "Self-organizing graph memory for AI agents — TypeScript SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "license": "MIT",
+  "author": "MikeSquared Agency <mike@darlington.dev>",
+  "homepage": "https://github.com/MikeSquared-Agency/cortex#readme",
+  "bugs": {
+    "url": "https://github.com/MikeSquared-Agency/cortex/issues"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/MikeSquared-Agency/cortex"
+    "url": "git+https://github.com/MikeSquared-Agency/cortex.git",
+    "directory": "sdks/typescript"
+  },
+  "keywords": [
+    "ai-agents",
+    "cortex",
+    "graph-memory",
+    "memory",
+    "sdk"
+  ],
+  "engines": {
+    "node": ">=18"
   },
   "scripts": {
-    "build": "tsc",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && tsc",
     "test": "jest",
     "prepublishOnly": "npm run build"
   },
   "files": [
     "dist",
-    "proto"
+    "proto",
+    "README.md",
+    "LICENSE"
   ],
   "dependencies": {
-    "@grpc/grpc-js": "^1.14.3",
-    "@grpc/proto-loader": "^0.7.15"
+    "@grpc/grpc-js": "^1.14.4",
+    "@grpc/proto-loader": "^0.8.1"
+  },
+  "overrides": {
+    "protobufjs": "^8.7.1"
   },
   "devDependencies": {
     "@types/node": "^20.19.33",

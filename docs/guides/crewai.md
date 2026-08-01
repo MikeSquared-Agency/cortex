@@ -5,7 +5,7 @@ Share memory across a CrewAI multi-agent team using Cortex.
 ## Install
 
 ```bash
-pip install cortex-memory crewai crewai-tools
+pip install cortex-memory-client crewai crewai-tools
 ```
 
 ## Shared Memory Tool

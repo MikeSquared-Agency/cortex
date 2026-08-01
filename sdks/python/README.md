@@ -1,11 +1,11 @@
-# cortex-memory
+# cortex-memory-client
 
-Python client SDK for the [Cortex](https://github.com/MikeSquared-Agency/cortex) graph memory engine.
+Python client SDK for the [Cortex](https://github.com/MikeSquared-Agency/cortex) graph memory engine. The distribution is named `cortex-memory-client`; the import package remains `cortex_memory`.
 
 ## Installation
 
 ```bash
-pip install cortex-memory
+pip install cortex-memory-client
 ```
 
 ## Quick start

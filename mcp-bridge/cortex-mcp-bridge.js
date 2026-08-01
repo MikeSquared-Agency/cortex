@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Cortex MCP Bridge — lightweight MCP server that proxies to Cortex REST API.
- * No Rust binary needed. Just Node.js.
+ * Cortex MCP Bridge — lightweight MCP server that proxies to a running Cortex
+ * REST API. The bridge itself needs only Node.js; Cortex may run locally or on
+ * a remote host.
  *
  * Usage in Claude Desktop config:
  * {
@@ -20,9 +21,10 @@
  * CORTEX_AUTH_TOKEN is optional — omit it for local servers with auth disabled.
  */
 
-const BASE = process.env.CORTEX_URL || "http://localhost:19091";
+const BASE = process.env.CORTEX_URL || "http://localhost:9091";
 const TOKEN = process.env.CORTEX_AUTH_TOKEN || null;
 const readline = require("readline");
+const { version: BRIDGE_VERSION } = require("./package.json");
 
 const TOOLS = [
   {
@@ -226,7 +228,7 @@ rl.on("line", async (line) => {
         respond(id, {
           protocolVersion: "2024-11-05",
           capabilities: { tools: {} },
-          serverInfo: { name: "cortex", version: "0.1.0" },
+          serverInfo: { name: "cortex-mcp-bridge", version: BRIDGE_VERSION },
         });
         break;
 

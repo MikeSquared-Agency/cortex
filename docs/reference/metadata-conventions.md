@@ -6,24 +6,24 @@ This document defines **well-known metadata keys**: documented conventions that 
 
 ## Node metadata
 
-| Key | Type | Description | Used by |
-|-----|------|-------------|---------|
-| `entity_type` | string | What kind of entity this is: `agent`, `company`, `person`, `technology`, `project`, `location`, `product` | Entity layer, briefing engine |
-| `aliases` | array of strings | Alternative names for an entity node. Used for entity resolution. | Auto-linker entity matching |
-| `parent_agent` | string | Agent ID that spawned the agent that created this node. Provenance chain. | Trust scoring (source reliability), audit |
-| `task_id` | string | Orchestrator task ID that prompted this node's creation. | Audit, task-scoped queries |
-| `source_url` | string | External URL where this knowledge originated. | Provenance, citation |
-| `content_type` | string | MIME-like type of the body content: `text/plain`, `text/markdown`, `application/json`, `code/rust`, `code/python` | Embedding strategy, display |
-| `language` | string | ISO 639-1 language code of the content: `en`, `zh`, `ja` | Embedding model selection |
-| `expires_reason` | string | Why this node has an `expires_at`. `working-memory`, `ttl-policy`, `gdpr-request` | Audit |
+| Key              | Type             | Description                                                                                                       | Used by                                   |
+| ---------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `entity_type`    | string           | What kind of entity this is: `agent`, `company`, `person`, `technology`, `project`, `location`, `product`         | Entity layer, briefing engine             |
+| `aliases`        | array of strings | Alternative names for an entity node. Used for entity resolution.                                                 | Auto-linker entity matching               |
+| `parent_agent`   | string           | Agent ID that spawned the agent that created this node. Provenance chain.                                         | Trust scoring (source reliability), audit |
+| `task_id`        | string           | Orchestrator task ID that prompted this node's creation.                                                          | Audit, task-scoped queries                |
+| `source_url`     | string           | External URL where this knowledge originated.                                                                     | Provenance, citation                      |
+| `content_type`   | string           | MIME-like type of the body content: `text/plain`, `text/markdown`, `application/json`, `code/rust`, `code/python` | Embedding strategy, display               |
+| `language`       | string           | ISO 639-1 language code of the content: `en`, `zh`, `ja`                                                          | Embedding model selection                 |
+| `expires_reason` | string           | Why this node has an `expires_at`. `working-memory`, `ttl-policy`, `gdpr-request`                                 | Audit                                     |
 
 ## Edge metadata
 
-| Key | Type | Description | Used by |
-|-----|------|-------------|---------|
-| `entity` | string | Normalised entity name that links these two nodes. | Entity co-occurrence rule, cross-agent discovery |
-| `similarity_context` | string | What the similarity was about (title match, body match, tag overlap). | Debugging, trust scoring |
-| `rule_version` | string | Version of the rule that created this edge. | Migration, debugging |
+| Key                  | Type   | Description                                                           | Used by                                          |
+| -------------------- | ------ | --------------------------------------------------------------------- | ------------------------------------------------ |
+| `entity`             | string | Normalised entity name that links these two nodes.                    | Entity co-occurrence rule, cross-agent discovery |
+| `similarity_context` | string | What the similarity was about (title match, body match, tag overlap). | Debugging, trust scoring                         |
+| `rule_version`       | string | Version of the rule that created this edge.                           | Migration, debugging                             |
 
 ## Entity type
 
@@ -39,15 +39,15 @@ The briefing engine uses `entity_type` to group entities in cross-agent sections
 
 Well-known entity types:
 
-| Value | Description |
-|-------|-------------|
-| `agent` | An AI agent or bot |
-| `company` | A company or organisation |
-| `person` | A human individual |
-| `technology` | A language, framework, or tool |
-| `project` | A named project or initiative |
-| `location` | A place (city, region, address) |
-| `product` | A product or service |
+| Value        | Description                     |
+| ------------ | ------------------------------- |
+| `agent`      | An AI agent or bot              |
+| `company`    | A company or organisation       |
+| `person`     | A human individual              |
+| `technology` | A language, framework, or tool  |
+| `project`    | A named project or initiative   |
+| `location`   | A place (city, region, address) |
+| `product`    | A product or service            |
 
 Custom entity types are allowed — these are conventions, not constraints.
 
@@ -111,13 +111,13 @@ cx.store("entity", "Company X", metadata={
 ### TypeScript
 
 ```typescript
-import { Cortex, EntityType } from '@cortex-memory/client';
+import { Cortex, EntityType } from "cortex-memory-client";
 
-const cx = new Cortex('localhost:9090');
+const cx = new Cortex("localhost:9090");
 
-await cx.storeEntity('Company X', {
-    entityType: EntityType.Company,
-    aliases: ['CompanyX'],
+await cx.storeEntity("Company X", {
+  entityType: EntityType.Company,
+  aliases: ["CompanyX"],
 });
 ```
 

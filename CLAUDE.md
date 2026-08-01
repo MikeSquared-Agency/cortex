@@ -14,8 +14,8 @@ crates/
   cortex-proto/    — Protobuf definitions + generated code.
   warren-adapter/  — Optional Warren integration (feature-gated).
 sdks/
-  typescript/      — @cortex/client npm package
-  python/          — cortex-memory PyPI package
+  typescript/      — cortex-memory-client npm package
+  python/          — cortex-memory-client PyPI package (`cortex_memory` import)
   go/              — Go client module
 specs/             — Design specs (tagged IMPLEMENTED/DEFERRED)
 docs/              — User-facing documentation
@@ -108,6 +108,7 @@ The `test_node_schema_golden` test in `redb_storage.rs` will fail immediately if
 format changes without these steps being followed.
 
 **Fields added in evolution (specs 09-10):**
+
 - Node: `valid_from`, `valid_until`, `expires_at`, `embedding_model` (all Option, serde default None)
 - Edge: `metadata` (HashMap, serde default empty)
 - EdgeProvenance: `Custom { kind, detail }` variant
@@ -137,6 +138,7 @@ The native MCP server is in `crates/cortex-server/src/mcp/mod.rs`.
 It implements 7 tools via stdio JSON-RPC transport.
 
 The MCP server runs in two modes:
+
 - **Library mode** (default): opens the redb database directly. Fastest.
 - **Proxy mode** (`--server`): connects to a running gRPC server.
 

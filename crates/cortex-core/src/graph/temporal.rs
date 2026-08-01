@@ -47,7 +47,7 @@ impl<S: Storage> TemporalQueries for TemporalQueriesImpl<S> {
             .collect();
 
         // Sort by updated_at ascending (oldest changes first)
-        nodes.sort_by(|a, b| a.updated_at.cmp(&b.updated_at));
+        nodes.sort_by_key(|node| node.updated_at);
 
         Ok(nodes)
     }
@@ -137,7 +137,7 @@ impl<S: Storage> TemporalQueries for TemporalQueriesImpl<S> {
         let mut nodes = self.storage.list_nodes(filter)?;
 
         // Sort by created_at
-        nodes.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+        nodes.sort_by_key(|node| node.created_at);
 
         Ok(nodes)
     }

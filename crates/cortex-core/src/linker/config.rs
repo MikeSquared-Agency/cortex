@@ -505,13 +505,11 @@ impl RuleCondition {
                     )));
                 }
             }
-            Self::TagReferencesTitle { tag_prefix } => {
-                if tag_prefix.is_empty() {
-                    return Err(CortexError::Validation(format!(
-                        "Rule '{}' tag_prefix cannot be empty",
-                        rule_name
-                    )));
-                }
+            Self::TagReferencesTitle { tag_prefix } if tag_prefix.is_empty() => {
+                return Err(CortexError::Validation(format!(
+                    "Rule '{}' tag_prefix cannot be empty",
+                    rule_name
+                )));
             }
             _ => {}
         }
