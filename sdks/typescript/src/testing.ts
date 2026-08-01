@@ -6,7 +6,7 @@
  *
  * @example
  * ```typescript
- * import { MockCortex } from '@cortex-memory/client';
+ * import { MockCortex } from 'cortex-memory-client';
  *
  * describe('my agent', () => {
  *   it('stores and retrieves knowledge', async () => {
@@ -20,7 +20,12 @@
  * ```
  */
 
-import type { SearchResult, StoreOptions, StoreEntityOptions, Subgraph } from './client';
+import type {
+  SearchResult,
+  StoreOptions,
+  StoreEntityOptions,
+  Subgraph,
+} from "./client";
 
 interface StoredNode {
   id: string;
@@ -57,7 +62,7 @@ export class MockCortex {
       metadata.aliases = JSON.stringify(options.aliases);
     }
     return this.store({
-      kind: 'entity',
+      kind: "entity",
       title: options.title,
       body: options.body,
       tags: options.tags,
@@ -77,10 +82,10 @@ export class MockCortex {
       tags: options.tags ?? [],
       importance: options.importance ?? 0.5,
       metadata: options.metadata ?? {},
-      source_agent: options.source_agent ?? '',
+      source_agent: options.source_agent ?? "",
     };
     this.nodes.set(id, node);
-    this.callLog.push({ method: 'store', args: [options] });
+    this.callLog.push({ method: "store", args: [options] });
     return id;
   }
 
@@ -96,7 +101,10 @@ export class MockCortex {
     const limit = opts.limit ?? 10;
     const results: SearchResult[] = [];
     for (const n of this.nodes.values()) {
-      if (n.title.toLowerCase().includes(q) || n.body.toLowerCase().includes(q)) {
+      if (
+        n.title.toLowerCase().includes(q) ||
+        n.body.toLowerCase().includes(q)
+      ) {
         results.push({
           score: 0.9,
           nodeId: n.id,
@@ -139,7 +147,7 @@ export class MockCortex {
   assertStored(kind: string, title: string): void {
     const found = this.callLog.some(
       (e) =>
-        e.method === 'store' &&
+        e.method === "store" &&
         e.args[0].kind === kind &&
         e.args[0].title === title,
     );
@@ -155,7 +163,7 @@ export class MockCortex {
   assertNotStored(kind: string, title: string): void {
     const found = this.callLog.some(
       (e) =>
-        e.method === 'store' &&
+        e.method === "store" &&
         e.args[0].kind === kind &&
         e.args[0].title === title,
     );
@@ -176,15 +184,17 @@ export class MockCortex {
 function _uuid(): string {
   // Prefer native crypto.randomUUID if available (Node ≥ 14.17)
   if (
-    typeof globalThis !== 'undefined' &&
-    typeof (globalThis as unknown as { crypto?: { randomUUID?: () => string } }).crypto
-      ?.randomUUID === 'function'
+    typeof globalThis !== "undefined" &&
+    typeof (globalThis as unknown as { crypto?: { randomUUID?: () => string } })
+      .crypto?.randomUUID === "function"
   ) {
-    return (globalThis as unknown as { crypto: { randomUUID: () => string } }).crypto.randomUUID();
+    return (
+      globalThis as unknown as { crypto: { randomUUID: () => string } }
+    ).crypto.randomUUID();
   }
   // Fallback
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
-    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
   });
 }

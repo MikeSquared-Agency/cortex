@@ -1,14 +1,37 @@
 {
   "name": "cortex-mcp-bridge",
-  "version": "0.3.1",
-  "description": "MCP bridge for Cortex graph memory (no Rust needed)",
+  "version": "0.3.2",
+  "description": "Node.js MCP bridge for a local or remote Cortex graph-memory server",
   "bin": {
     "cortex-mcp-bridge": "./cortex-mcp-bridge.js"
   },
+  "scripts": {
+    "test": "node --test test.mjs"
+  },
   "license": "MIT",
+  "author": "MikeSquared Agency <mike@darlington.dev>",
+  "homepage": "https://github.com/MikeSquared-Agency/cortex#use-with-ai-agents-mcp",
+  "bugs": {
+    "url": "https://github.com/MikeSquared-Agency/cortex/issues"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/MikeSquared-Agency/cortex"
+    "url": "git+https://github.com/MikeSquared-Agency/cortex.git",
+    "directory": "mcp-bridge"
   },
-  "keywords": ["mcp", "cortex", "memory", "ai-agents", "model-context-protocol"]
+  "keywords": [
+    "mcp",
+    "cortex",
+    "memory",
+    "ai-agents",
+    "model-context-protocol"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "cortex-mcp-bridge.js",
+    "README.md",
+    "LICENSE"
+  ]
 }

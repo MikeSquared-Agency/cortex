@@ -6,7 +6,7 @@
  *
  * @example
  * ```typescript
- * import { Cortex } from '@cortex-memory/client';
+ * import { Cortex } from 'cortex-memory-client';
  *
  * const cx = new Cortex('localhost:9090');
  *
@@ -17,12 +17,12 @@
  * ```
  */
 
-import * as grpc from '@grpc/grpc-js';
-import * as protoLoader from '@grpc/proto-loader';
-import path from 'path';
+import * as grpc from "@grpc/grpc-js";
+import * as protoLoader from "@grpc/proto-loader";
+import path from "path";
 
 // Proto file is bundled inside the package at ../proto/cortex.proto
-const PROTO_PATH = path.join(__dirname, '..', 'proto', 'cortex.proto');
+const PROTO_PATH = path.join(__dirname, "..", "proto", "cortex.proto");
 
 const LOADER_OPTIONS: protoLoader.Options = {
   keepCase: true,
@@ -30,18 +30,18 @@ const LOADER_OPTIONS: protoLoader.Options = {
   enums: String,
   defaults: true,
   oneofs: true,
-  includeDirs: [path.join(__dirname, '..', 'proto')],
+  includeDirs: [path.join(__dirname, "..", "proto")],
 };
 
 /** Well-known entity type constants for metadata conventions. */
 export enum EntityType {
-  Agent = 'agent',
-  Company = 'company',
-  Person = 'person',
-  Technology = 'technology',
-  Project = 'project',
-  Location = 'location',
-  Product = 'product',
+  Agent = "agent",
+  Company = "company",
+  Person = "person",
+  Technology = "technology",
+  Project = "project",
+  Location = "location",
+  Product = "product",
 }
 
 /** Options for storing an entity node. */
@@ -126,7 +126,7 @@ export class Cortex {
       metadata.aliases = JSON.stringify(options.aliases);
     }
     return this.store({
-      kind: 'entity',
+      kind: "entity",
       title: options.title,
       body: options.body,
       tags: options.tags,
@@ -138,14 +138,14 @@ export class Cortex {
 
   /** Store a knowledge node. Returns the new node ID. */
   async store(options: StoreOptions): Promise<string> {
-    return this._call('CreateNode', {
+    return this._call("CreateNode", {
       kind: options.kind,
       title: options.title,
       body: options.body ?? options.title,
       importance: options.importance ?? 0.5,
       tags: options.tags ?? [],
       metadata: options.metadata ?? {},
-      source_agent: options.source_agent ?? '',
+      source_agent: options.source_agent ?? "",
     }).then((r: { id: string }) => r.id);
   }
 
@@ -163,23 +163,31 @@ export class Cortex {
     query: string,
     opts: { limit?: number; kindFilter?: string[] } = {},
   ): Promise<SearchResult[]> {
-    const resp = await this._call('SimilaritySearch', {
+    const resp = await this._call("SimilaritySearch", {
       query,
       limit: opts.limit ?? 10,
       kind_filter: opts.kindFilter ?? [],
     });
     // SearchResponse.results is SearchResultEntry[] where each has node + score
-    return (resp.results ?? []).map((r: {
-      score: number;
-      node: { id: string; title: string; kind: string; body: string; importance: number };
-    }) => ({
-      score: r.score,
-      nodeId: r.node?.id ?? '',
-      title: r.node?.title ?? '',
-      kind: r.node?.kind ?? '',
-      body: r.node?.body ?? '',
-      importance: r.node?.importance ?? 0,
-    }));
+    return (resp.results ?? []).map(
+      (r: {
+        score: number;
+        node: {
+          id: string;
+          title: string;
+          kind: string;
+          body: string;
+          importance: number;
+        };
+      }) => ({
+        score: r.score,
+        nodeId: r.node?.id ?? "",
+        title: r.node?.title ?? "",
+        kind: r.node?.kind ?? "",
+        body: r.node?.body ?? "",
+        importance: r.node?.importance ?? 0,
+      }),
+    );
   }
 
   /**
@@ -194,22 +202,30 @@ export class Cortex {
     anchorIds: string[] = [],
     opts: { limit?: number } = {},
   ): Promise<SearchResult[]> {
-    const resp = await this._call('HybridSearch', {
+    const resp = await this._call("HybridSearch", {
       query,
       anchor_ids: anchorIds,
       limit: opts.limit ?? 10,
     });
-    return (resp.results ?? []).map((r: {
-      combined_score: number;
-      node: { id: string; title: string; kind: string; body: string; importance: number };
-    }) => ({
-      score: r.combined_score,
-      nodeId: r.node?.id ?? '',
-      title: r.node?.title ?? '',
-      kind: r.node?.kind ?? '',
-      body: r.node?.body ?? '',
-      importance: r.node?.importance ?? 0,
-    }));
+    return (resp.results ?? []).map(
+      (r: {
+        combined_score: number;
+        node: {
+          id: string;
+          title: string;
+          kind: string;
+          body: string;
+          importance: number;
+        };
+      }) => ({
+        score: r.combined_score,
+        nodeId: r.node?.id ?? "",
+        title: r.node?.title ?? "",
+        kind: r.node?.kind ?? "",
+        body: r.node?.body ?? "",
+        importance: r.node?.importance ?? 0,
+      }),
+    );
   }
 
   /**
@@ -220,18 +236,18 @@ export class Cortex {
    * @returns Rendered markdown string.
    */
   async briefing(agentId: string, compact = false): Promise<string> {
-    const resp = await this._call('GetBriefing', {
+    const resp = await this._call("GetBriefing", {
       agent_id: agentId,
       compact,
     });
-    return resp.rendered ?? '';
+    return resp.rendered ?? "";
   }
 
   /**
    * Graph traversal from *nodeId* up to *depth* hops.
    */
   async traverse(nodeId: string, depth = 2): Promise<Subgraph> {
-    const resp = await this._call('Traverse', {
+    const resp = await this._call("Traverse", {
       start_ids: [nodeId],
       max_depth: depth,
     });
@@ -245,7 +261,7 @@ export class Cortex {
   /** Get a node by ID. Returns `null` if not found. */
   async getNode(id: string): Promise<unknown | null> {
     try {
-      return await this._call('GetNode', { id });
+      return await this._call("GetNode", { id });
     } catch (err: unknown) {
       if (_isGrpcError(err, grpc.status.NOT_FOUND)) return null;
       throw err;
@@ -260,19 +276,22 @@ export class Cortex {
   private _call(method: string, req: unknown): Promise<any> {
     return new Promise((resolve, reject) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (this.client[method] as any)(req, (err: Error | null, response: unknown) => {
-        if (err) reject(err);
-        else resolve(response);
-      });
+      (this.client[method] as any)(
+        req,
+        (err: Error | null, response: unknown) => {
+          if (err) reject(err);
+          else resolve(response);
+        },
+      );
     });
   }
 }
 
 function _isGrpcError(err: unknown, code: number): boolean {
   return (
-    typeof err === 'object' &&
+    typeof err === "object" &&
     err !== null &&
-    'code' in err &&
+    "code" in err &&
     (err as { code: number }).code === code
   );
 }

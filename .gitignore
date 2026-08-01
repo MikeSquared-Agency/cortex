@@ -19,6 +19,8 @@ Thumbs.db
 .fastembed_cache/
 node_modules/
 **/node_modules/
+sdks/typescript/dist/
+sdks/python/dist/
 
 # Python / macOS / DB files
 __pycache__/
