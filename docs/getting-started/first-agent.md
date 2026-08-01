@@ -11,7 +11,7 @@ This guide builds a simple question-answering agent that remembers facts across 
 ## Install
 
 ```bash
-pip install cortex-memory openai
+pip install cortex-memory-client openai
 ```
 
 ## The Agent

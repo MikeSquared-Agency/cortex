@@ -3,8 +3,9 @@
 [![CI](https://github.com/MikeSquared-Agency/cortex/actions/workflows/ci.yml/badge.svg)](https://github.com/MikeSquared-Agency/cortex/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/MikeSquared-Agency/cortex)](https://github.com/MikeSquared-Agency/cortex/releases/latest)
 [![crates.io](https://img.shields.io/crates/v/cortex-memory.svg)](https://crates.io/crates/cortex-memory)
-[![PyPI](https://img.shields.io/pypi/v/cortex-memory.svg)](https://pypi.org/project/cortex-memory/)
-[![npm](https://img.shields.io/npm/v/@cortex-memory/client.svg)](https://www.npmjs.com/package/@cortex-memory/client)
+[![PyPI](https://img.shields.io/pypi/v/cortex-memory-client.svg)](https://pypi.org/project/cortex-memory-client/)
+[![npm SDK](https://img.shields.io/npm/v/cortex-memory-client.svg)](https://www.npmjs.com/package/cortex-memory-client)
+[![npm MCP](https://img.shields.io/npm/v/cortex-mcp-bridge.svg)](https://www.npmjs.com/package/cortex-mcp-bridge)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **Self-organizing graph memory for AI agents. One binary. Zero dependencies.**
@@ -137,7 +138,8 @@ Add to `.vscode/mcp.json`:
 
 ### Without installing the binary
 
-Use the Node.js bridge (no Rust needed):
+Use the Node.js bridge with a running local or remote Cortex HTTP server. The
+bridge itself does not require Rust:
 
 ```bash
 npx cortex-mcp-bridge
@@ -159,17 +161,36 @@ Or with a remote Cortex server:
 }
 ```
 
+### Client SDKs
+
+Connect applications to the Cortex gRPC server using the language-native
+clients:
+
+```bash
+# TypeScript / Node.js
+npm install cortex-memory-client
+
+# Python (distribution name; imports remain `cortex_memory`)
+pip install cortex-memory-client
+
+# Go
+go get github.com/MikeSquared-Agency/cortex/sdks/go
+
+# Rust
+cargo add cortex-memory-client
+```
+
 ### What your agent gets
 
-| Tool | Purpose |
-|------|---------|
-| `cortex_store` | Remember facts, decisions, goals, events, patterns |
-| `cortex_search` | Semantic search by meaning |
-| `cortex_recall` | Hybrid search (semantic + graph structure) |
-| `cortex_briefing` | "What do I need to know?" context document |
-| `cortex_traverse` | Explore how concepts connect in the graph |
-| `cortex_relate` | Explicitly link related knowledge |
-| `cortex_observe` | Record performance metrics for prompt selection |
+| Tool              | Purpose                                            |
+| ----------------- | -------------------------------------------------- |
+| `cortex_store`    | Remember facts, decisions, goals, events, patterns |
+| `cortex_search`   | Semantic search by meaning                         |
+| `cortex_recall`   | Hybrid search (semantic + graph structure)         |
+| `cortex_briefing` | "What do I need to know?" context document         |
+| `cortex_traverse` | Explore how concepts connect in the graph          |
+| `cortex_relate`   | Explicitly link related knowledge                  |
+| `cortex_observe`  | Record performance metrics for prompt selection    |
 
 The briefing tool supports scope: `agent` (default), `shared` (cross-agent),
 or `unified` (multi-agent overview for orchestrators).
@@ -204,6 +225,9 @@ cortex prompt performance my-prompt
 ```
 
 ### As a Library (Python)
+
+Install the Python distribution with `pip install cortex-memory-client`, then
+import its stable `cortex_memory` module:
 
 ```python
 from cortex_memory import Cortex
@@ -263,21 +287,21 @@ let results = cx.search("authentication", 5)?;
 
 ## How Cortex Compares
 
-| | Cortex | Mem0 | Zep/Graphiti | Cognee | Letta | Engram |
-|---|---|---|---|---|---|---|
-| Embedded (no server) | Yes | No | No | No | No | Yes |
-| Self-organizing graph | Yes | No | Partial | Partial | No | No |
-| Auto-linking | Yes | No | No | No | No | No |
-| Temporal validity | Yes | No | Yes | No | No | No |
-| Knowledge decay | Yes | No | No | Partial | No | Yes |
-| Contradiction detection | Yes | No | Yes | No | No | No |
-| Trust from topology | Yes | No | No | No | No | No |
-| Briefing synthesis | Yes | No | No | No | No | No |
-| Entity resolution | Yes | Yes | Yes | Yes | No | No |
-| Cross-agent discovery | Yes | Yes | No | Yes | No | No |
-| Single binary | Yes | No | No | No | No | Yes |
-| Rust (performance) | Yes | No | No | No | No | No (Go) |
-| Open source (MIT) | Yes | Partial | Partial | Yes | Yes | Yes |
+|                         | Cortex | Mem0    | Zep/Graphiti | Cognee  | Letta | Engram  |
+| ----------------------- | ------ | ------- | ------------ | ------- | ----- | ------- |
+| Embedded (no server)    | Yes    | No      | No           | No      | No    | Yes     |
+| Self-organizing graph   | Yes    | No      | Partial      | Partial | No    | No      |
+| Auto-linking            | Yes    | No      | No           | No      | No    | No      |
+| Temporal validity       | Yes    | No      | Yes          | No      | No    | No      |
+| Knowledge decay         | Yes    | No      | No           | Partial | No    | Yes     |
+| Contradiction detection | Yes    | No      | Yes          | No      | No    | No      |
+| Trust from topology     | Yes    | No      | No           | No      | No    | No      |
+| Briefing synthesis      | Yes    | No      | No           | No      | No    | No      |
+| Entity resolution       | Yes    | Yes     | Yes          | Yes     | No    | No      |
+| Cross-agent discovery   | Yes    | Yes     | No           | Yes     | No    | No      |
+| Single binary           | Yes    | No      | No           | No      | No    | Yes     |
+| Rust (performance)      | Yes    | No      | No           | No      | No    | No (Go) |
+| Open source (MIT)       | Yes    | Partial | Partial      | Yes     | Yes   | Yes     |
 
 Cortex occupies a unique position: embedded AND self-organizing. Every competitor requires external infrastructure or manual curation. Cortex does neither.
 

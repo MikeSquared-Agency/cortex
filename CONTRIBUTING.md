@@ -39,8 +39,8 @@ crates/
   warren-adapter/  Warren NATS adapter (internal)
 
 sdks/
-  python/          Python SDK (cortex-memory on PyPI)
-  typescript/      TypeScript SDK (@cortex-memory/client on npm)
+  python/          Python SDK (cortex-memory-client on PyPI)
+  typescript/      TypeScript SDK (cortex-memory-client on npm)
   go/              Go SDK
 
 specs/             Phase specifications
@@ -69,4 +69,4 @@ Use GitHub Issues for bugs and feature requests. For questions, use GitHub Discu
 
 ## Releasing
 
-Releases are tagged with `vX.Y.Z`. The CI pipeline publishes to crates.io and Docker Hub automatically on tag push.
+Releases are tagged with `vX.Y.Z`. The release pipeline publishes the Rust crates, Python and TypeScript SDKs, MCP bridge, binaries, and Docker image automatically on tag push.

@@ -5,7 +5,7 @@ Use Cortex as the memory backend for a LangChain agent.
 ## Install
 
 ```bash
-pip install cortex-memory langchain langchain-openai
+pip install cortex-memory-client langchain langchain-openai
 ```
 
 ## Memory Class
