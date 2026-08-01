@@ -93,10 +93,7 @@ fn dispatch(cortex: &Cortex, line: &str) -> Option<Value> {
     };
 
     // Notifications have no "id" field — must not respond
-    let id = match msg.get("id") {
-        Some(id) => id.clone(),
-        None => return None,
-    };
+    let id = msg.get("id")?.clone();
 
     let method = msg["method"].as_str().unwrap_or("").to_string();
     let params = msg

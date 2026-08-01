@@ -209,7 +209,7 @@ pub async fn variant_history(
         .filter_map(|e| state.storage.get_node(e.to).ok().flatten())
         .collect();
 
-    raw_nodes.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    raw_nodes.sort_by_key(|node| std::cmp::Reverse(node.created_at));
     raw_nodes.truncate(q.limit);
 
     let observations: Vec<serde_json::Value> = raw_nodes
@@ -953,7 +953,7 @@ pub async fn prompt_performance(
         })
         .collect();
 
-    all_obs.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    all_obs.sort_by_key(|observation| std::cmp::Reverse(observation.created_at));
 
     let agg = aggregate_observations(&all_obs);
 
@@ -1026,7 +1026,7 @@ pub async fn version_performance(
         })
         .collect();
 
-    all_obs.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    all_obs.sort_by_key(|observation| std::cmp::Reverse(observation.created_at));
 
     let agg = aggregate_observations(&all_obs);
 
