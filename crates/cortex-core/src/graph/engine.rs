@@ -319,7 +319,7 @@ impl<S: Storage + 'static> GraphEngine for GraphEngineImpl<S> {
         }
 
         // Sort by degree descending
-        node_degrees.sort_by(|a, b| b.1.cmp(&a.1));
+        node_degrees.sort_by_key(|entry| std::cmp::Reverse(entry.1));
 
         // Take top N
         Ok(node_degrees.into_iter().take(limit).collect())
