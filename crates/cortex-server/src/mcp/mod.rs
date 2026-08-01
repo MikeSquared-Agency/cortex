@@ -1369,8 +1369,15 @@ async fn remote_resource_read(http: &reqwest::Client, base_url: &str, uri: &str)
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    // FastEmbed populates a shared model cache on first use. Serializing test
+    // construction prevents parallel tests from racing while that cache is
+    // downloaded and unpacked on a clean CI runner.
+    static EMBEDDING_MODEL_INIT: Mutex<()> = Mutex::new(());
 
     fn make_cortex() -> Cortex {
+        let _guard = EMBEDDING_MODEL_INIT.lock().unwrap();
         let dir = tempfile::tempdir().unwrap();
         Cortex::open(dir.path().join("test.redb"), LibraryConfig::default()).unwrap()
     }
