@@ -3,7 +3,7 @@
   "version": "0.3.2",
   "description": "Node.js MCP bridge for a local or remote Cortex graph-memory server",
   "bin": {
-    "cortex-mcp-bridge": "./cortex-mcp-bridge.js"
+    "cortex-mcp-bridge": "cortex-mcp-bridge.js"
   },
   "scripts": {
     "test": "node --test test.mjs"
