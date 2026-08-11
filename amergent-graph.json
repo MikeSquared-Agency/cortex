@@ -1,0 +1,2060 @@
+{
+  "nodes": [
+    {
+      "id": "local-1",
+      "kind": "agent",
+      "title": "cortex",
+      "body": "Auto-ingested from https://github.com/MikeSquared-Agency/cortex",
+      "tags": [
+        "ingested",
+        "mikesquared-agency",
+        "cortex"
+      ],
+      "importance": 1,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-2",
+      "kind": "file",
+      "title": "ARCHITECTURE.md",
+      "tags": [
+        "doc"
+      ],
+      "importance": 0.7,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-3",
+      "kind": "file",
+      "title": "CHANGELOG.md",
+      "tags": [
+        "doc"
+      ],
+      "importance": 0.7,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-4",
+      "kind": "file",
+      "title": "CLAUDE.md",
+      "tags": [
+        "doc"
+      ],
+      "importance": 0.7,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-5",
+      "kind": "file",
+      "title": "CONTRIBUTING.md",
+      "tags": [
+        "doc"
+      ],
+      "importance": 0.7,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-6",
+      "kind": "file",
+      "title": "docs/blog/cortex-vs-mem0.md",
+      "tags": [
+        "doc"
+      ],
+      "importance": 0.7,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-7",
+      "kind": "constraint",
+      "title": "Cargo.toml",
+      "tags": [
+        "config"
+      ],
+      "importance": 0.65,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-8",
+      "kind": "constraint",
+      "title": "crates/cortex-client/Cargo.toml",
+      "tags": [
+        "config"
+      ],
+      "importance": 0.65,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-9",
+      "kind": "constraint",
+      "title": "crates/cortex-core/Cargo.toml",
+      "tags": [
+        "config"
+      ],
+      "importance": 0.65,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-10",
+      "kind": "constraint",
+      "title": "crates/cortex-proto/Cargo.toml",
+      "tags": [
+        "config"
+      ],
+      "importance": 0.65,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-11",
+      "kind": "constraint",
+      "title": "crates/cortex-server/Cargo.toml",
+      "tags": [
+        "config"
+      ],
+      "importance": 0.65,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-12",
+      "kind": "module",
+      "title": "ARCHITECTURE.md",
+      "tags": [
+        "module"
+      ],
+      "importance": 0.75,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-13",
+      "kind": "module",
+      "title": "Cargo.lock",
+      "tags": [
+        "module"
+      ],
+      "importance": 0.75,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-14",
+      "kind": "module",
+      "title": "Cargo.toml",
+      "tags": [
+        "module"
+      ],
+      "importance": 0.75,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-15",
+      "kind": "module",
+      "title": "CHANGELOG.md",
+      "tags": [
+        "module"
+      ],
+      "importance": 0.75,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-16",
+      "kind": "module",
+      "title": "CLAUDE.md",
+      "tags": [
+        "module"
+      ],
+      "importance": 0.75,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-17",
+      "kind": "module",
+      "title": "CONTRIBUTING.md",
+      "tags": [
+        "module"
+      ],
+      "importance": 0.75,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-18",
+      "kind": "module",
+      "title": "cortex.example.toml",
+      "tags": [
+        "module"
+      ],
+      "importance": 0.75,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-19",
+      "kind": "module",
+      "title": "cortex.toml.example",
+      "tags": [
+        "module"
+      ],
+      "importance": 0.75,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-20",
+      "kind": "module",
+      "title": "crates",
+      "tags": [
+        "module"
+      ],
+      "importance": 0.75,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-21",
+      "kind": "module",
+      "title": "docker-compose.yml",
+      "tags": [
+        "module"
+      ],
+      "importance": 0.75,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-22",
+      "kind": "file",
+      "title": "crates/cortex-client/src/lib.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-23",
+      "kind": "file",
+      "title": "crates/cortex-core/benches/storage.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-24",
+      "kind": "file",
+      "title": "crates/cortex-core/examples/auto_linker.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-25",
+      "kind": "file",
+      "title": "crates/cortex-core/examples/basic_usage.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-26",
+      "kind": "file",
+      "title": "crates/cortex-core/examples/graph_queries.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-27",
+      "kind": "file",
+      "title": "crates/cortex-core/examples/vector_search.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-28",
+      "kind": "file",
+      "title": "crates/cortex-core/src/api.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-29",
+      "kind": "file",
+      "title": "crates/cortex-core/src/briefing/cache.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-30",
+      "kind": "file",
+      "title": "crates/cortex-core/src/briefing/engine.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-31",
+      "kind": "file",
+      "title": "crates/cortex-core/src/briefing/ingest.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-32",
+      "kind": "file",
+      "title": "crates/cortex-core/src/briefing/mod.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-33",
+      "kind": "file",
+      "title": "crates/cortex-core/src/briefing/renderer.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-34",
+      "kind": "file",
+      "title": "crates/cortex-core/src/conventions.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-35",
+      "kind": "file",
+      "title": "crates/cortex-core/src/error.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-36",
+      "kind": "file",
+      "title": "crates/cortex-core/src/gate/mod.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-37",
+      "kind": "file",
+      "title": "crates/cortex-core/src/gate/schema.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-38",
+      "kind": "file",
+      "title": "crates/cortex-core/src/graph/cache.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-39",
+      "kind": "file",
+      "title": "crates/cortex-core/src/graph/engine.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-40",
+      "kind": "file",
+      "title": "crates/cortex-core/src/graph/mod.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-41",
+      "kind": "file",
+      "title": "crates/cortex-core/src/graph/paths.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-42",
+      "kind": "file",
+      "title": "crates/cortex-core/src/graph/subgraph.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-43",
+      "kind": "file",
+      "title": "crates/cortex-core/src/graph/temporal.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-44",
+      "kind": "file",
+      "title": "crates/cortex-core/src/graph/tests.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-45",
+      "kind": "file",
+      "title": "crates/cortex-core/src/graph/traversal.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-46",
+      "kind": "file",
+      "title": "crates/cortex-core/src/graph/types.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-47",
+      "kind": "file",
+      "title": "crates/cortex-core/src/hooks/mod.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-48",
+      "kind": "file",
+      "title": "crates/cortex-core/src/ingest.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-49",
+      "kind": "file",
+      "title": "crates/cortex-core/src/kinds.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-50",
+      "kind": "file",
+      "title": "crates/cortex-core/src/lib.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-51",
+      "kind": "file",
+      "title": "crates/cortex-core/src/linker/auto_linker.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-52",
+      "kind": "file",
+      "title": "crates/cortex-core/src/linker/config.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-53",
+      "kind": "file",
+      "title": "crates/cortex-core/src/linker/decay.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-54",
+      "kind": "file",
+      "title": "crates/cortex-core/src/linker/dedup.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-55",
+      "kind": "file",
+      "title": "crates/cortex-core/src/linker/entity.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-56",
+      "kind": "file",
+      "title": "crates/cortex-core/src/linker/metrics.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-57",
+      "kind": "file",
+      "title": "crates/cortex-core/src/linker/mod.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-58",
+      "kind": "file",
+      "title": "crates/cortex-core/src/linker/rules.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-59",
+      "kind": "file",
+      "title": "crates/cortex-core/src/linker/tests.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-60",
+      "kind": "file",
+      "title": "crates/cortex-core/src/policies/audit.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-61",
+      "kind": "file",
+      "title": "crates/cortex-core/src/policies/mod.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-62",
+      "kind": "file",
+      "title": "crates/cortex-core/src/policies/retention.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-63",
+      "kind": "file",
+      "title": "crates/cortex-core/src/prompt/mod.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-64",
+      "kind": "file",
+      "title": "crates/cortex-core/src/prompt/model.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-65",
+      "kind": "file",
+      "title": "crates/cortex-core/src/prompt/resolver.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-66",
+      "kind": "file",
+      "title": "crates/cortex-core/src/prompt/rollback.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-67",
+      "kind": "file",
+      "title": "crates/cortex-core/src/prompt/selection.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-68",
+      "kind": "file",
+      "title": "crates/cortex-core/src/query/mod.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-69",
+      "kind": "file",
+      "title": "crates/cortex-core/src/relations.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-70",
+      "kind": "file",
+      "title": "crates/cortex-core/src/storage/encrypted.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-71",
+      "kind": "file",
+      "title": "crates/cortex-core/src/storage/filters.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-72",
+      "kind": "file",
+      "title": "crates/cortex-core/src/storage/mod.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-73",
+      "kind": "file",
+      "title": "crates/cortex-core/src/storage/redb_storage.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-74",
+      "kind": "file",
+      "title": "crates/cortex-core/src/storage/traits.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-75",
+      "kind": "file",
+      "title": "crates/cortex-core/src/tests.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-76",
+      "kind": "file",
+      "title": "crates/cortex-core/src/trust/cache.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-77",
+      "kind": "file",
+      "title": "crates/cortex-core/src/trust/mod.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-78",
+      "kind": "file",
+      "title": "crates/cortex-core/src/trust/signals.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-79",
+      "kind": "file",
+      "title": "crates/cortex-core/src/types.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-80",
+      "kind": "file",
+      "title": "crates/cortex-core/src/vector/config.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-81",
+      "kind": "file",
+      "title": "crates/cortex-core/src/vector/embedding.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-82",
+      "kind": "file",
+      "title": "crates/cortex-core/src/vector/hybrid.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-83",
+      "kind": "file",
+      "title": "crates/cortex-core/src/vector/index.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-84",
+      "kind": "file",
+      "title": "crates/cortex-core/src/vector/mod.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-85",
+      "kind": "file",
+      "title": "crates/cortex-core/src/vector/scoring.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-86",
+      "kind": "file",
+      "title": "crates/cortex-core/src/vector/tests.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-87",
+      "kind": "file",
+      "title": "crates/cortex-proto/build.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-88",
+      "kind": "file",
+      "title": "crates/cortex-proto/src/generated/cortex.v1.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-89",
+      "kind": "file",
+      "title": "crates/cortex-proto/src/lib.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-90",
+      "kind": "file",
+      "title": "crates/cortex-server/src/bin/fix_nodes.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-91",
+      "kind": "file",
+      "title": "crates/cortex-server/src/bin/repair_db.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-92",
+      "kind": "file",
+      "title": "crates/cortex-server/src/briefing/mod.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-93",
+      "kind": "file",
+      "title": "crates/cortex-server/src/cli/agent.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-94",
+      "kind": "file",
+      "title": "crates/cortex-server/src/cli/audit.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-95",
+      "kind": "file",
+      "title": "crates/cortex-server/src/cli/backup.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-96",
+      "kind": "file",
+      "title": "crates/cortex-server/src/cli/briefing.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-97",
+      "kind": "file",
+      "title": "crates/cortex-server/src/cli/config_cmd.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-98",
+      "kind": "file",
+      "title": "crates/cortex-server/src/cli/doctor.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-99",
+      "kind": "file",
+      "title": "crates/cortex-server/src/cli/edge.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-100",
+      "kind": "file",
+      "title": "crates/cortex-server/src/cli/export.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-101",
+      "kind": "file",
+      "title": "crates/cortex-server/src/cli/import.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-102",
+      "kind": "file",
+      "title": "crates/cortex-server/src/cli/init.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-103",
+      "kind": "file",
+      "title": "crates/cortex-server/src/cli/migrate.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-104",
+      "kind": "file",
+      "title": "crates/cortex-server/src/cli/mod.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-105",
+      "kind": "file",
+      "title": "crates/cortex-server/src/cli/node.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-106",
+      "kind": "file",
+      "title": "crates/cortex-server/src/cli/prompt.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-107",
+      "kind": "file",
+      "title": "crates/cortex-server/src/cli/search.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-108",
+      "kind": "file",
+      "title": "crates/cortex-server/src/cli/security.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-109",
+      "kind": "file",
+      "title": "crates/cortex-server/src/cli/shell.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-110",
+      "kind": "file",
+      "title": "crates/cortex-server/src/cli/stats.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-111",
+      "kind": "file",
+      "title": "crates/cortex-server/src/cli/traverse.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-112",
+      "kind": "file",
+      "title": "crates/cortex-server/src/cli/trust.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-113",
+      "kind": "file",
+      "title": "crates/cortex-server/src/config.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-114",
+      "kind": "file",
+      "title": "crates/cortex-server/src/grpc/conversions.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-115",
+      "kind": "file",
+      "title": "crates/cortex-server/src/grpc/mod.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-116",
+      "kind": "file",
+      "title": "crates/cortex-server/src/grpc/service.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-117",
+      "kind": "file",
+      "title": "crates/cortex-server/src/http/auth.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-118",
+      "kind": "file",
+      "title": "crates/cortex-server/src/http/metrics.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-119",
+      "kind": "file",
+      "title": "crates/cortex-server/src/http/mod.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-120",
+      "kind": "file",
+      "title": "crates/cortex-server/src/http/prompts.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    },
+    {
+      "id": "local-121",
+      "kind": "file",
+      "title": "crates/cortex-server/src/http/rollback.rs",
+      "tags": [
+        "rs"
+      ],
+      "importance": 0.5,
+      "agent": "mikesquared-agency-cortex",
+      "edges": 0
+    }
+  ],
+  "edges": [
+    {
+      "source": "local-1",
+      "target": "local-2",
+      "relation": "documents",
+      "weight": 0.7
+    },
+    {
+      "source": "local-1",
+      "target": "local-3",
+      "relation": "documents",
+      "weight": 0.7
+    },
+    {
+      "source": "local-1",
+      "target": "local-4",
+      "relation": "documents",
+      "weight": 0.7
+    },
+    {
+      "source": "local-1",
+      "target": "local-5",
+      "relation": "documents",
+      "weight": 0.7
+    },
+    {
+      "source": "local-1",
+      "target": "local-6",
+      "relation": "documents",
+      "weight": 0.7
+    },
+    {
+      "source": "local-1",
+      "target": "local-7",
+      "relation": "defines",
+      "weight": 0.65
+    },
+    {
+      "source": "local-1",
+      "target": "local-8",
+      "relation": "defines",
+      "weight": 0.65
+    },
+    {
+      "source": "local-1",
+      "target": "local-9",
+      "relation": "defines",
+      "weight": 0.65
+    },
+    {
+      "source": "local-1",
+      "target": "local-10",
+      "relation": "defines",
+      "weight": 0.65
+    },
+    {
+      "source": "local-1",
+      "target": "local-11",
+      "relation": "defines",
+      "weight": 0.65
+    },
+    {
+      "source": "local-1",
+      "target": "local-12",
+      "relation": "owns",
+      "weight": 0.8
+    },
+    {
+      "source": "local-1",
+      "target": "local-13",
+      "relation": "owns",
+      "weight": 0.8
+    },
+    {
+      "source": "local-1",
+      "target": "local-14",
+      "relation": "owns",
+      "weight": 0.8
+    },
+    {
+      "source": "local-1",
+      "target": "local-15",
+      "relation": "owns",
+      "weight": 0.8
+    },
+    {
+      "source": "local-1",
+      "target": "local-16",
+      "relation": "owns",
+      "weight": 0.8
+    },
+    {
+      "source": "local-1",
+      "target": "local-17",
+      "relation": "owns",
+      "weight": 0.8
+    },
+    {
+      "source": "local-1",
+      "target": "local-18",
+      "relation": "owns",
+      "weight": 0.8
+    },
+    {
+      "source": "local-1",
+      "target": "local-19",
+      "relation": "owns",
+      "weight": 0.8
+    },
+    {
+      "source": "local-1",
+      "target": "local-20",
+      "relation": "owns",
+      "weight": 0.8
+    },
+    {
+      "source": "local-1",
+      "target": "local-21",
+      "relation": "owns",
+      "weight": 0.8
+    },
+    {
+      "source": "local-20",
+      "target": "local-22",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-23",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-24",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-25",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-26",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-27",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-28",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-29",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-30",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-31",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-32",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-33",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-34",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-35",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-36",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-37",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-38",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-39",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-40",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-41",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-42",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-43",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-44",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-45",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-46",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-47",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-48",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-49",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-50",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-51",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-52",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-53",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-54",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-55",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-56",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-57",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-58",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-59",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-60",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-61",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-62",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-63",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-64",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-65",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-66",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-67",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-68",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-69",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-70",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-71",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-72",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-73",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-74",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-75",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-76",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-77",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-78",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-79",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-80",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-81",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-82",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-83",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-84",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-85",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-86",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-87",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-88",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-89",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-90",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-91",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-92",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-93",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-94",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-95",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-96",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-97",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-98",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-99",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-100",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-101",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-102",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-103",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-104",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-105",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-106",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-107",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-108",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-109",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-110",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-111",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-112",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-113",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-114",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-115",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-116",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-117",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-118",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-119",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-120",
+      "relation": "contains",
+      "weight": 0.5
+    },
+    {
+      "source": "local-20",
+      "target": "local-121",
+      "relation": "contains",
+      "weight": 0.5
+    }
+  ]
+}
